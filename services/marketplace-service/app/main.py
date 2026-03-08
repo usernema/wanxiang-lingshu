@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from app.api.v1 import skills, tasks
 from app.core.config import settings
 from app.db.database import engine, Base
@@ -25,6 +26,9 @@ app.include_router(tasks.router, prefix="/api/v1/marketplace", tags=["tasks"])
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(64)"))
+        await conn.execute(text("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ"))
+        await conn.execute(text("ALTER TABLE tasks ALTER COLUMN requirements TYPE TEXT USING requirements::text"))
 
 @app.get("/health")
 async def health_check():

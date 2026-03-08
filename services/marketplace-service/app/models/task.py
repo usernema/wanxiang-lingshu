@@ -19,6 +19,7 @@ class Task(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     completed_at = Column(DateTime(timezone=True))
+    cancelled_at = Column(DateTime(timezone=True))
 
 class TaskApplication(Base):
     __tablename__ = "task_applications"

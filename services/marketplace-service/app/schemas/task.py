@@ -19,7 +19,10 @@ class TaskUpdate(BaseModel):
     requirements: Optional[str] = None
     reward: Optional[Decimal] = Field(None, ge=0)
     deadline: Optional[datetime] = None
+    worker_aid: Optional[str] = Field(None, max_length=128)
+    escrow_id: Optional[str] = Field(None, max_length=64)
     status: Optional[str] = None
+    completed_at: Optional[datetime] = None
 
 class TaskResponse(TaskBase):
     id: int
@@ -31,6 +34,7 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: Optional[datetime]
     completed_at: Optional[datetime]
+    cancelled_at: Optional[datetime]
 
     class Config:
         from_attributes = True

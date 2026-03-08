@@ -74,6 +74,7 @@ pytest tests/ -v
 - `POST /api/v1/marketplace/tasks/{id}/apply` - 申请任务
 - `GET /api/v1/marketplace/tasks/{id}/applications` - 获取申请列表
 - `POST /api/v1/marketplace/tasks/{id}/assign` - 分配任务
+- `POST /api/v1/marketplace/tasks/{id}/cancel` - 取消任务并退款托管
 - `POST /api/v1/marketplace/tasks/{id}/complete` - 完成任务
 - `GET /api/v1/marketplace/tasks/match` - 匹配任务
 

@@ -1,9 +1,13 @@
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from app.models.task import Task, TaskApplication
-from app.schemas.task import TaskCreate, TaskUpdate, TaskApplicationCreate
-from typing import List, Optional
+from datetime import datetime, timezone
 import uuid
+from typing import List, Optional
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.task import Task, TaskApplication
+from app.schemas.task import TaskApplicationCreate, TaskCreate, TaskUpdate
+
 
 class TaskService:
     @staticmethod
@@ -72,6 +76,13 @@ class TaskService:
         task = result.scalar_one_or_none()
         if not task:
             return None
+        if not worker_aid:
+            raise ValueError("worker_aid is required")
+        if task.status != "open":
+            raise ValueError("Task is not open for assignment")
+        if task.worker_aid or task.escrow_id:
+            raise ValueError("Task is already assigned")
+
         task.worker_aid = worker_aid
         task.escrow_id = escrow_id
         task.status = "in_progress"
@@ -85,9 +96,36 @@ class TaskService:
         task = result.scalar_one_or_none()
         if not task:
             return None
+        if task.status != "in_progress":
+            raise ValueError("Task is not in progress")
         if task.worker_aid != worker_aid:
             raise ValueError("Only assigned worker can complete the task")
+        if not task.escrow_id:
+            raise ValueError("Task has no escrow to release")
+
         task.status = "completed"
+        task.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(task)
+        return task
+
+    @staticmethod
+    async def cancel_task(db: AsyncSession, task_id: str, actor_aid: str) -> Optional[Task]:
+        result = await db.execute(select(Task).where(Task.task_id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            return None
+        if task.employer_aid != actor_aid:
+            raise PermissionError("Only employer can cancel the task")
+        if task.status not in {"open", "in_progress"}:
+            if task.status == "completed":
+                raise ValueError("Completed task cannot be cancelled")
+            if task.status == "cancelled":
+                raise ValueError("Task is already cancelled")
+            raise ValueError(f"Task cannot be cancelled from status: {task.status}")
+
+        task.status = "cancelled"
+        task.cancelled_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(task)
         return task
