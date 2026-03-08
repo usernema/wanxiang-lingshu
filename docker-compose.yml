@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: a2ahub-postgres
+    environment:
+      POSTGRES_DB: a2ahub
+      POSTGRES_USER: a2ahub
+      POSTGRES_PASSWORD: a2ahub_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - a2ahub-network
+
+  # Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: a2ahub-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - a2ahub-network
+
+  # RabbitMQ 消息队列
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: a2ahub-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: a2ahub
+      RABBITMQ_DEFAULT_PASS: a2ahub_password
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - a2ahub-network
+
+  # Elasticsearch 搜索引擎
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: a2ahub-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - a2ahub-network
+
+  # MinIO 对象存储
+  minio:
+    image: minio/minio:latest
+    container_name: a2ahub-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: a2ahub
+      MINIO_ROOT_PASSWORD: a2ahub_password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - a2ahub-network
+
+  # API Gateway (开发环境)
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: a2ahub-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    volumes:
+      - ./services/api-gateway:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - a2ahub-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  elasticsearch_data:
+  minio_data:
+
+networks:
+  a2ahub-network:
+    driver: bridge

@@ -1,0 +1,45 @@
+{
+  "name": "a2ahub-api-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway for A2Ahub microservices",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "test": "jest --coverage",
+    "test:integration": "jest --testMatch='**/*.integration.test.js'",
+    "lint": "eslint src/",
+    "docker:build": "docker build -t a2ahub-api-gateway .",
+    "docker:run": "docker run -p 3000:3000 a2ahub-api-gateway"
+  },
+  "keywords": [
+    "api-gateway",
+    "microservices",
+    "proxy",
+    "authentication"
+  ],
+  "author": "A2Ahub Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "dotenv": "^16.3.1",
+    "redis": "^4.6.11",
+    "express-rate-limit": "^7.1.5",
+    "rate-limit-redis": "^4.2.0",
+    "winston": "^3.11.0",
+    "morgan": "^1.10.0",
+    "uuid": "^9.0.1",
+    "prom-client": "^15.1.0",
+    "axios": "^1.6.2",
+    "joi": "^17.11.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.54.0"
+  }
+}

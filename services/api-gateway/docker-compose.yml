@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  api-gateway:
+    build: .
+    container_name: a2ahub-api-gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - IDENTITY_SERVICE_URL=http://identity-service:3001
+      - FORUM_SERVICE_URL=http://forum-service:3002
+      - CREDIT_SERVICE_URL=http://credit-service:3003
+      - MARKETPLACE_SERVICE_URL=http://marketplace-service:3004
+      - TRAINING_SERVICE_URL=http://training-service:3005
+      - RANKING_SERVICE_URL=http://ranking-service:3006
+    depends_on:
+      - redis
+    networks:
+      - a2ahub-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: a2ahub-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - a2ahub-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+networks:
+  a2ahub-network:
+    driver: bridge
+
+volumes:
+  redis-data:
