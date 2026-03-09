@@ -354,6 +354,73 @@ services:
 - **服务网格**: Istio (可选)
 - **CI/CD**: GitHub Actions
 
+### Trial ingress 收口（当前仓库可执行形态）
+- 统一公网入口为 `docker-compose.trial.yml` 中的 `ingress` Nginx 容器。
+- Nginx 同时负责：
+  - 托管前端静态资源；
+  - 代理 `/api/` 到 `api-gateway:3000`；
+  - 对外公开 `/health/live` 与 `/health/ready`。
+- 默认不再直接向宿主机暴露 `api-gateway`、`identity-service`、`forum-service`、`credit-service`、`marketplace-service`、`postgres`、`redis`、`elasticsearch`、`minio`、`rabbitmq` 的业务端口。
+- RabbitMQ 管理端口、MinIO console 以及其余基础设施控制面当前也保持内网可见；如后续需要宿主机调试入口，建议通过单独的 debug overlay 或 profile 增加，而不是恢复默认公网暴露。
+- `/health`、`/health/deps`、`/metrics` 在 ingress 层默认不公开，避免把内部依赖拓扑和指标直接暴露到公网。
+- TLS 在入口 Nginx 终止，网关和后端服务继续在 Docker network 内使用 HTTP；网关通过 `TRUST_PROXY=true` 配合 `X-Forwarded-*` 头感知真实来源协议。
+- 当 `TRIAL_ENABLE_TLS=true` 时：
+  - 入口 `80` 端口执行 HTTP → HTTPS 跳转；
+  - `443` 端口使用挂载证书提供服务；
+  - 证书目录由 `TRIAL_TLS_CERTS_DIR` 指定，默认 `./frontend/certs`，需包含 `tls.crt` 与 `tls.key`。
+- 本地试运行可保留 `TRIAL_ENABLE_TLS=false`，此时统一入口默认为 `http://localhost`；公网试运行再切换到正式域名和证书。
+- 统一入口相关变量定义在 `.env.trial` / `.env.trial.example`：
+  - `TRIAL_PUBLIC_HOSTNAME`
+  - `TRIAL_PUBLIC_SCHEME`
+  - `TRIAL_HTTP_PORT`
+  - `TRIAL_HTTPS_PORT`
+  - `TRIAL_ENABLE_TLS`
+  - `TRIAL_TLS_CERTS_DIR`
+  - `TRIAL_TLS_CERT_PATH`
+  - `TRIAL_TLS_KEY_PATH`
+  - `TRIAL_ENABLE_DEBUG_OVERLAY`
+  - `TRIAL_RABBITMQ_MANAGEMENT_PORT`
+  - `TRIAL_MINIO_API_PORT`
+  - `TRIAL_MINIO_CONSOLE_PORT`
+
+### Trial 使用约定
+- 启动：`scripts/run-trial.sh`
+- 如需开启本机调试入口：设置 `TRIAL_ENABLE_DEBUG_OVERLAY=true` 后再运行启动脚本。
+- 默认访问：
+  - 前端：`http://localhost/`（或启用 TLS 后的 `https://<hostname>/`）
+  - API：`/api`
+  - Liveness：`/health/live`
+  - Readiness：`/health/ready`
+- 烟测脚本 `scripts/smoke-trial.sh` 默认通过统一入口 `http://localhost/api` 访问；如入口域名或端口不同，可通过 `BASE_URL` 覆盖。
+- 如需宿主机调试管理控制台，可选加载 `docker-compose.trial.debug.yml`，而不是回退 trial 默认暴露边界。
+- 当前 debug overlay 仅暴露：
+  - RabbitMQ 管理端口 `15672`
+  - MinIO API `9000`
+  - MinIO Console `9001`
+
+### Trial 对外暴露边界
+- **公开**：`/`、静态资源、`/api/`、`/health/live`、`/health/ready`
+- **默认不公开**：`/health`、`/health/deps`、`/metrics`
+- **纯内网**：各后端服务原始端口以及数据库/缓存/消息队列/对象存储服务端口
+
+### Forwarded headers 与代理语义
+- 入口 Nginx 向网关显式传递：
+  - `Host`
+  - `X-Real-IP`
+  - `X-Forwarded-For`
+  - `X-Forwarded-Host`
+  - `X-Forwarded-Proto`
+- `api-gateway` 在 `services/api-gateway/src/index.js` 中启用 `trust proxy` 后，可正确识别反向代理后的来源地址与协议。
+- 网关继续在下游代理时透传 `X-Request-Id`、`X-Trace-Id`、`X-Forwarded-For`、`X-Forwarded-Host`、`X-Forwarded-Proto`，确保链路日志与协议判断保持一致。
+
+### 迁移顺序
+1. 先通过统一入口验证前端与 `/api/` 主链路；
+2. 再收紧宿主机端口暴露；
+3. 最后按需启用 TLS 与公网域名。
+这可以降低 trial 迁移过程中的回退成本。
+
+**最后更新**: 2026-03-10
+
 ## 安全设计
 
 ### 1. 认证与授权
