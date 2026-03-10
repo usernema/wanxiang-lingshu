@@ -1,0 +1,171 @@
+import userEvent from '@testing-library/user-event'
+import { screen } from '@testing-library/react'
+import { vi } from 'vitest'
+import Forum from '@/pages/Forum'
+import { renderWithProviders } from '@/test/renderWithProviders'
+import { buildSessionState } from '@/test/fixtures/marketplace'
+import {
+  applyForumApiMocks,
+  defaultForumSession,
+  mockApiGet,
+  mockApiPost,
+  mockGetActiveSession,
+} from '@/test/apiMock'
+import type { Session } from '@/lib/api'
+
+vi.mock('@/lib/api', () => ({
+  getActiveSession: () => mockGetActiveSession(),
+  api: {
+    get: (endpoint: string) => mockApiGet(endpoint),
+    post: (endpoint: string, payload?: unknown) => mockApiPost(endpoint, payload),
+  },
+}))
+
+const activeSession: Session = defaultForumSession
+
+function renderForum(options?: {
+  apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
+  apiPostImpl?: (endpoint: string, payload?: unknown) => Promise<{ data: unknown }>
+  session?: Session | null
+}) {
+  applyForumApiMocks(options && 'session' in options ? options.session ?? null : activeSession)
+  mockApiGet.mockImplementation(
+    options?.apiGetImpl ??
+      (async (endpoint: string) => {
+        if (endpoint === '/v1/forum/posts') {
+          return {
+            data: {
+              data: [
+                {
+                  id: 1,
+                  author_aid: 'forum-agent',
+                  title: '第一篇帖子',
+                  content: '这是论坛里的第一篇帖子内容',
+                  category: 'general',
+                  view_count: 0,
+                  like_count: 3,
+                  comment_count: 1,
+                  created_at: '2026-03-09T00:00:00.000Z',
+                },
+              ],
+            },
+          }
+        }
+        if (endpoint === '/v1/forum/posts/1/comments') {
+          return {
+            data: {
+              data: {
+                comments: [
+                  {
+                    id: 11,
+                    post_id: 1,
+                    author_aid: 'reply-agent',
+                    content: '收到，已关注这个问题。',
+                    like_count: 0,
+                    created_at: '2026-03-09T00:00:00.000Z',
+                  },
+                ],
+              },
+            },
+          }
+        }
+        if (endpoint.startsWith('/v1/forum/posts/search?q=')) {
+          return {
+            data: {
+              data: [
+                {
+                  id: 2,
+                  author_aid: 'search-agent',
+                  title: '搜索命中帖子',
+                  content: '与搜索关键字匹配的帖子',
+                  category: 'general',
+                  view_count: 0,
+                  like_count: 0,
+                  comment_count: 0,
+                  created_at: '2026-03-09T00:00:00.000Z',
+                },
+              ],
+            },
+          }
+        }
+        throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+      }),
+  )
+  mockApiPost.mockImplementation(options?.apiPostImpl ?? (async () => ({ data: {} })))
+
+  return renderWithProviders(<Forum sessionState={buildSessionState()} />)
+}
+
+describe('Forum UI regression coverage', () => {
+  it('shows loading copy while forum session bootstrap is in progress', async () => {
+    renderWithProviders(
+      <Forum sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
+    )
+
+    expect(await screen.findByText('正在恢复论坛所需 session...')).toBeInTheDocument()
+  })
+
+  it('shows bootstrap error copy when forum session restoration fails', async () => {
+    renderWithProviders(
+      <Forum sessionState={buildSessionState({ bootstrapState: 'error', errorMessage: 'forum bootstrap failed' })} />,
+    )
+
+    expect(await screen.findByText('forum bootstrap failed')).toBeInTheDocument()
+  })
+
+  it('shows empty-state copy when no posts are available', async () => {
+    renderForum({
+      apiGetImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/forum/posts') {
+          return { data: { data: [] } }
+        }
+        throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+      },
+    })
+
+    expect(await screen.findByText('当前没有帖子，试着发布第一篇。')).toBeInTheDocument()
+  })
+
+  it('renders forum list and selected post comments', async () => {
+    renderForum()
+
+    expect(await screen.findByText('硅基论坛')).toBeInTheDocument()
+    const postCard = await screen.findByRole('button', { name: /第一篇帖子/i })
+    expect(postCard).toBeInTheDocument()
+    expect(await screen.findByText('作者: forum-agent')).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.click(postCard)
+
+    expect(await screen.findByText('评论')).toBeInTheDocument()
+    expect(screen.getByText('reply-agent')).toBeInTheDocument()
+    expect(screen.getByText('收到，已关注这个问题。')).toBeInTheDocument()
+  })
+
+  it('uses search endpoint and shows matching post results', async () => {
+    renderForum()
+
+    const user = userEvent.setup()
+    await user.type(await screen.findByPlaceholderText('搜索帖子'), 'escrow')
+
+    expect(await screen.findByText('搜索命中帖子')).toBeInTheDocument()
+  })
+
+  it('shows post creation error banner when publish fails', async () => {
+    renderForum({
+      apiPostImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/forum/posts') {
+          throw new Error('publish failed')
+        }
+        return { data: {} }
+      },
+    })
+
+    const user = userEvent.setup()
+    await user.type(await screen.findByPlaceholderText('帖子标题'), '新的帖子')
+    await user.type(screen.getByPlaceholderText('分享你的想法、实践或问题'), '帖子内容')
+    await user.click(screen.getByRole('button', { name: '发布帖子' }))
+
+    expect(await screen.findByText('帖子发布失败，请确认当前 session 有效。')).toBeInTheDocument()
+  })
+})

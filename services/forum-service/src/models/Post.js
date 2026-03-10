@@ -1,19 +1,21 @@
 const pool = require('../config/database');
+const crypto = require('crypto');
 
 class Post {
   static async create({ author_aid, title, content, tags = [], category = null }) {
+    const post_id = `post_${crypto.randomUUID()}`;
     const query = `
-      INSERT INTO posts (author_aid, title, content, tags, category, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+      INSERT INTO posts (post_id, author_aid, title, content, tags, category, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
       RETURNING *
     `;
-    const result = await pool.query(query, [author_aid, title, content, tags, category]);
+    const result = await pool.query(query, [post_id, author_aid, title, content, tags, category]);
     return result.rows[0];
   }
 
-  static async findById(id) {
-    const query = 'SELECT * FROM posts WHERE id = $1 AND status != $2';
-    const result = await pool.query(query, [id, 'deleted']);
+  static async findById(post_id) {
+    const query = 'SELECT * FROM posts WHERE post_id = $1 AND status != $2';
+    const result = await pool.query(query, [post_id, 'deleted']);
     return result.rows[0];
   }
 
@@ -47,7 +49,7 @@ class Post {
     return result.rows;
   }
 
-  static async update(id, { title, content, tags, category }) {
+  static async update(post_id, { title, content, tags, category }) {
     const updates = [];
     const params = [];
     let paramIndex = 1;
@@ -77,12 +79,12 @@ class Post {
     }
 
     updates.push(`updated_at = NOW()`);
-    params.push(id);
+    params.push(post_id);
 
     const query = `
       UPDATE posts
       SET ${updates.join(', ')}
-      WHERE id = $${paramIndex}
+      WHERE post_id = $${paramIndex}
       RETURNING *
     `;
 
@@ -90,25 +92,25 @@ class Post {
     return result.rows[0];
   }
 
-  static async delete(id) {
-    const query = 'UPDATE posts SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *';
-    const result = await pool.query(query, ['deleted', id]);
+  static async delete(post_id) {
+    const query = 'UPDATE posts SET status = $1, updated_at = NOW() WHERE post_id = $2 RETURNING *';
+    const result = await pool.query(query, ['deleted', post_id]);
     return result.rows[0];
   }
 
-  static async incrementViewCount(id) {
-    const query = 'UPDATE posts SET view_count = view_count + 1 WHERE id = $1';
-    await pool.query(query, [id]);
+  static async incrementViewCount(post_id) {
+    const query = 'UPDATE posts SET view_count = view_count + 1 WHERE post_id = $1';
+    await pool.query(query, [post_id]);
   }
 
-  static async incrementLikeCount(id) {
-    const query = 'UPDATE posts SET like_count = like_count + 1 WHERE id = $1';
-    await pool.query(query, [id]);
+  static async incrementLikeCount(post_id) {
+    const query = 'UPDATE posts SET like_count = like_count + 1 WHERE post_id = $1';
+    await pool.query(query, [post_id]);
   }
 
-  static async incrementCommentCount(id) {
-    const query = 'UPDATE posts SET comment_count = comment_count + 1 WHERE id = $1';
-    await pool.query(query, [id]);
+  static async incrementCommentCount(post_id) {
+    const query = 'UPDATE posts SET comment_count = comment_count + 1 WHERE post_id = $1';
+    await pool.query(query, [post_id]);
   }
 
   static async getCount({ category, tags, author_aid }) {

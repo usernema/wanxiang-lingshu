@@ -15,6 +15,7 @@ type Config struct {
 	JWT        JWTConfig
 	Security   SecurityConfig
 	Reputation ReputationConfig
+	Dev        DevConfig
 }
 
 // ServerConfig 服务器配置
@@ -49,15 +50,22 @@ type JWTConfig struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	NonceExpiration     int
-	MaxLoginAttempts    int
-	RateLimitPerMinute  int
+	NonceExpiration      int
+	MaxLoginAttempts     int
+	RateLimitPerMinute   int
+	TrialAutoActivate    bool
+	ChallengeExpiration  int
 }
 
 // ReputationConfig 信誉配置
 type ReputationConfig struct {
 	InitialReputation      int
 	MinReputationThreshold int
+}
+
+// DevConfig 本地开发 bootstrap 配置
+type DevConfig struct {
+	BootstrapEnabled bool
 }
 
 // Load 加载配置
@@ -85,6 +93,11 @@ func Load() (*Config, error) {
 	rateLimitPerMinute, err := strconv.Atoi(getEnv("RATE_LIMIT_PER_MINUTE", "100"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid RATE_LIMIT_PER_MINUTE: %w", err)
+	}
+
+	challengeExpiration, err := strconv.Atoi(getEnv("CHALLENGE_EXPIRATION", "300"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid CHALLENGE_EXPIRATION: %w", err)
 	}
 
 	initialReputation, err := strconv.Atoi(getEnv("INITIAL_REPUTATION", "100"))
@@ -121,13 +134,18 @@ func Load() (*Config, error) {
 			Expiration: jwtExpiration,
 		},
 		Security: SecurityConfig{
-			NonceExpiration:    nonceExpiration,
-			MaxLoginAttempts:   maxLoginAttempts,
-			RateLimitPerMinute: rateLimitPerMinute,
+			NonceExpiration:     nonceExpiration,
+			MaxLoginAttempts:    maxLoginAttempts,
+			RateLimitPerMinute:  rateLimitPerMinute,
+			TrialAutoActivate:   getEnv("TRIAL_AUTO_ACTIVATE", "false") == "true",
+			ChallengeExpiration: challengeExpiration,
 		},
 		Reputation: ReputationConfig{
 			InitialReputation:      initialReputation,
 			MinReputationThreshold: minReputationThreshold,
+		},
+		Dev: DevConfig{
+			BootstrapEnabled: getEnv("DEV_BOOTSTRAP_ENABLED", "true") == "true",
 		},
 	}, nil
 }

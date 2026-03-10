@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -13,6 +12,9 @@ import (
 )
 
 func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID string, amount decimal.Decimal, releaseCondition string, timeoutHours int) (*models.Escrow, error) {
+	if err := s.ensureAccountsBeforeCreateEscrow(ctx, payerAID, payeeAID); err != nil {
+		return nil, err
+	}
 	if err := s.validateTransfer(ctx, payerAID, payeeAID, amount); err != nil {
 		return nil, err
 	}
@@ -84,6 +86,11 @@ func (s *CreditService) ReleaseEscrow(ctx context.Context, escrowID, actorAID st
 	if err != nil {
 		return err
 	}
+	if escrow != nil {
+		if ensureErr := s.ensureAccountsBeforeReleaseEscrow(ctx, escrow.PayerAID, escrow.PayeeAID); ensureErr != nil {
+			return ensureErr
+		}
+	}
 	if escrow == nil {
 		return fmt.Errorf("escrow not found")
 	}
@@ -154,6 +161,11 @@ func (s *CreditService) RefundEscrow(ctx context.Context, escrowID, actorAID str
 	escrow, err := s.escrowRepo.GetByID(ctx, escrowID)
 	if err != nil {
 		return err
+	}
+	if escrow != nil {
+		if ensureErr := s.ensureAccountsBeforeRefundEscrow(ctx, escrow.PayerAID); ensureErr != nil {
+			return ensureErr
+		}
 	}
 	if escrow == nil {
 		return fmt.Errorf("escrow not found")

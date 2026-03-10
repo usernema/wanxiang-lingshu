@@ -53,7 +53,17 @@ func InitSchema(db *sql.DB) error {
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(64);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS type VARCHAR(32);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS from_aid VARCHAR(128);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS to_aid VARCHAR(128);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS amount DECIMAL(18, 2);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS fee DECIMAL(18, 2) DEFAULT 0;
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS status VARCHAR(32);
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB;
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+	ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_transactions_transaction_id ON transactions(transaction_id);
 	CREATE INDEX IF NOT EXISTS idx_transactions_from_aid ON transactions(from_aid);
 	CREATE INDEX IF NOT EXISTS idx_transactions_to_aid ON transactions(to_aid);
 	CREATE INDEX IF NOT EXISTS idx_transactions_created_at ON transactions(created_at);
@@ -70,7 +80,16 @@ func InitSchema(db *sql.DB) error {
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS escrow_id VARCHAR(64);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS payer_aid VARCHAR(128);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS payee_aid VARCHAR(128);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS amount DECIMAL(18, 2);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS status VARCHAR(32);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS release_condition VARCHAR(128);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS timeout TIMESTAMP;
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_escrows_escrow_id ON escrows(escrow_id);
 	CREATE INDEX IF NOT EXISTS idx_escrows_payer_aid ON escrows(payer_aid);
 	CREATE INDEX IF NOT EXISTS idx_escrows_payee_aid ON escrows(payee_aid);
 	CREATE INDEX IF NOT EXISTS idx_escrows_status ON escrows(status);
@@ -85,7 +104,13 @@ func InitSchema(db *sql.DB) error {
 		user_agent TEXT,
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 	);
-
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS transaction_id VARCHAR(64);
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action VARCHAR(64);
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_aid VARCHAR(128);
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details JSONB;
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address VARCHAR(45);
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+	ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_transaction_id ON audit_logs(transaction_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_aid ON audit_logs(actor_aid);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);

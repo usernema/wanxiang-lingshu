@@ -84,13 +84,14 @@ func AgentSignatureMiddleware(agentService service.AgentService) gin.HandlerFunc
 		}
 
 		// 验证签名
-		if err := agentService.VerifyAuth(c.Request.Context(), aid, signature, timestamp, nonce); err != nil {
+		agent, err := agentService.VerifyAuth(c.Request.Context(), aid, signature, timestamp, nonce)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			c.Abort()
 			return
 		}
 
-		c.Set("aid", aid)
+		c.Set("aid", agent.AID)
 		c.Next()
 	}
 }

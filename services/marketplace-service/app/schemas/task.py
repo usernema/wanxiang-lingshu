@@ -1,7 +1,27 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from datetime import datetime
 from decimal import Decimal
+from typing import List
+
+
+class TaskConsistencyExample(BaseModel):
+    task_id: str
+    status: str
+    issue: str
+
+
+class TaskConsistencySummary(BaseModel):
+    open_with_lifecycle_fields: int
+    in_progress_missing_assignment: int
+    completed_missing_completed_at: int
+    cancelled_missing_cancelled_at: int
+    total_issues: int
+
+
+class TaskConsistencyReport(BaseModel):
+    summary: TaskConsistencySummary
+    examples: List[TaskConsistencyExample]
 
 class TaskBase(BaseModel):
     title: str = Field(..., max_length=256)
@@ -14,15 +34,13 @@ class TaskCreate(TaskBase):
     employer_aid: str = Field(..., max_length=128)
 
 class TaskUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = Field(None, max_length=256)
     description: Optional[str] = None
     requirements: Optional[str] = None
     reward: Optional[Decimal] = Field(None, ge=0)
     deadline: Optional[datetime] = None
-    worker_aid: Optional[str] = Field(None, max_length=128)
-    escrow_id: Optional[str] = Field(None, max_length=64)
-    status: Optional[str] = None
-    completed_at: Optional[datetime] = None
 
 class TaskResponse(TaskBase):
     id: int

@@ -1,0 +1,220 @@
+services:
+  frontend-demo:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_APP_MODE: ${DEMO_VITE_APP_MODE:-leadership-demo}
+        VITE_DEMO_BANNER_LABEL: ${DEMO_VITE_DEMO_BANNER_LABEL:-Leadership Demo}
+        VITE_DEMO_GATEWAY_LABEL: ${DEMO_VITE_DEMO_GATEWAY_LABEL:-http://localhost:3300}
+        VITE_DEMO_RESET_SESSIONS_ON_LOAD: ${DEMO_VITE_DEMO_RESET_SESSIONS_ON_LOAD:-true}
+    container_name: a2ahub-frontend-demo
+    depends_on:
+      - api-gateway-demo
+    ports:
+      - "${DEMO_FRONTEND_PORT:-5175}:80"
+    networks:
+      - leadership-demo-network
+
+  postgres-demo:
+    image: postgres:15-alpine
+    container_name: a2ahub-postgres-demo
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-a2ahub}
+      POSTGRES_USER: ${POSTGRES_USER:-a2ahub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-a2ahub_password}
+    ports:
+      - "${DEMO_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - leadership-demo-network
+
+  redis-demo:
+    image: redis:7-alpine
+    container_name: a2ahub-redis-demo
+    ports:
+      - "${DEMO_REDIS_PORT:-56379}:6379"
+    volumes:
+      - redis_demo_data:/data
+    networks:
+      - leadership-demo-network
+
+  rabbitmq-demo:
+    image: rabbitmq:3-management-alpine
+    container_name: a2ahub-rabbitmq-demo
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-a2ahub}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-a2ahub_password}
+    ports:
+      - "${DEMO_RABBITMQ_PORT:-35672}:5672"
+      - "${DEMO_RABBITMQ_MANAGEMENT_PORT:-35673}:15672"
+    volumes:
+      - rabbitmq_demo_data:/var/lib/rabbitmq
+    networks:
+      - leadership-demo-network
+
+  elasticsearch-demo:
+    image: elasticsearch:8.11.0
+    container_name: a2ahub-elasticsearch-demo
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: -Xms512m -Xmx512m
+    ports:
+      - "${DEMO_ELASTICSEARCH_PORT:-39200}:9200"
+    volumes:
+      - elasticsearch_demo_data:/usr/share/elasticsearch/data
+    networks:
+      - leadership-demo-network
+
+  minio-demo:
+    image: minio/minio:latest
+    container_name: a2ahub-minio-demo
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-a2ahub}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-a2ahub_password}
+    ports:
+      - "${DEMO_MINIO_PORT:-39000}:9000"
+      - "${DEMO_MINIO_CONSOLE_PORT:-39001}:9001"
+    volumes:
+      - minio_demo_data:/data
+    networks:
+      - leadership-demo-network
+
+  identity-service-demo:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-identity-service-demo
+    environment:
+      PORT: 8001
+      ENV: leadership-demo
+      DB_HOST: postgres-demo
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-a2ahub}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-a2ahub_password}
+      DB_NAME: ${POSTGRES_DB:-a2ahub}
+      DB_SSLMODE: disable
+      REDIS_HOST: redis-demo
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      DEV_BOOTSTRAP_ENABLED: "true"
+    depends_on:
+      - postgres-demo
+      - redis-demo
+    networks:
+      - leadership-demo-network
+
+  forum-service-demo:
+    build:
+      context: ./services/forum-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-forum-service-demo
+    environment:
+      PORT: 3002
+      NODE_ENV: leadership-demo
+      DB_HOST: postgres-demo
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-a2ahub}
+      DB_USER: ${POSTGRES_USER:-a2ahub}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-a2ahub_password}
+      REDIS_HOST: redis-demo
+      REDIS_PORT: 6379
+      ES_NODE: http://elasticsearch-demo:9200
+    depends_on:
+      - postgres-demo
+      - redis-demo
+      - elasticsearch-demo
+    networks:
+      - leadership-demo-network
+
+  credit-service-demo:
+    build:
+      context: ./services/credit-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-credit-service-demo
+    environment:
+      SERVER_PORT: 8080
+      GIN_MODE: debug
+      DB_HOST: postgres-demo
+      DB_PORT: 5432
+      DB_USER: ${POSTGRES_USER:-a2ahub}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-a2ahub_password}
+      DB_NAME: ${POSTGRES_DB:-a2ahub}
+      DB_SSLMODE: disable
+      REDIS_HOST: redis-demo
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://${RABBITMQ_DEFAULT_USER:-a2ahub}:${RABBITMQ_DEFAULT_PASS:-a2ahub_password}@rabbitmq-demo:5672/
+    depends_on:
+      - postgres-demo
+      - redis-demo
+      - rabbitmq-demo
+    networks:
+      - leadership-demo-network
+
+  marketplace-service-demo:
+    build:
+      context: ./services/marketplace-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-marketplace-service-demo
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-a2ahub}:${POSTGRES_PASSWORD:-a2ahub_password}@postgres-demo:5432/${POSTGRES_DB:-a2ahub}
+      REDIS_URL: redis://redis-demo:6379/0
+      MINIO_ENDPOINT: minio-demo:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-a2ahub}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-a2ahub_password}
+      MINIO_BUCKET: marketplace
+      CREDIT_SERVICE_URL: http://credit-service-demo:8080
+      PLATFORM_FEE_RATE: 0.10
+    depends_on:
+      - postgres-demo
+      - redis-demo
+      - minio-demo
+      - credit-service-demo
+    networks:
+      - leadership-demo-network
+
+  api-gateway-demo:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    container_name: a2ahub-api-gateway-demo
+    environment:
+      NODE_ENV: leadership-demo
+      PORT: 3000
+      IDENTITY_SERVICE_URL: http://identity-service-demo:8001
+      FORUM_SERVICE_URL: http://forum-service-demo:3002
+      CREDIT_SERVICE_URL: http://credit-service-demo:8080
+      MARKETPLACE_SERVICE_URL: http://marketplace-service-demo:8000
+      REDIS_HOST: redis-demo
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-your-secret-key-change-in-production}
+      ALLOWED_ORIGINS: http://localhost:${DEMO_FRONTEND_PORT:-5175}
+      DEMO_MODE: leadership-demo
+      DEMO_READINESS_TIMEOUT_MS: 5000
+      DEMO_BOOTSTRAP_PATH: /api/v1/agents/dev/bootstrap
+    ports:
+      - "${DEMO_GATEWAY_PORT:-3300}:3000"
+    depends_on:
+      - identity-service-demo
+      - forum-service-demo
+      - credit-service-demo
+      - marketplace-service-demo
+      - redis-demo
+    networks:
+      - leadership-demo-network
+
+volumes:
+  postgres_demo_data:
+  redis_demo_data:
+  rabbitmq_demo_data:
+  elasticsearch_demo_data:
+  minio_demo_data:
+
+networks:
+  leadership-demo-network:
+    name: ${DEMO_NETWORK_NAME:-a2ahub-leadership-demo-network}
+    driver: bridge

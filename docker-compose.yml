@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # PostgreSQL 数据库
   postgres:
     image: postgres:15-alpine
     container_name: a2ahub-postgres
@@ -17,7 +14,6 @@ services:
     networks:
       - a2ahub-network
 
-  # Redis 缓存
   redis:
     image: redis:7-alpine
     container_name: a2ahub-redis
@@ -28,7 +24,6 @@ services:
     networks:
       - a2ahub-network
 
-  # RabbitMQ 消息队列
   rabbitmq:
     image: rabbitmq:3-management-alpine
     container_name: a2ahub-rabbitmq
@@ -43,14 +38,13 @@ services:
     networks:
       - a2ahub-network
 
-  # Elasticsearch 搜索引擎
   elasticsearch:
     image: elasticsearch:8.11.0
     container_name: a2ahub-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
       - "9200:9200"
     volumes:
@@ -58,7 +52,6 @@ services:
     networks:
       - a2ahub-network
 
-  # MinIO 对象存储
   minio:
     image: minio/minio:latest
     container_name: a2ahub-minio
@@ -74,24 +67,129 @@ services:
     networks:
       - a2ahub-network
 
-  # API Gateway (开发环境)
+  identity-service:
+    build:
+      context: ./services/identity-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-identity-service
+    environment:
+      PORT: 8001
+      ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: a2ahub
+      DB_PASSWORD: a2ahub_password
+      DB_NAME: a2ahub
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: your-secret-key-change-in-production
+    ports:
+      - "8001:8001"
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - a2ahub-network
+
+  forum-service:
+    build:
+      context: ./services/forum-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-forum-service
+    environment:
+      PORT: 3002
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: a2ahub
+      DB_USER: a2ahub
+      DB_PASSWORD: a2ahub_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ES_NODE: http://elasticsearch:9200
+    ports:
+      - "3002:3002"
+    depends_on:
+      - postgres
+      - redis
+      - elasticsearch
+    networks:
+      - a2ahub-network
+
+  credit-service:
+    build:
+      context: ./services/credit-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-credit-service
+    environment:
+      SERVER_PORT: 8080
+      GIN_MODE: debug
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: a2ahub
+      DB_PASSWORD: a2ahub_password
+      DB_NAME: a2ahub
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://a2ahub:a2ahub_password@rabbitmq:5672/
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+      - redis
+      - rabbitmq
+    networks:
+      - a2ahub-network
+
+  marketplace-service:
+    build:
+      context: ./services/marketplace-service
+      dockerfile: Dockerfile
+    container_name: a2ahub-marketplace-service
+    environment:
+      DATABASE_URL: postgresql+asyncpg://a2ahub:a2ahub_password@postgres:5432/a2ahub
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: a2ahub
+      MINIO_SECRET_KEY: a2ahub_password
+      MINIO_BUCKET: marketplace
+      CREDIT_SERVICE_URL: http://credit-service:8080
+      PLATFORM_FEE_RATE: 0.10
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - credit-service
+    networks:
+      - a2ahub-network
+
   api-gateway:
     build:
       context: ./services/api-gateway
       dockerfile: Dockerfile
     container_name: a2ahub-api-gateway
-    ports:
-      - "3000:3000"
     environment:
       NODE_ENV: development
       PORT: 3000
-    volumes:
-      - ./services/api-gateway:/app
-      - /app/node_modules
+      IDENTITY_SERVICE_URL: http://identity-service:8001
+      FORUM_SERVICE_URL: http://forum-service:3002
+      CREDIT_SERVICE_URL: http://credit-service:8080
+      MARKETPLACE_SERVICE_URL: http://marketplace-service:8000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: your-secret-key-change-in-production
+    ports:
+      - "3000:3000"
     depends_on:
-      - postgres
+      - identity-service
+      - forum-service
+      - credit-service
+      - marketplace-service
       - redis
-      - rabbitmq
     networks:
       - a2ahub-network
 

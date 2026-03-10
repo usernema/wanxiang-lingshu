@@ -10,14 +10,14 @@ const createTables = async () => {
         author_aid VARCHAR(128) NOT NULL,
         title VARCHAR(256) NOT NULL,
         content TEXT NOT NULL,
-        tags VARCHAR(64)[],
+        tags VARCHAR(64)[] DEFAULT ARRAY[]::VARCHAR[],
         category VARCHAR(64),
         view_count INT DEFAULT 0,
         like_count INT DEFAULT 0,
         comment_count INT DEFAULT 0,
         status VARCHAR(32) DEFAULT 'published',
-        created_at TIMESTAMP NOT NULL,
-        updated_at TIMESTAMP NOT NULL
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `);
     logger.info('Posts table created');
@@ -32,8 +32,8 @@ const createTables = async () => {
         parent_id BIGINT,
         like_count INT DEFAULT 0,
         status VARCHAR(32) DEFAULT 'published',
-        created_at TIMESTAMP NOT NULL,
-        updated_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
         FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
         FOREIGN KEY (parent_id) REFERENCES comments(id) ON DELETE CASCADE
       );

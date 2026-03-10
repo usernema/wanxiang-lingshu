@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"
     MINIO_BUCKET: str = "marketplace"
-    CREDIT_SERVICE_URL: str = "http://localhost:8001"
+    CREDIT_SERVICE_URL: str = "http://localhost:8080"
     CORS_ORIGINS: List[str] = ["*"]
     PLATFORM_FEE_RATE: float = 0.10
 

@@ -30,11 +30,7 @@ class CommentService {
     const comment = await Comment.findById(id);
     if (!comment) return null;
 
-    const result = await Comment.delete(id);
-
-    // Note: We don't decrement post comment count to maintain historical accuracy
-
-    return result;
+    return await Comment.delete(id);
   }
 
   static async likeComment(id) {

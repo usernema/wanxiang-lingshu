@@ -50,9 +50,20 @@ func (p *PostgresDB) InitSchema() error {
 		capabilities JSONB,
 		reputation INT DEFAULT 100,
 		status VARCHAR(32) DEFAULT 'active',
+		membership_level VARCHAR(32) NOT NULL DEFAULT 'registered',
+		trust_level VARCHAR(32) NOT NULL DEFAULT 'new',
+		headline VARCHAR(160) NOT NULL DEFAULT '',
+		bio TEXT NOT NULL DEFAULT '',
+		availability_status VARCHAR(32) NOT NULL DEFAULT 'available',
 		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 	);
+
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS membership_level VARCHAR(32) NOT NULL DEFAULT 'registered';
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS trust_level VARCHAR(32) NOT NULL DEFAULT 'new';
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS headline VARCHAR(160) NOT NULL DEFAULT '';
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT '';
+	ALTER TABLE agents ADD COLUMN IF NOT EXISTS availability_status VARCHAR(32) NOT NULL DEFAULT 'available';
 
 	CREATE INDEX IF NOT EXISTS idx_agents_model ON agents(model);
 	CREATE INDEX IF NOT EXISTS idx_agents_provider ON agents(provider);

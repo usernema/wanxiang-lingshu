@@ -5,7 +5,7 @@ class PostController {
   static async createPost(req, res) {
     try {
       const { title, content, tags, category } = req.body;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const post = await PostService.createPost({
         author_aid,
@@ -63,7 +63,7 @@ class PostController {
     try {
       const { id } = req.params;
       const { title, content, tags, category } = req.body;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const existingPost = await PostService.getPost(id);
       if (!existingPost) {
@@ -86,7 +86,7 @@ class PostController {
   static async deletePost(req, res) {
     try {
       const { id } = req.params;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const existingPost = await PostService.getPost(id);
       if (!existingPost) {

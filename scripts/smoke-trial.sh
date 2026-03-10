@@ -2,16 +2,78 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost/api}"
+HEALTH_BASE_URL="${HEALTH_BASE_URL:-${BASE_URL%/api}}"
 JQ_BIN="${JQ_BIN:-jq}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_DIR="${TMP_DIR:-/tmp/a2ahub-trial-smoke}"
+CURL_INSECURE="${CURL_INSECURE:-false}"
+CURL_RESOLVE="${CURL_RESOLVE:-}"
 mkdir -p "$TMP_DIR"
+
+CURL_ARGS=()
+if [[ "$CURL_INSECURE" == "true" ]]; then
+  CURL_ARGS+=(-k)
+fi
+if [[ -n "$CURL_RESOLVE" ]]; then
+  IFS=',' read -r -a resolve_entries <<<"$CURL_RESOLVE"
+  for entry in "${resolve_entries[@]}"; do
+    trimmed="${entry#${entry%%[![:space:]]*}}"
+    trimmed="${trimmed%${trimmed##*[![:space:]]}}"
+    if [[ -n "$trimmed" ]]; then
+      CURL_ARGS+=(--resolve "$trimmed")
+    fi
+  done
+fi
 
 require_tool() {
   command -v "$1" >/dev/null 2>&1 || {
     echo "Missing required tool: $1" >&2
     exit 1
   }
+}
+
+curl_fail() {
+  if [[ ${#CURL_ARGS[@]} -gt 0 ]]; then
+    curl -fsS "$@" "${CURL_ARGS[@]}"
+  else
+    curl -fsS "$@"
+  fi
+}
+
+curl_status() {
+  if [[ ${#CURL_ARGS[@]} -gt 0 ]]; then
+    curl -sS -o /dev/null -w '%{http_code}' "$@" "${CURL_ARGS[@]}"
+  else
+    curl -sS -o /dev/null -w '%{http_code}' "$@"
+  fi
+}
+
+curl_soft() {
+  if [[ ${#CURL_ARGS[@]} -gt 0 ]]; then
+    curl -sS "$@" "${CURL_ARGS[@]}"
+  else
+    curl -sS "$@"
+  fi
+}
+
+curl_json() {
+  local url="$1"
+  curl_fail "$url"
+}
+
+http_status() {
+  local url="$1"
+  curl_status "$url"
+}
+
+assert_non_2xx() {
+  local path="$1"
+  local status
+  status="$(http_status "${HEALTH_BASE_URL}${path}")"
+  if [[ "$status" =~ ^2 ]]; then
+    echo "Expected non-2xx for ${path}, got ${status}" >&2
+    exit 1
+  fi
 }
 
 api_json() {
@@ -24,9 +86,9 @@ api_json() {
     headers+=(-H "Authorization: Bearer $token")
   fi
   if [[ -n "$body" ]]; then
-    curl -fsS -X "$method" "${BASE_URL}${path}" "${headers[@]}" -d "$body"
+    curl_fail -X "$method" "${BASE_URL}${path}" "${headers[@]}" -d "$body"
   else
-    curl -fsS -X "$method" "${BASE_URL}${path}" "${headers[@]}"
+    curl_fail -X "$method" "${BASE_URL}${path}" "${headers[@]}"
   fi
 }
 
@@ -118,62 +180,70 @@ require_tool "$PYTHON_BIN"
 import cryptography
 PY
 
-echo "[1/8] Checking gateway liveness"
-curl -fsS "${BASE_URL%/api}/health/live" | "$JQ_BIN" >/dev/null
+echo "[1/10] Checking public liveness"
+curl_json "${HEALTH_BASE_URL}/health/live" | "$JQ_BIN" >/dev/null
 
-echo "[2/8] Waiting for readiness"
+echo "[2/10] Waiting for public readiness"
 for attempt in $(seq 1 30); do
-  if curl -fsS "${BASE_URL%/api}/health/ready" | "$JQ_BIN" >/dev/null 2>&1; then
+  if curl_json "${HEALTH_BASE_URL}/health/ready" | "$JQ_BIN" >/dev/null 2>&1; then
     break
   fi
   if [[ "$attempt" -eq 30 ]]; then
     echo "Gateway readiness did not become healthy in time" >&2
-    curl -sS "${BASE_URL%/api}/health/ready" || true
+    curl_soft "${HEALTH_BASE_URL}/health/ready" || true
     exit 1
   fi
   sleep 2
 done
 
-echo "[3/8] Registering and logging in employer"
+echo "[3/10] Verifying ingress blocks internal health and metrics"
+assert_non_2xx "/health"
+assert_non_2xx "/health/deps"
+assert_non_2xx "/metrics"
+
+echo "[4/10] Registering and logging in employer"
 employer_data="$(register_and_login employer trial-employer)"
 EMPLOYER_AID="$(printf '%s\n' "$employer_data" | sed -n '1p')"
 EMPLOYER_TOKEN="$(printf '%s\n' "$employer_data" | sed -n '2p')"
 
-echo "[4/8] Registering and logging in worker"
+echo "[5/10] Registering and logging in worker"
 worker_data="$(register_and_login worker trial-worker)"
 WORKER_AID="$(printf '%s\n' "$worker_data" | sed -n '1p')"
 WORKER_TOKEN="$(printf '%s\n' "$worker_data" | sed -n '2p')"
 
-echo "[5/8] Posting introduction thread"
+echo "[6/10] Posting introduction thread"
 POST_RESP="$(api_json POST "/v1/forum/posts" "$EMPLOYER_TOKEN" "{\"title\":\"Trial intro\",\"content\":\"Hello from smoke trial\",\"category\":\"introduction\",\"tags\":[\"trial\",\"intro\"]}")"
 POST_ID="$(printf '%s' "$POST_RESP" | "$JQ_BIN" -r '.data.id // .id')"
 
-echo "[6/8] Creating and purchasing skill"
+echo "[7/10] Creating and purchasing skill"
 SKILL_RESP="$(api_json POST "/v1/marketplace/skills" "$WORKER_TOKEN" "{\"author_aid\":\"${WORKER_AID}\",\"name\":\"Smoke Skill\",\"description\":\"trial purchase flow\",\"category\":\"automation\",\"price\":5}")"
 SKILL_ID="$(printf '%s' "$SKILL_RESP" | "$JQ_BIN" -r '.skill_id')"
 PURCHASE_RESP="$(api_json POST "/v1/marketplace/skills/${SKILL_ID}/purchase" "$EMPLOYER_TOKEN" "{\"buyer_aid\":\"${EMPLOYER_AID}\"}")"
 
-echo "[7/8] Creating, assigning, and completing task with escrow"
+echo "[8/10] Creating, assigning, and completing task with escrow"
 TASK_RESP="$(api_json POST "/v1/marketplace/tasks" "$EMPLOYER_TOKEN" "{\"title\":\"Smoke task\",\"description\":\"trial escrow flow\",\"requirements\":\"none\",\"reward\":7,\"employer_aid\":\"${EMPLOYER_AID}\"}")"
 TASK_ID="$(printf '%s' "$TASK_RESP" | "$JQ_BIN" -r '.task_id')"
-ASSIGN_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/assign?worker_aid=$(printf '%s' "$WORKER_AID" | jq -sRr @uri)" "$EMPLOYER_TOKEN")"
+ASSIGN_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/assign?worker_aid=$(printf '%s' "$WORKER_AID" | "$JQ_BIN" -sRr @uri)" "$EMPLOYER_TOKEN")"
 ESCROW_ID="$(printf '%s' "$ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id')"
 COMPLETE_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/complete" "$WORKER_TOKEN" "{\"worker_aid\":\"${WORKER_AID}\",\"result\":\"done\"}")"
 
-echo "[8/8] Checking wallet balances"
+echo "[9/10] Checking wallet balances"
 EMPLOYER_BALANCE="$(api_json GET "/v1/credits/balance" "$EMPLOYER_TOKEN")"
 WORKER_BALANCE="$(api_json GET "/v1/credits/balance" "$WORKER_TOKEN")"
 
+echo "[10/10] Trial smoke completed"
 echo
-printf 'Employer AID: %s\n' "$EMPLOYER_AID"
-printf 'Worker AID:   %s\n' "$WORKER_AID"
-printf 'Forum post:    %s\n' "$POST_ID"
-printf 'Skill ID:      %s\n' "$SKILL_ID"
-printf 'Purchase OK:   %s\n' "$(printf '%s' "$PURCHASE_RESP" | "$JQ_BIN" -r '.status')"
-printf 'Task ID:       %s\n' "$TASK_ID"
-printf 'Escrow ID:     %s\n' "$ESCROW_ID"
-printf 'Task status:   %s\n' "$(printf '%s' "$COMPLETE_RESP" | "$JQ_BIN" -r '.status')"
-printf 'Employer bal:  %s\n' "$(printf '%s' "$EMPLOYER_BALANCE" | "$JQ_BIN" -r '.balance')"
-printf 'Worker bal:    %s\n' "$(printf '%s' "$WORKER_BALANCE" | "$JQ_BIN" -r '.balance')"
+printf 'Health base:    %s\n' "$HEALTH_BASE_URL"
+printf 'API base:       %s\n' "$BASE_URL"
+printf 'Employer AID:   %s\n' "$EMPLOYER_AID"
+printf 'Worker AID:     %s\n' "$WORKER_AID"
+printf 'Forum post:     %s\n' "$POST_ID"
+printf 'Skill ID:       %s\n' "$SKILL_ID"
+printf 'Purchase OK:    %s\n' "$(printf '%s' "$PURCHASE_RESP" | "$JQ_BIN" -r '.status')"
+printf 'Task ID:        %s\n' "$TASK_ID"
+printf 'Escrow ID:      %s\n' "$ESCROW_ID"
+printf 'Task status:    %s\n' "$(printf '%s' "$COMPLETE_RESP" | "$JQ_BIN" -r '.status')"
+printf 'Employer bal:   %s\n' "$(printf '%s' "$EMPLOYER_BALANCE" | "$JQ_BIN" -r '.balance')"
+printf 'Worker bal:     %s\n' "$(printf '%s' "$WORKER_BALANCE" | "$JQ_BIN" -r '.balance')"
 echo
 echo "Trial smoke completed successfully."

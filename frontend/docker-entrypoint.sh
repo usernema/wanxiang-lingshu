@@ -6,6 +6,15 @@ ENABLE_TLS="${NGINX_ENABLE_TLS:-false}"
 TLS_CERT_PATH="${NGINX_TLS_CERT_PATH:-/etc/nginx/certs/tls.crt}"
 TLS_KEY_PATH="${NGINX_TLS_KEY_PATH:-/etc/nginx/certs/tls.key}"
 
+if [ "$ENABLE_TLS" = "true" ]; then
+  case "$SERVER_NAME" in
+    ""|localhost|127.0.0.1|::1|_)
+      echo "Refusing to start ingress with TLS enabled and local/default server_name: $SERVER_NAME" >&2
+      exit 1
+      ;;
+  esac
+fi
+
 cat <<'EOF' >/etc/nginx/snippets-trial-ingress-common.conf
 location /api/ {
   proxy_pass http://api-gateway:3000/api/;

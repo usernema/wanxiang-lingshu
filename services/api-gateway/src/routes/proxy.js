@@ -1,79 +1,8 @@
-const { createProxyMiddleware } = require('http-proxy-middleware');
+const { createProxyMiddleware, fixRequestBody } = require('http-proxy-middleware');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { sendError } = require('../middleware/errorHandler');
 
-/**
- * 创建代理配置
- */
-function createProxyConfig(target, pathRewrite = {}) {
-  return {
-    target,
-    changeOrigin: true,
-    pathRewrite,
-    timeout: config.request.timeout,
-    proxyTimeout: config.request.timeout,
-
-    // 请求日志
-    onProxyReq: (proxyReq, req, res) => {
-      // 转发 Request ID
-      proxyReq.setHeader('X-Request-Id', req.id);
-
-      // 转发 Agent 信息
-      if (req.agent) {
-        proxyReq.setHeader('X-Agent-Id', req.agent.aid);
-        proxyReq.setHeader('X-Agent-Reputation', req.agent.reputation);
-      }
-
-      logger.debug('Proxying request', {
-        requestId: req.id,
-        method: req.method,
-        path: req.path,
-        target,
-      });
-    },
-
-    // 响应日志
-    onProxyRes: (proxyRes, req, res) => {
-      logger.debug('Proxy response received', {
-        requestId: req.id,
-        statusCode: proxyRes.statusCode,
-        target,
-      });
-    },
-
-    // 错误处理
-    onError: (err, req, res) => {
-      logger.error('Proxy error', {
-        requestId: req.id,
-        error: err.message,
-        target,
-        path: req.path,
-      });
-
-      res.status(502).json({
-        success: false,
-        error: 'Service temporarily unavailable',
-        code: 'SERVICE_UNAVAILABLE',
-        service: extractServiceName(target),
-        requestId: req.id,
-      });
-    },
-
-    // 重试配置
-    retry: {
-      retries: config.request.retryAttempts,
-      retryDelay: config.request.retryDelay,
-      retryCondition: (error) => {
-        // 仅在网络错误或 5xx 错误时重试
-        return !error.response || (error.response.status >= 500 && error.response.status <= 599);
-      },
-    },
-  };
-}
-
-/**
- * 从 URL 提取服务名称
- */
 function extractServiceName(url) {
   try {
     const urlObj = new URL(url);
@@ -83,9 +12,85 @@ function extractServiceName(url) {
   }
 }
 
-/**
- * 创建所有服务的代理中间件
- */
+function classifyProxyError(error) {
+  const code = error?.code;
+  const message = error?.message || '';
+
+  if (code === 'ECONNABORTED' || code === 'ETIMEDOUT' || message.toLowerCase().includes('timeout')) {
+    return { status: 504, code: 'UPSTREAM_TIMEOUT', error: 'Upstream service timed out' };
+  }
+
+  if (['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)) {
+    return { status: 502, code: 'UPSTREAM_UNAVAILABLE', error: 'Upstream service unavailable' };
+  }
+
+  return { status: 502, code: 'BAD_GATEWAY', error: 'Bad gateway' };
+}
+
+function sanitizeForwardHeaders(req) {
+  return {
+    'X-Request-Id': req.id,
+    'X-Trace-Id': req.traceId || req.id,
+    'X-Forwarded-For': req.ip,
+    'X-Forwarded-Host': req.get('host'),
+    'X-Forwarded-Proto': req.protocol,
+  };
+}
+
+function createProxyConfig(target) {
+  const service = extractServiceName(target);
+
+  return {
+    target,
+    changeOrigin: true,
+    timeout: config.request.connectTimeout,
+    proxyTimeout: config.request.upstreamTimeout,
+    onProxyReq: (proxyReq, req, res) => {
+      const forwardHeaders = sanitizeForwardHeaders(req);
+      Object.entries(forwardHeaders).forEach(([header, value]) => {
+        if (value) proxyReq.setHeader(header, value);
+      });
+
+      if (req.agent) {
+        proxyReq.setHeader('X-Agent-Id', req.agent.aid);
+        proxyReq.setHeader('X-Agent-ID', req.agent.aid);
+        proxyReq.setHeader('X-Agent-Reputation', req.agent.reputation ?? 0);
+        if (req.agent.membership_level) proxyReq.setHeader('X-Agent-Membership-Level', req.agent.membership_level);
+        if (req.agent.trust_level) proxyReq.setHeader('X-Agent-Trust-Level', req.agent.trust_level);
+      }
+
+      fixRequestBody(proxyReq, req, res);
+      logger.debug('Proxying request', {
+        requestId: req.id,
+        method: req.method,
+        path: req.path,
+        target,
+        service,
+      });
+    },
+    onError: (err, req, res) => {
+      const classified = config.request.classifyProxyErrors ? classifyProxyError(err) : { status: 502, code: 'BAD_GATEWAY', error: 'Bad gateway' };
+
+      logger.error('Proxy error', {
+        requestId: req.id,
+        error: err.message,
+        errorCode: err.code,
+        target,
+        service,
+        path: req.path,
+        classifiedCode: classified.code,
+      });
+
+      return sendError(res, req, {
+        status: classified.status,
+        code: classified.code,
+        error: classified.error,
+        extras: { service },
+      });
+    },
+  };
+}
+
 function createRouteProxies() {
   return {
     identity: createProxyMiddleware(createProxyConfig(config.services.identity)),
@@ -98,6 +103,8 @@ function createRouteProxies() {
 }
 
 module.exports = {
+  classifyProxyError,
   createProxyConfig,
   createRouteProxies,
+  extractServiceName,
 };

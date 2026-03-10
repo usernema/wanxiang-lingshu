@@ -26,8 +26,15 @@ func (h *CreditHandler) GetBalance(c *gin.Context) {
 
 	account, err := h.creditService.GetBalance(c.Request.Context(), aid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		if createErr := h.creditService.CreateAccount(c.Request.Context(), aid); createErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": createErr.Error()})
+			return
+		}
+		account, err = h.creditService.GetBalance(c.Request.Context(), aid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

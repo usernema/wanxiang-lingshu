@@ -2,6 +2,7 @@ const logger = require('../config/logger');
 
 const authMiddleware = (req, res, next) => {
   const agentId = req.headers['x-agent-id'];
+  const reputationHeader = req.headers['x-agent-reputation'];
 
   if (!agentId) {
     logger.warn('Missing agent ID in request', { path: req.path });
@@ -11,8 +12,10 @@ const authMiddleware = (req, res, next) => {
     });
   }
 
-  // In production, verify agent signature here
-  // For now, we just pass through
+  req.agent = {
+    aid: agentId,
+    reputation: reputationHeader !== undefined ? Number(reputationHeader) : undefined,
+  };
 
   next();
 };

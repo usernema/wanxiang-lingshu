@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/a2ahub/identity-service/internal/config"
@@ -18,11 +21,17 @@ import (
 // AgentService Agent 服务接口
 type AgentService interface {
 	Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
+	IssueLoginChallenge(ctx context.Context, aid string) (*LoginChallengeResponse, error)
 	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
+	Refresh(ctx context.Context, aid string) (*LoginResponse, error)
+	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
+	UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error)
 	UpdateReputation(ctx context.Context, aid string, change int, reason string) error
 	GetReputationHistory(ctx context.Context, aid string, limit int) ([]models.ReputationHistory, error)
-	VerifyAuth(ctx context.Context, aid, signature, timestamp, nonce string) error
+	VerifyAuth(ctx context.Context, aid, signature, timestamp, nonce string) (*models.Agent, error)
+	EnsureDevBootstrap(ctx context.Context) (*DevBootstrapResponse, error)
+	GetDevSession(ctx context.Context, role string) (*DevSessionResponse, error)
 }
 
 // agentService Agent 服务实现
@@ -52,18 +61,21 @@ type RegisterRequest struct {
 
 // RegisterResponse 注册响应
 type RegisterResponse struct {
-	AID            string    `json:"aid"`
-	Certificate    string    `json:"certificate"`
-	InitialCredits int       `json:"initial_credits"`
-	CreatedAt      time.Time `json:"created_at"`
+	AID            string        `json:"aid"`
+	Certificate    string        `json:"certificate"`
+	InitialCredits int           `json:"initial_credits"`
+	CreatedAt      time.Time     `json:"created_at"`
+	Agent          *models.Agent `json:"agent"`
 }
 
 // Register 注册 Agent
 func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error) {
 	// 验证公钥格式
-	_, err := utils.ParsePublicKeyFromPEM(req.PublicKey)
-	if err != nil {
-		return nil, fmt.Errorf("invalid public key format: %w", err)
+	if s.isLikelyPEM(req.PublicKey) {
+		_, err := utils.ParsePublicKeyFromPEM(req.PublicKey)
+		if err != nil {
+			return nil, fmt.Errorf("invalid public key format: %w", err)
+		}
 	}
 
 	// 验证能力证明（简化版本，实际应该有更复杂的验证逻辑）
@@ -78,16 +90,28 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 
 	// 创建 Agent
 	now := time.Now()
+	status := "pending"
+	membershipLevel := "registered"
+	trustLevel := "new"
+	if s.config.Security.TrialAutoActivate {
+		status = "active"
+		membershipLevel = "member"
+		trustLevel = "trial"
+	}
+
 	agent := &models.Agent{
-		AID:          aid,
-		Model:        req.Model,
-		Provider:     req.Provider,
-		PublicKey:    req.PublicKey,
-		Capabilities: req.Capabilities,
-		Reputation:   s.config.Reputation.InitialReputation,
-		Status:       "active",
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		AID:                aid,
+		Model:              req.Model,
+		Provider:           req.Provider,
+		PublicKey:          req.PublicKey,
+		Capabilities:       req.Capabilities,
+		Reputation:         s.config.Reputation.InitialReputation,
+		Status:             status,
+		MembershipLevel:    membershipLevel,
+		TrustLevel:         trustLevel,
+		AvailabilityStatus: "available",
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	if err := s.repo.Create(ctx, agent); err != nil {
@@ -111,10 +135,19 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 		Certificate:    certificate,
 		InitialCredits: s.config.Reputation.InitialReputation,
 		CreatedAt:      now,
+		Agent:          agent,
 	}, nil
 }
 
 // LoginRequest 登录请求
+type LoginChallengeResponse struct {
+	AID       string    `json:"aid"`
+	Nonce     string    `json:"nonce"`
+	Timestamp int64     `json:"timestamp"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Message   string    `json:"message"`
+}
+
 type LoginRequest struct {
 	AID       string `json:"aid" binding:"required"`
 	Timestamp int64  `json:"timestamp" binding:"required"`
@@ -124,60 +157,361 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expires_at"`
+	Token     string        `json:"token"`
+	ExpiresAt time.Time     `json:"expires_at"`
+	Agent     *models.Agent `json:"agent"`
+}
+
+type UpdateProfileRequest struct {
+	Headline           string   `json:"headline"`
+	Bio                string   `json:"bio"`
+	AvailabilityStatus string   `json:"availability_status"`
+	Capabilities       []string `json:"capabilities"`
+}
+
+type DevBootstrapSession struct {
+	Role      string       `json:"role"`
+	Aid       string       `json:"aid"`
+	Token     string       `json:"token"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	Agent     *models.Agent `json:"agent"`
+}
+
+type DevBootstrapResponse struct {
+	Sessions []DevBootstrapSession `json:"sessions"`
+}
+
+type DevSessionResponse struct {
+	Role      string        `json:"role"`
+	Aid       string        `json:"aid"`
+	Token     string        `json:"token"`
+	ExpiresAt time.Time     `json:"expires_at"`
+	Agent     *models.Agent `json:"agent"`
+}
+
+var devBootstrapProfiles = map[string]struct {
+	AID          string
+	Model        string
+	Provider     string
+	Capabilities []string
+	PublicKey    string
+	Reputation   int
+}{
+	"default": {
+		AID:          "agent://a2ahub/dev-default",
+		Model:        "dev-default",
+		Provider:     "a2ahub",
+		Capabilities: []string{"code", "analysis", "planning"},
+		PublicKey:    "dev-public-key-default",
+		Reputation:   120,
+	},
+	"employer": {
+		AID:          "agent://a2ahub/dev-employer",
+		Model:        "dev-employer",
+		Provider:     "a2ahub",
+		Capabilities: []string{"publish_tasks", "review_workers", "manage_bounties"},
+		PublicKey:    "dev-public-key-employer",
+		Reputation:   150,
+	},
+	"worker": {
+		AID:          "agent://a2ahub/dev-worker",
+		Model:        "dev-worker",
+		Provider:     "a2ahub",
+		Capabilities: []string{"execute_tasks", "collaboration", "delivery"},
+		PublicKey:    "dev-public-key-worker",
+		Reputation:   130,
+	},
+}
+
+var devBootstrapRoleOrder = []string{"default", "employer", "worker"}
+
+func (s *agentService) ensureDevBootstrapEnabled() error {
+	if s.config == nil || !s.config.Dev.BootstrapEnabled {
+		return fmt.Errorf("dev bootstrap is disabled")
+	}
+	return nil
+}
+
+func (s *agentService) ensureDevAgent(ctx context.Context, role string) (*models.Agent, error) {
+	profile, ok := devBootstrapProfiles[role]
+	if !ok {
+		return nil, fmt.Errorf("unknown dev role: %s", role)
+	}
+
+	agent, err := s.repo.GetByAID(ctx, profile.AID)
+	if err == nil {
+		return agent, nil
+	}
+
+	now := time.Now()
+	agent = &models.Agent{
+		AID:                profile.AID,
+		Model:              profile.Model,
+		Provider:           profile.Provider,
+		PublicKey:          profile.PublicKey,
+		Capabilities:       profile.Capabilities,
+		Reputation:         profile.Reputation,
+		Status:             "active",
+		MembershipLevel:    "trusted_seller",
+		TrustLevel:         "internal",
+		AvailabilityStatus: "available",
+		CreatedAt:          now,
+		UpdatedAt:          now,
+	}
+
+	if err := s.repo.Create(ctx, agent); err != nil {
+		return nil, fmt.Errorf("failed to seed dev agent %s: %w", role, err)
+	}
+
+	return agent, nil
+}
+
+func (s *agentService) buildDevSession(ctx context.Context, role string) (*DevSessionResponse, error) {
+	agent, err := s.ensureDevAgent(ctx, role)
+	if err != nil {
+		return nil, err
+	}
+
+	token, expiresAt, err := s.generateJWT(agent.AID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate dev token: %w", err)
+	}
+
+	return &DevSessionResponse{
+		Role:      role,
+		Aid:       agent.AID,
+		Token:     token,
+		ExpiresAt: expiresAt,
+		Agent:     s.sanitizeAgent(agent),
+	}, nil
+}
+
+func (s *agentService) EnsureDevBootstrap(ctx context.Context) (*DevBootstrapResponse, error) {
+	if err := s.ensureDevBootstrapEnabled(); err != nil {
+		return nil, err
+	}
+
+	sessions := make([]DevBootstrapSession, 0, len(devBootstrapRoleOrder))
+	for _, role := range devBootstrapRoleOrder {
+		session, err := s.buildDevSession(ctx, role)
+		if err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, DevBootstrapSession{
+			Role:      session.Role,
+			Aid:       session.Aid,
+			Token:     session.Token,
+			ExpiresAt: session.ExpiresAt,
+			Agent:     session.Agent,
+		})
+	}
+
+	return &DevBootstrapResponse{Sessions: sessions}, nil
+}
+
+func (s *agentService) GetDevSession(ctx context.Context, role string) (*DevSessionResponse, error) {
+	if err := s.ensureDevBootstrapEnabled(); err != nil {
+		return nil, err
+	}
+
+	return s.buildDevSession(ctx, role)
+}
+
+func (s *agentService) isDevBootstrapSignature(req *LoginRequest) bool {
+	for _, profile := range devBootstrapProfiles {
+		if req.AID == profile.AID && req.Signature == "dev-bootstrap" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *agentService) ensureDevAgentForLogin(ctx context.Context, aid string) error {
+	for role, profile := range devBootstrapProfiles {
+		if profile.AID != aid {
+			continue
+		}
+		_, err := s.ensureDevAgent(ctx, role)
+		return err
+	}
+	return nil
+}
+
+func (s *agentService) isLikelyPEM(value string) bool {
+	return strings.Contains(value, "BEGIN PUBLIC KEY")
+}
+
+func (s *agentService) IssueLoginChallenge(ctx context.Context, aid string) (*LoginChallengeResponse, error) {
+	if !utils.ValidateAID(aid) {
+		return nil, fmt.Errorf("invalid AID format")
+	}
+
+	agent, err := s.repo.GetByAID(ctx, aid)
+	if err != nil {
+		return nil, fmt.Errorf("agent not found: %w", err)
+	}
+
+	nonce := fmt.Sprintf("login-%d", time.Now().UnixNano())
+	timestamp := time.Now().Unix()
+	expiresAt := time.Now().Add(time.Duration(s.config.Security.ChallengeExpiration) * time.Second)
+	challengeKey := fmt.Sprintf("login_challenge:%s:%s", aid, nonce)
+	payload := fmt.Sprintf("%d", timestamp)
+	if err := s.redis.Client.Set(ctx, challengeKey, payload, time.Duration(s.config.Security.ChallengeExpiration)*time.Second).Err(); err != nil {
+		return nil, fmt.Errorf("failed to store login challenge: %w", err)
+	}
+
+	return &LoginChallengeResponse{
+		AID:       agent.AID,
+		Nonce:     nonce,
+		Timestamp: timestamp,
+		ExpiresAt: expiresAt,
+		Message:   fmt.Sprintf(`{"aid":"%s","nonce":"%s","timestamp":%d}`, aid, nonce, timestamp),
+	}, nil
 }
 
 // Login Agent 登录
 func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error) {
-	// 验证 AID 格式
 	if !utils.ValidateAID(req.AID) {
 		return nil, fmt.Errorf("invalid AID format")
 	}
 
-	// 获取 Agent
+	if s.isDevBootstrapSignature(req) {
+		if err := s.ensureDevBootstrapEnabled(); err != nil {
+			return nil, err
+		}
+		if err := s.ensureDevAgentForLogin(ctx, req.AID); err != nil {
+			return nil, err
+		}
+	}
+
 	agent, err := s.repo.GetByAID(ctx, req.AID)
 	if err != nil {
 		return nil, fmt.Errorf("agent not found: %w", err)
 	}
 
-	// 检查状态
 	if agent.Status != "active" {
 		return nil, fmt.Errorf("agent is not active")
 	}
 
-	// 检查信誉分
 	if agent.Reputation < s.config.Reputation.MinReputationThreshold {
 		return nil, fmt.Errorf("reputation too low, account frozen")
 	}
 
-	// 验证签名
-	if err := s.verifyLoginSignature(agent, req); err != nil {
-		return nil, fmt.Errorf("signature verification failed: %w", err)
+	if req.Signature == "dev-bootstrap" {
+		if !s.isDevBootstrapSignature(req) {
+			return nil, fmt.Errorf("invalid dev bootstrap login")
+		}
+	} else {
+		if err := s.validateLoginChallenge(ctx, req); err != nil {
+			return nil, fmt.Errorf("invalid login challenge: %w", err)
+		}
+		if err := s.verifyLoginSignature(agent, req); err != nil {
+			return nil, fmt.Errorf("signature verification failed: %w", err)
+		}
+		if err := s.consumeLoginChallenge(ctx, req); err != nil {
+			return nil, fmt.Errorf("failed to consume login challenge: %w", err)
+		}
 	}
 
-	// 生成 JWT Token
 	token, expiresAt, err := s.generateJWT(agent.AID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	logrus.WithField("aid", req.AID).Info("Agent logged in successfully")
+	logrus.WithFields(logrus.Fields{
+		"aid": agent.AID,
+		"membership_level": agent.MembershipLevel,
+		"trust_level": agent.TrustLevel,
+	}).Info("Agent logged in successfully")
 
 	return &LoginResponse{
 		Token:     token,
 		ExpiresAt: expiresAt,
+		Agent:     s.sanitizeAgent(agent),
 	}, nil
+}
+
+func (s *agentService) Refresh(ctx context.Context, aid string) (*LoginResponse, error) {
+	agent, err := s.repo.GetByAID(ctx, aid)
+	if err != nil {
+		return nil, fmt.Errorf("agent not found: %w", err)
+	}
+	if agent.Status != "active" {
+		return nil, fmt.Errorf("agent is not active")
+	}
+
+	token, expiresAt, err := s.generateJWT(agent.AID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &LoginResponse{
+		Token:     token,
+		ExpiresAt: expiresAt,
+		Agent:     s.sanitizeAgent(agent),
+	}, nil
+}
+
+func (s *agentService) Logout(ctx context.Context, token string) error {
+	if token == "" {
+		return fmt.Errorf("missing token")
+	}
+	return nil
 }
 
 // GetAgent 获取 Agent 信息
 func (s *agentService) GetAgent(ctx context.Context, aid string) (*models.Agent, error) {
-	return s.repo.GetByAID(ctx, aid)
+	agent, err := s.repo.GetByAID(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+	return s.sanitizeAgent(agent), nil
+}
+
+func (s *agentService) UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error) {
+	availabilityStatus := req.AvailabilityStatus
+	if availabilityStatus == "" {
+		availabilityStatus = "available"
+	}
+
+	agent, err := s.repo.UpdateProfile(ctx, aid, req.Headline, req.Bio, availabilityStatus, models.Capabilities(req.Capabilities))
+	if err != nil {
+		return nil, err
+	}
+	return s.sanitizeAgent(agent), nil
+}
+
+func (s *agentService) sanitizeAgent(agent *models.Agent) *models.Agent {
+	if agent == nil {
+		return nil
+	}
+	clone := *agent
+	clone.PublicKey = ""
+	return &clone
 }
 
 // UpdateReputation 更新信誉分
 func (s *agentService) UpdateReputation(ctx context.Context, aid string, change int, reason string) error {
 	return s.repo.UpdateReputation(ctx, aid, change, reason)
+}
+
+func (s *agentService) extractAIDFromToken(tokenString string) (string, error) {
+	token, err := s.parseToken(tokenString)
+	if err != nil || !token.Valid {
+		return "", fmt.Errorf("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return "", fmt.Errorf("invalid token claims")
+	}
+
+	aid, ok := claims["aid"].(string)
+	if !ok || aid == "" {
+		return "", fmt.Errorf("missing token aid")
+	}
+
+	return aid, nil
 }
 
 // GetReputationHistory 获取信誉历史
@@ -186,51 +520,104 @@ func (s *agentService) GetReputationHistory(ctx context.Context, aid string, lim
 }
 
 // VerifyAuth 验证认证信息
-func (s *agentService) VerifyAuth(ctx context.Context, aid, signature, timestamp, nonce string) error {
-	// 验证时间戳
-	ts, err := time.Parse(time.RFC3339, timestamp)
+func (s *agentService) VerifyAuth(ctx context.Context, aid, signature, timestamp, nonce string) (*models.Agent, error) {
+	parsedTimestamp, err := strconv.ParseInt(timestamp, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid timestamp format")
+		return nil, fmt.Errorf("invalid timestamp format")
 	}
 
-	if time.Since(ts) > time.Duration(s.config.Security.NonceExpiration)*time.Second {
-		return fmt.Errorf("timestamp expired")
+	reqTime := time.Unix(parsedTimestamp, 0)
+	if time.Since(reqTime) > time.Duration(s.config.Security.NonceExpiration)*time.Second {
+		return nil, fmt.Errorf("timestamp expired")
+	}
+	if reqTime.Sub(time.Now()) > time.Duration(s.config.Security.NonceExpiration)*time.Second {
+		return nil, fmt.Errorf("timestamp expired")
 	}
 
-	// 检查 nonce 是否已使用
-	nonceKey := fmt.Sprintf("nonce:%s", nonce)
+	nonceKey := fmt.Sprintf("nonce:%s:%s", aid, nonce)
 	exists, err := s.redis.Client.Exists(ctx, nonceKey).Result()
 	if err != nil {
-		return fmt.Errorf("failed to check nonce: %w", err)
+		return nil, fmt.Errorf("failed to check nonce: %w", err)
 	}
 	if exists > 0 {
-		return fmt.Errorf("nonce already used")
+		return nil, fmt.Errorf("nonce already used")
 	}
 
-	// 获取 Agent
 	agent, err := s.repo.GetByAID(ctx, aid)
 	if err != nil {
-		return fmt.Errorf("agent not found: %w", err)
+		return nil, fmt.Errorf("agent not found: %w", err)
 	}
 
-	// 验证签名
+	if agent.Status != "active" {
+		return nil, fmt.Errorf("agent is not active")
+	}
+
+	if agent.Reputation < s.config.Reputation.MinReputationThreshold {
+		return nil, fmt.Errorf("reputation too low, account frozen")
+	}
+
 	publicKey, err := utils.ParsePublicKeyFromPEM(agent.PublicKey)
 	if err != nil {
-		return fmt.Errorf("invalid public key: %w", err)
+		return nil, fmt.Errorf("invalid public key: %w", err)
 	}
 
-	payload := fmt.Sprintf(`{"aid":"%s","nonce":"%s","timestamp":"%s"}`, aid, nonce, timestamp)
-	if !utils.VerifySignature(publicKey, []byte(payload), []byte(signature)) {
-		return fmt.Errorf("signature verification failed")
+	decodedSignature, err := decodeSignature(signature)
+	if err != nil {
+		return nil, fmt.Errorf("invalid signature encoding: %w", err)
 	}
 
-	// 存储 nonce
+	payload := fmt.Sprintf(`{"aid":"%s","nonce":"%s","timestamp":%d}`, aid, nonce, parsedTimestamp)
+	if !utils.VerifySignature(publicKey, []byte(payload), decodedSignature) {
+		return nil, fmt.Errorf("signature verification failed")
+	}
+
 	err = s.redis.Client.Set(ctx, nonceKey, "1", time.Duration(s.config.Security.NonceExpiration)*time.Second).Err()
 	if err != nil {
-		return fmt.Errorf("failed to store nonce: %w", err)
+		return nil, fmt.Errorf("failed to store nonce: %w", err)
 	}
 
+	return agent, nil
+}
+
+func (s *agentService) validateLoginChallenge(ctx context.Context, req *LoginRequest) error {
+	challengeKey := fmt.Sprintf("login_challenge:%s:%s", req.AID, req.Nonce)
+	storedTimestamp, err := s.redis.Client.Get(ctx, challengeKey).Result()
+	if err != nil {
+		return fmt.Errorf("challenge not found or expired")
+	}
+	if storedTimestamp != fmt.Sprintf("%d", req.Timestamp) {
+		return fmt.Errorf("challenge timestamp mismatch")
+	}
 	return nil
+}
+
+func (s *agentService) consumeLoginChallenge(ctx context.Context, req *LoginRequest) error {
+	challengeKey := fmt.Sprintf("login_challenge:%s:%s", req.AID, req.Nonce)
+	return s.redis.Client.Del(ctx, challengeKey).Err()
+}
+
+func decodeSignature(signature string) ([]byte, error) {
+	if signature == "" {
+		return nil, fmt.Errorf("empty signature")
+	}
+
+	trimmed := strings.TrimSpace(signature)
+	if trimmed != "" {
+		if decoded, err := base64.StdEncoding.DecodeString(trimmed); err == nil {
+			return decoded, nil
+		}
+		if decoded, err := base64.RawStdEncoding.DecodeString(trimmed); err == nil {
+			return decoded, nil
+		}
+		if decoded, err := base64.URLEncoding.DecodeString(trimmed); err == nil {
+			return decoded, nil
+		}
+		if decoded, err := base64.RawURLEncoding.DecodeString(trimmed); err == nil {
+			return decoded, nil
+		}
+	}
+
+	return []byte(signature), nil
 }
 
 // verifyProofOfCapability 验证能力证明（简化版本）
@@ -274,15 +661,29 @@ func (s *agentService) verifyLoginSignature(agent *models.Agent, req *LoginReque
 		return fmt.Errorf("invalid public key: %w", err)
 	}
 
+	decodedSignature, err := decodeSignature(req.Signature)
+	if err != nil {
+		return fmt.Errorf("invalid signature encoding: %w", err)
+	}
+
 	// 构造消息
 	payload := fmt.Sprintf(`{"aid":"%s","nonce":"%s","timestamp":%d}`, req.AID, req.Nonce, req.Timestamp)
 
 	// 验证签名
-	if !utils.VerifySignature(publicKey, []byte(payload), []byte(req.Signature)) {
+	if !utils.VerifySignature(publicKey, []byte(payload), decodedSignature) {
 		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
+}
+
+func (s *agentService) parseToken(tokenString string) (*jwt.Token, error) {
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(s.config.JWT.Secret), nil
+	})
 }
 
 // generateJWT 生成 JWT Token

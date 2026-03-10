@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 from app.db.database import get_db
@@ -17,9 +17,14 @@ router = APIRouter()
 @router.post("/skills", response_model=SkillResponse, status_code=201)
 async def create_skill(
     skill: SkillCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """发布技能"""
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    if skill.author_aid != x_agent_id:
+        raise HTTPException(status_code=403, detail="author_aid must match authenticated agent")
     return await SkillService.create_skill(db, skill)
 
 @router.post("/skills/{skill_id}/upload")
@@ -88,9 +93,15 @@ async def update_skill(
 async def purchase_skill(
     skill_id: str,
     purchase_data: SkillPurchaseRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """购买技能"""
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    if purchase_data.buyer_aid != x_agent_id:
+        raise HTTPException(status_code=403, detail="buyer_aid must match authenticated agent")
+
     skill = await SkillService.get_skill(db, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")

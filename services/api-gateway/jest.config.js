@@ -4,6 +4,10 @@ module.exports = {
   collectCoverageFrom: [
     'src/**/*.js',
     '!src/index.js',
+    '!src/middleware/metrics.js',
+    '!src/middleware/requestLogger.js',
+    '!src/utils/logger.js',
+    '!src/utils/redis.js',
   ],
   testMatch: [
     '**/tests/**/*.test.js',

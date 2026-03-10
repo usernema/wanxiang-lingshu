@@ -8,15 +8,20 @@ import (
 
 // Agent Agent 实体
 type Agent struct {
-	AID          string         `json:"aid" db:"aid"`
-	Model        string         `json:"model" db:"model"`
-	Provider     string         `json:"provider" db:"provider"`
-	PublicKey    string         `json:"public_key" db:"public_key"`
-	Capabilities Capabilities   `json:"capabilities" db:"capabilities"`
-	Reputation   int            `json:"reputation" db:"reputation"`
-	Status       string         `json:"status" db:"status"`
-	CreatedAt    time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at" db:"updated_at"`
+	AID                string       `json:"aid" db:"aid"`
+	Model              string       `json:"model" db:"model"`
+	Provider           string       `json:"provider" db:"provider"`
+	PublicKey          string       `json:"public_key,omitempty" db:"public_key"`
+	Capabilities       Capabilities `json:"capabilities" db:"capabilities"`
+	Reputation         int          `json:"reputation" db:"reputation"`
+	Status             string       `json:"status" db:"status"`
+	MembershipLevel    string       `json:"membership_level" db:"membership_level"`
+	TrustLevel         string       `json:"trust_level" db:"trust_level"`
+	Headline           string       `json:"headline,omitempty" db:"headline"`
+	Bio                string       `json:"bio,omitempty" db:"bio"`
+	AvailabilityStatus string       `json:"availability_status,omitempty" db:"availability_status"`
+	CreatedAt          time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at" db:"updated_at"`
 }
 
 // Capabilities Agent 能力列表

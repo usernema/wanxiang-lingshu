@@ -1,42 +1,139 @@
 require('dotenv').config();
 
+function parseInteger(value, fallback) {
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function parseBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).toLowerCase() === 'true';
+}
+
+function parseList(value, fallback = []) {
+  if (value === undefined || value === null || value === '') {
+    return Array.isArray(fallback) ? [...fallback] : [];
+  }
+
+  const items = String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return items.length > 0 ? items : [];
+}
+
+const env = process.env.NODE_ENV || 'development';
+const appMode = process.env.APP_MODE || env;
+const isProductionLike = env === 'production' || appMode === 'trial';
+const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:8080'];
+const allowedOrigins = parseList(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '', isProductionLike ? [] : defaultDevOrigins);
+
+if (!isProductionLike && allowedOrigins.length === 0) {
+  allowedOrigins.push(...defaultDevOrigins);
+}
+
+const normalizedAllowedOrigins = Array.from(new Set(allowedOrigins));
+
+const defaultRequiredServices = ['identity', 'forum', 'credit', 'marketplace'];
+const defaultOptionalServices = [];
+
 module.exports = {
   server: {
-    env: process.env.NODE_ENV || 'development',
-    port: parseInt(process.env.PORT, 10) || 3000,
+    env,
+    appMode,
+    isProductionLike,
+    port: parseInteger(process.env.PORT, 3000),
     host: process.env.HOST || '0.0.0.0',
   },
 
   services: {
-    identity: process.env.IDENTITY_SERVICE_URL || 'http://localhost:3001',
+    identity: process.env.IDENTITY_SERVICE_URL || 'http://localhost:8001',
     forum: process.env.FORUM_SERVICE_URL || 'http://localhost:3002',
-    credit: process.env.CREDIT_SERVICE_URL || 'http://localhost:3003',
-    marketplace: process.env.MARKETPLACE_SERVICE_URL || 'http://localhost:3004',
+    credit: process.env.CREDIT_SERVICE_URL || 'http://localhost:8080',
+    marketplace: process.env.MARKETPLACE_SERVICE_URL || 'http://localhost:8000',
     training: process.env.TRAINING_SERVICE_URL || 'http://localhost:3005',
     ranking: process.env.RANKING_SERVICE_URL || 'http://localhost:3006',
   },
 
+  demo: {
+    readinessTimeout: parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000),
+    bootstrapPath: process.env.DEMO_BOOTSTRAP_PATH || '/api/v1/agents/dev/bootstrap',
+    balancePath: process.env.DEMO_BALANCE_PATH || '/api/v1/credits/balance',
+    mode: process.env.DEMO_MODE || 'disabled',
+  },
+
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT, 10) || 6379,
+    port: parseInteger(process.env.REDIS_PORT, 6379),
     password: process.env.REDIS_PASSWORD || undefined,
-    db: parseInt(process.env.REDIS_DB, 10) || 0,
+    db: parseInteger(process.env.REDIS_DB, 0),
   },
 
   rateLimit: {
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 60000,
-    maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100,
+    profiles: {
+      default: {
+        windowMs: parseInteger(process.env.RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 80 : 100),
+      },
+      auth: {
+        windowMs: parseInteger(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 12 : 30),
+      },
+      publicRead: {
+        windowMs: parseInteger(process.env.PUBLIC_READ_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.PUBLIC_READ_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 60 : 120),
+      },
+      write: {
+        windowMs: parseInteger(process.env.WRITE_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.WRITE_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 20 : 40),
+      },
+      internal: {
+        windowMs: parseInteger(process.env.INTERNAL_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.INTERNAL_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 300 : 600),
+      },
+      health: {
+        windowMs: parseInteger(process.env.HEALTH_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.HEALTH_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 600 : 1200),
+      },
+    },
   },
 
   request: {
-    timeout: parseInt(process.env.REQUEST_TIMEOUT_MS, 10) || 30000,
-    retryAttempts: parseInt(process.env.REQUEST_RETRY_ATTEMPTS, 10) || 3,
-    retryDelay: parseInt(process.env.REQUEST_RETRY_DELAY_MS, 10) || 1000,
+    connectTimeout: parseInteger(process.env.REQUEST_CONNECT_TIMEOUT_MS, 5000),
+    upstreamTimeout: parseInteger(process.env.REQUEST_UPSTREAM_TIMEOUT_MS, parseInteger(process.env.REQUEST_TIMEOUT_MS, 15000)),
+    timeout: parseInteger(process.env.REQUEST_UPSTREAM_TIMEOUT_MS, parseInteger(process.env.REQUEST_TIMEOUT_MS, 15000)),
+    classifyProxyErrors: parseBoolean(process.env.CLASSIFY_PROXY_ERRORS, true),
+    bodyLimits: {
+      default: process.env.REQUEST_BODY_LIMIT_DEFAULT || process.env.REQUEST_BODY_LIMIT || '256kb',
+      write: process.env.REQUEST_BODY_LIMIT_WRITE || '512kb',
+      forumWrite: process.env.REQUEST_BODY_LIMIT_FORUM_WRITE || '1mb',
+      marketplaceWrite: process.env.REQUEST_BODY_LIMIT_MARKETPLACE_WRITE || '1mb',
+      identityWrite: process.env.REQUEST_BODY_LIMIT_IDENTITY_WRITE || '256kb',
+    },
   },
 
   security: {
-    corsOrigin: process.env.CORS_ORIGIN || '*',
-    allowedOrigins: (process.env.ALLOWED_ORIGINS || '').split(',').filter(Boolean),
+    corsOrigin: process.env.CORS_ORIGIN || '',
+    allowedOrigins: normalizedAllowedOrigins,
+    trustProxy: parseBoolean(process.env.TRUST_PROXY, false),
+    allowWildcardCors: parseBoolean(process.env.ALLOW_WILDCARD_CORS, false) && !isProductionLike,
+    allowRequestsWithoutOrigin: parseBoolean(process.env.ALLOW_REQUESTS_WITHOUT_ORIGIN, true),
+    enforceExplicitOriginsInProduction: parseBoolean(process.env.ENFORCE_EXPLICIT_ORIGINS_IN_PRODUCTION, true),
+    corsCredentials: parseBoolean(process.env.CORS_CREDENTIALS, true),
+    preflightMaxAgeSeconds: parseInteger(process.env.CORS_PREFLIGHT_MAX_AGE_SECONDS, 600),
+    allowedMethods: parseList(process.env.CORS_ALLOWED_METHODS, ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']),
+    allowedHeaders: parseList(process.env.CORS_ALLOWED_HEADERS, ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Trace-Id']),
+    exposedHeaders: parseList(process.env.CORS_EXPOSED_HEADERS, ['X-Request-Id', 'X-Trace-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'Retry-After']),
+  },
+
+  health: {
+    readinessTimeout: parseInteger(process.env.READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000)),
+    dependencyTimeout: parseInteger(process.env.HEALTH_DEPENDENCY_TIMEOUT_MS, 2500),
+    redisRequired: parseBoolean(process.env.HEALTH_REDIS_REQUIRED, true),
+    requiredServices: parseList(process.env.HEALTH_REQUIRED_SERVICES, defaultRequiredServices),
+    optionalServices: parseList(process.env.HEALTH_OPTIONAL_SERVICES, defaultOptionalServices),
+    skipLogPaths: ['/health', '/health/live', '/health/ready', '/health/deps', '/live', '/ready', '/livez', '/readyz', '/metrics'],
   },
 
   logging: {
@@ -45,7 +142,7 @@ module.exports = {
   },
 
   metrics: {
-    enabled: process.env.METRICS_ENABLED === 'true',
-    port: parseInt(process.env.METRICS_PORT, 10) || 9090,
+    enabled: process.env.METRICS_ENABLED !== 'false',
+    port: parseInteger(process.env.METRICS_PORT, 9090),
   },
 };

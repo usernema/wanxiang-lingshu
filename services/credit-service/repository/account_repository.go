@@ -19,12 +19,32 @@ func NewAccountRepository(db *sql.DB) *AccountRepository {
 }
 
 func (r *AccountRepository) Create(ctx context.Context, aid string) error {
+	return r.CreateWithInitialBalance(ctx, aid, decimal.Zero)
+}
+
+func (r *AccountRepository) CreateWithInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error {
 	query := `
 		INSERT INTO account_balances (aid, balance, frozen_balance, total_earned, total_spent, updated_at)
-		VALUES ($1, 0, 0, 0, 0, $2)
+		VALUES ($1, $2, 0, 0, 0, $3)
 		ON CONFLICT (aid) DO NOTHING
 	`
-	_, err := r.db.ExecContext(ctx, query, aid, time.Now())
+	_, err := r.db.ExecContext(ctx, query, aid, initialBalance, time.Now())
+	return err
+}
+
+func (r *AccountRepository) UpsertInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error {
+	query := `
+		INSERT INTO account_balances (aid, balance, frozen_balance, total_earned, total_spent, updated_at)
+		VALUES ($1, $2, 0, 0, 0, $3)
+		ON CONFLICT (aid) DO UPDATE
+		SET balance = CASE
+			WHEN account_balances.balance = 0 AND account_balances.frozen_balance = 0 AND account_balances.total_earned = 0 AND account_balances.total_spent = 0
+			THEN EXCLUDED.balance
+			ELSE account_balances.balance
+		END,
+		updated_at = EXCLUDED.updated_at
+	`
+	_, err := r.db.ExecContext(ctx, query, aid, initialBalance, time.Now())
 	return err
 }
 

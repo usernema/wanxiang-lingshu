@@ -14,6 +14,33 @@ type AgentHandler struct {
 	service service.AgentService
 }
 
+type VerifyAuthRequest struct {
+	AID       string `json:"aid" binding:"required"`
+	Signature string `json:"signature" binding:"required"`
+	Timestamp string `json:"timestamp" binding:"required"`
+	Nonce     string `json:"nonce" binding:"required"`
+}
+
+type DevSessionRequest struct {
+	Role string `json:"role" binding:"required"`
+}
+
+type LoginChallengeRequest struct {
+	AID string `json:"aid" binding:"required"`
+}
+
+type LogoutRequest struct {
+	Token string `json:"token"`
+}
+
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if len(header) > len(prefix) && header[:len(prefix)] == prefix {
+		return header[len(prefix):]
+	}
+	return ""
+}
+
 // NewAgentHandler 创建 Agent 处理器
 func NewAgentHandler(service service.AgentService) *AgentHandler {
 	return &AgentHandler{service: service}
@@ -47,6 +74,22 @@ func (h *AgentHandler) Register(c *gin.Context) {
 	c.JSON(http.StatusCreated, resp)
 }
 
+func (h *AgentHandler) IssueLoginChallenge(c *gin.Context) {
+	var req LoginChallengeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.IssueLoginChallenge(c.Request.Context(), req.AID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 // Login Agent 登录
 // @Summary Agent 登录
 // @Description Agent 使用签名登录并获取 JWT Token
@@ -74,6 +117,38 @@ func (h *AgentHandler) Login(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) Verify(c *gin.Context) {
+	var req VerifyAuthRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"code":    "INVALID_REQUEST",
+		})
+		return
+	}
+
+	agent, err := h.service.VerifyAuth(c.Request.Context(), req.AID, req.Signature, req.Timestamp, req.Nonce)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if err.Error() == "agent is not active" || err.Error() == "reputation too low, account frozen" {
+			status = http.StatusForbidden
+		}
+
+		c.JSON(status, gin.H{
+			"success": false,
+			"error":   err.Error(),
+			"code":    "VERIFY_AUTH_FAILED",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    agent,
+	})
 }
 
 // GetAgent 获取 Agent 信息
@@ -167,6 +242,125 @@ func (h *AgentHandler) UpdateReputation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, SuccessResponse{Message: "reputation updated successfully"})
+}
+
+func (h *AgentHandler) Refresh(c *gin.Context) {
+	aidValue, exists := c.Get("aid")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	aid, ok := aidValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "invalid agent context"})
+		return
+	}
+
+	resp, err := h.service.Refresh(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) Logout(c *gin.Context) {
+	token := bearerToken(c.GetHeader("Authorization"))
+	if token == "" {
+		var req LogoutRequest
+		if err := c.ShouldBindJSON(&req); err == nil {
+			token = req.Token
+		}
+	}
+
+	if err := h.service.Logout(c.Request.Context(), token); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, SuccessResponse{Message: "logged out successfully"})
+}
+
+func (h *AgentHandler) UpdateProfile(c *gin.Context) {
+	aidValue, exists := c.Get("aid")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	aid, ok := aidValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "invalid agent context"})
+		return
+	}
+
+	var req service.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	agent, err := h.service.UpdateProfile(c.Request.Context(), aid, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, agent)
+}
+
+func (h *AgentHandler) GetCurrentAgent(c *gin.Context) {
+	aidValue, exists := c.Get("aid")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	aid, ok := aidValue.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "invalid agent context"})
+		return
+	}
+
+	agent, err := h.service.GetAgent(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "agent not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, agent)
+}
+
+func (h *AgentHandler) DevBootstrap(c *gin.Context) {
+	resp, err := h.service.EnsureDevBootstrap(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) DevSession(c *gin.Context) {
+	var req DevSessionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.GetDevSession(c.Request.Context(), req.Role)
+	if err != nil {
+		status := http.StatusBadRequest
+		if err.Error() == "dev bootstrap is disabled" {
+			status = http.StatusForbidden
+		}
+		c.JSON(status, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
 // ErrorResponse 错误响应

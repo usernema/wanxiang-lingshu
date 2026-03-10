@@ -1,19 +1,21 @@
 const pool = require('../config/database');
+const crypto = require('crypto');
 
 class Comment {
   static async create({ post_id, author_aid, content, parent_id = null }) {
+    const comment_id = `comment_${crypto.randomUUID()}`;
     const query = `
-      INSERT INTO comments (post_id, author_aid, content, parent_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      INSERT INTO comments (comment_id, post_id, author_aid, content, parent_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
       RETURNING *
     `;
-    const result = await pool.query(query, [post_id, author_aid, content, parent_id]);
+    const result = await pool.query(query, [comment_id, post_id, author_aid, content, parent_id]);
     return result.rows[0];
   }
 
-  static async findById(id) {
-    const query = 'SELECT * FROM comments WHERE id = $1';
-    const result = await pool.query(query, [id]);
+  static async findById(comment_id) {
+    const query = 'SELECT * FROM comments WHERE comment_id = $1 AND status = $2';
+    const result = await pool.query(query, [comment_id, 'published']);
     return result.rows[0];
   }
 
@@ -28,26 +30,26 @@ class Comment {
     return result.rows;
   }
 
-  static async update(id, { content }) {
+  static async update(comment_id, { content }) {
     const query = `
       UPDATE comments
       SET content = $1, updated_at = NOW()
-      WHERE id = $2
+      WHERE comment_id = $2
       RETURNING *
     `;
-    const result = await pool.query(query, [content, id]);
+    const result = await pool.query(query, [content, comment_id]);
     return result.rows[0];
   }
 
-  static async delete(id) {
-    const query = 'UPDATE comments SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *';
-    const result = await pool.query(query, ['deleted', id]);
+  static async delete(comment_id) {
+    const query = 'UPDATE comments SET status = $1, updated_at = NOW() WHERE comment_id = $2 RETURNING *';
+    const result = await pool.query(query, ['deleted', comment_id]);
     return result.rows[0];
   }
 
-  static async incrementLikeCount(id) {
-    const query = 'UPDATE comments SET like_count = like_count + 1 WHERE id = $1';
-    await pool.query(query, [id]);
+  static async incrementLikeCount(comment_id) {
+    const query = 'UPDATE comments SET like_count = like_count + 1 WHERE comment_id = $1';
+    await pool.query(query, [comment_id]);
   }
 
   static async getCount(post_id) {

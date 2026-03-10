@@ -7,120 +7,140 @@ const { createRedisClient, closeRedisClient } = require('./utils/redis');
 const requestId = require('./middleware/requestId');
 const requestLogger = require('./middleware/requestLogger');
 const { metricsMiddleware } = require('./middleware/metrics');
-const { createRateLimiter, createIpRateLimiter } = require('./middleware/rateLimit');
-const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+const { createProfileLimiters } = require('./middleware/rateLimit');
+const { createHttpError, errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const { router, setupRoutes } = require('./routes');
 
 const app = express();
 
-/**
- * 初始化应用
- */
+function validateCorsConfig() {
+  if (!config.server.isProductionLike) return;
+  if (!config.security.enforceExplicitOriginsInProduction) return;
+  if (config.security.allowWildcardCors) {
+    throw new Error('Wildcard CORS is not allowed in production-like environments');
+  }
+  if (!config.security.allowedOrigins.length) {
+    throw new Error('ALLOWED_ORIGINS must be configured in production-like environments');
+  }
+}
+
+function buildCorsOptions() {
+  return {
+    origin: (origin, callback) => {
+      if (!origin) {
+        if (config.security.allowRequestsWithoutOrigin) {
+          return callback(null, true);
+        }
+        const error = createHttpError(403, 'CORS_ORIGIN_DENIED', 'Origin not allowed');
+        error.extras = { origin: null };
+        return callback(error);
+      }
+
+      if (config.security.allowWildcardCors) {
+        return callback(null, true);
+      }
+
+      if (config.security.allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      const error = createHttpError(403, 'CORS_ORIGIN_DENIED', 'Origin not allowed');
+      error.extras = { origin };
+      return callback(error);
+    },
+    credentials: config.security.corsCredentials,
+    methods: config.security.allowedMethods,
+    allowedHeaders: config.security.allowedHeaders,
+    exposedHeaders: config.security.exposedHeaders,
+    maxAge: config.security.preflightMaxAgeSeconds,
+    optionsSuccessStatus: 204,
+    preflightContinue: false,
+  };
+}
+
+function bodyLimitForRequest(req) {
+  if (req.path.startsWith('/api/v1/forum') && req.method !== 'GET') {
+    return config.request.bodyLimits.forumWrite;
+  }
+  if (req.path.startsWith('/api/v1/marketplace') && req.method !== 'GET') {
+    return config.request.bodyLimits.marketplaceWrite;
+  }
+  if (req.path.startsWith('/api/v1/agents') && req.method !== 'GET') {
+    return config.request.bodyLimits.identityWrite;
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return config.request.bodyLimits.write;
+  }
+  return config.request.bodyLimits.default;
+}
+
+function jsonBodyParser() {
+  return (req, res, next) => express.json({ limit: bodyLimitForRequest(req) })(req, res, next);
+}
+
+function urlencodedBodyParser() {
+  return (req, res, next) => express.urlencoded({ extended: true, limit: bodyLimitForRequest(req) })(req, res, next);
+}
+
 async function initializeApp() {
   try {
-    // 连接 Redis
+    validateCorsConfig();
+
+    if (config.security.trustProxy) {
+      app.set('trust proxy', 1);
+    }
+
     await createRedisClient();
     logger.info('Redis connected successfully');
 
-    // 安全中间件
-    app.use(helmet());
-
-    // CORS 配置
-    const corsOptions = {
-      origin: (origin, callback) => {
-        // 允许无 origin 的请求（如移动应用、Postman）
-        if (!origin) return callback(null, true);
-
-        // 检查是否在允许列表中
-        if (config.security.corsOrigin === '*' ||
-            config.security.allowedOrigins.includes(origin)) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-      exposedHeaders: ['X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
-    };
-    app.use(cors(corsOptions));
-
-    // 请求解析
-    app.use(express.json({ limit: '10mb' }));
-    app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-    // 请求 ID
     app.use(requestId);
-
-    // 请求日志
+    app.use(helmet());
+    app.use((req, res, next) => {
+      res.vary('Origin');
+      next();
+    });
+    app.use(cors(buildCorsOptions()));
+    app.use(jsonBodyParser());
+    app.use(urlencodedBodyParser());
     app.use(requestLogger);
-
-    // 指标收集
     app.use(metricsMiddleware);
 
-    // IP 限流
-    const ipRateLimiter = await createIpRateLimiter();
-    app.use(ipRateLimiter);
+    const limiters = await createProfileLimiters();
 
-    // Agent 限流
-    const rateLimiter = await createRateLimiter();
-    app.use(rateLimiter);
-
-    // 基础路由
     app.use(router);
-
-    // 配置服务代理路由
-    setupRoutes(app);
-
-    // 404 处理
+    setupRoutes(app, limiters);
     app.use(notFoundHandler);
-
-    // 错误处理
     app.use(errorHandler);
 
-    logger.info('Application initialized successfully');
+    logger.info('Application initialized successfully', {
+      env: config.server.env,
+      appMode: config.server.appMode,
+      allowedOrigins: config.security.allowedOrigins,
+    });
   } catch (error) {
     logger.error('Failed to initialize application', { error: error.message });
     throw error;
   }
 }
 
-/**
- * 启动服务器
- */
 async function startServer() {
   try {
     await initializeApp();
 
     const server = app.listen(config.server.port, config.server.host, () => {
-      logger.info(`API Gateway started`, {
+      logger.info('API Gateway started', {
         host: config.server.host,
         port: config.server.port,
         env: config.server.env,
-      });
-
-      logger.info('Service endpoints:', {
-        identity: config.services.identity,
-        forum: config.services.forum,
-        credit: config.services.credit,
-        marketplace: config.services.marketplace,
-        training: config.services.training,
-        ranking: config.services.ranking,
+        appMode: config.server.appMode,
       });
     });
 
-    // 优雅关闭
     const gracefulShutdown = async (signal) => {
       logger.info(`${signal} received, starting graceful shutdown`);
-
       server.close(async () => {
-        logger.info('HTTP server closed');
-
         try {
           await closeRedisClient();
-          logger.info('Redis connection closed');
-
           logger.info('Graceful shutdown completed');
           process.exit(0);
         } catch (error) {
@@ -129,37 +149,34 @@ async function startServer() {
         }
       });
 
-      // 强制关闭超时
       setTimeout(() => {
         logger.error('Forced shutdown after timeout');
         process.exit(1);
       }, 30000);
     };
 
-    // 监听关闭信号
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    // 未捕获异常处理
     process.on('uncaughtException', (error) => {
       logger.error('Uncaught Exception', { error: error.message, stack: error.stack });
       gracefulShutdown('uncaughtException');
     });
-
-    process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection', { reason, promise });
+    process.on('unhandledRejection', (reason) => {
+      logger.error('Unhandled Rejection', { reason });
       gracefulShutdown('unhandledRejection');
     });
-
   } catch (error) {
     logger.error('Failed to start server', { error: error.message });
     process.exit(1);
   }
 }
 
-// 启动服务器
 if (require.main === module) {
   startServer();
 }
 
 module.exports = app;
+module.exports.buildCorsOptions = buildCorsOptions;
+module.exports.bodyLimitForRequest = bodyLimitForRequest;
+module.exports.initializeApp = initializeApp;
+module.exports.validateCorsConfig = validateCorsConfig;

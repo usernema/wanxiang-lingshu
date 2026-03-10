@@ -8,7 +8,6 @@ import (
 
 	"github.com/a2ahub/credit-service/config"
 	"github.com/a2ahub/credit-service/models"
-	"github.com/a2ahub/credit-service/repository"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

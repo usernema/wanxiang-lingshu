@@ -1,200 +1,108 @@
-# A2Ahub 任务清单
+# A2Ahub 当前任务板
 
-## 当前 Sprint: Phase 0 基础设施搭建
+本任务板用于记录 **doing / next / blocked / done**，仅保留当前有效任务。
 
-### 🔴 高优先级任务
+## Doing
 
-#### T001: 协议标准制定
-**负责模块**: 核心协议层
-**状态**: 进行中
-**描述**: 制定 Agent 通信协议、身份认证协议、交易协议标准
-**产出**:
-- Agent Identity Protocol (AIP)
-- Agent Communication Protocol (ACP)
-- Agent Transaction Protocol (ATP)
-- 协议文档和示例代码
+### D1. 验证 product-grade auth/bootstrap 契约
+- **状态**: Doing
+- **关键文件**:
+  - `services/identity-service/internal/service/agent_service.go`
+  - `services/identity-service/internal/handler/agent_handler.go`
+  - `services/api-gateway/src/routes/index.js`
+  - `scripts/init.sql`
+- **目标**:
+  - 固定 seeded `default / employer / worker` 身份
+  - 统一 dev bootstrap / session 入口
+  - 保持 gateway -> downstream 头部契约稳定
+- **验收**:
+  - fresh startup 后无需手工准备 token
+  - frontend / smoke 能共用同一 bootstrap 契约
 
-**预计工时**: 5 天
+### D2. 验证 frontend session-aware UX
+- **状态**: Doing
+- **关键文件**:
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/layouts/Layout.tsx`
+  - `frontend/src/pages/Marketplace.tsx`
+  - `frontend/src/pages/Profile.tsx`
+  - `frontend/src/pages/Forum.tsx`
+- **目标**:
+  - 统一 session 恢复 / 切换 / 失效处理
+  - Marketplace / Profile / Forum 提供 loading / empty / error / success 状态
+- **验收**:
+  - Layout 可显示当前身份与角色切换
+  - 页面不再以 `ensureDemoSession()` 作为副作用入口
 
----
+### D4. 继续清理兼容层与产品化细节
+- **状态**: Doing
+- **关键文件**:
+  - `frontend/src/pages/Marketplace.tsx`
+  - `frontend/src/lib/api.ts`
+  - `services/identity-service/internal/service/agent_service.go`
+- **目标**:
+  - 继续收紧 demo 兼容路径
+  - 深化产品态页面体验与错误映射
+- **验收**:
+  - 兼容层不再成为默认开发入口
+  - 页面交互细节继续稳定
 
-#### T002: 数据库架构设计
-**负责模块**: 数据层
-**状态**: 待开始
-**描述**: 设计核心数据库表结构，支持所有功能模块
-**产出**:
-- ER 图
-- 数据库迁移脚本
-- 数据字典文档
+## Next
 
-**依赖**: 无
-**预计工时**: 3 天
+### N1. 收紧兼容层边界
+- **优先级**: P0
+- **内容**:
+  - 继续降低 `demo-signature` 的主路径影响
+  - 明确 `X-Agent-ID` 仅为 gateway 向下游透传契约
 
----
+### N2. 扩展 Marketplace / UI 回归矩阵
+- **优先级**: P1
+- **内容**:
+  - 继续把 Marketplace diagnostics / 状态机 / 错误映射从服务层回归扩展到前端/UI 层
+  - 将 seeded 数据校验纳入标准回归流程
+  - 增加更多 integration / UI 回归覆盖
 
-#### T003: API 接口规范
-**负责模块**: API 层
-**状态**: 待开始
-**描述**: 定义 RESTful API 和 WebSocket 接口规范
-**产出**:
-- OpenAPI 3.0 规范文档
-- 接口测试用例
-- Mock Server
+## Blocked
 
-**依赖**: T001
-**预计工时**: 4 天
+当前无新的结构性阻塞；如 build / smoke 暴露实现问题，再补充到本区。
 
----
+## Done
 
-#### T004: Agent 身份认证机制
-**负责模块**: 身份系统
-**状态**: 待开始
-**描述**: 实现 Agent 独有的身份注册和认证流程
-**产出**:
-- Agent 签名算法
-- 身份验证中间件
-- 注册/登录 API
+### C1. 文档中心从 MVP 叙事切到产品级开发叙事
+- `STATUS / DEVELOPMENT / ROADMAP / module docs` 已按产品级开发心智重写
 
-**依赖**: T001, T003
-**预计工时**: 5 天
+### C2. 本地开发从手工 token 切换到 seeded bootstrap 路径
+- 增加 dev bootstrap / session 入口
+- smoke 改为自动获取 employer / worker token
 
----
+### C3. 前端 session 从 demo 创建切到 restore / switch 模型
+- Layout / Marketplace / Profile / Forum 已接统一 session-aware 入口
 
-#### T005: 积分系统基础架构
-**负责模块**: 积分系统
-**状态**: 待开始
-**描述**: 实现积分的发放、转账、查询等基础功能
-**产出**:
-- 积分账户系统
-- 交易引擎
-- 账本记录
+### C4. 增加可重复执行的 dev seed 入口
+- 新增 `scripts/seed-dev.sh`
+- 适配已有 Postgres volume 场景
+- 会修复历史任务一致性坏数据并补齐样例数据
 
-**依赖**: T002, T004
-**预计工时**: 6 天
+### C5. 本地 diagnostics 已清零
+- 当前标准本地环境下 `tasks/diagnostics/consistency` 返回 `total_issues = 0`
 
----
+### C6. Marketplace 已具备产品级任务工作台基线
+- 已展示 diagnostics 摘要与异常样例
+- 已提供更明确的动作禁用原因与状态机说明
+- 已按后端错误 detail 做 mutation 错误映射
+- 已区分首次加载与刷新中状态
 
-### 🟡 中优先级任务
+### C7. Marketplace 服务层回归已扩展
+- 已覆盖 diagnostics 聚合与 example sample limit
+- 已覆盖 assign / complete 的关键状态冲突语义
+- 已以独立内存 SQLite 方式运行 `tests/test_tasks.py`，降低本机 pytest 插件环境差异影响
 
-#### T006: 项目脚手架搭建
-**负责模块**: 基础设施
-**状态**: 待开始
-**描述**: 搭建项目基础代码结构和开发环境
-**产出**:
-- 项目目录结构
-- Docker 开发环境
-- CI/CD 配置
+## 维护规则
 
-**预计工时**: 2 天
-
----
-
-#### T007: 日志与监控系统
-**负责模块**: 运维层
-**状态**: 待开始
-**描述**: 建立日志收集和系统监控机制
-**产出**:
-- 日志中间件
-- 监控面板
-- 告警规则
-
-**预计工时**: 3 天
-
----
-
-#### T008: 测试框架搭建
-**负责模块**: 测试层
-**状态**: 待开始
-**描述**: 建立单元测试、集成测试框架
-**产出**:
-- 测试工具配置
-- 测试用例模板
-- 测试覆盖率报告
-
-**预计工时**: 2 天
+- 每完成一个子阶段，至少同步更新 `STATUS.md`、`TASKS.md`、`CHANGELOG.md`
+- “Done” 中仅记录已由代码或脚本证实完成的事项
+- 任何新的流程约束应同时写入 `DEVELOPMENT.md`
 
 ---
 
-### 🟢 低优先级任务
-
-#### T009: 开发文档编写
-**负责模块**: 文档中心
-**状态**: 进行中
-**描述**: 编写开发指南、API 文档、部署文档
-**产出**:
-- 开发者指南
-- 部署手册
-- 常见问题文档
-
-**预计工时**: 持续进行
-
----
-
-#### T010: 社区规则制定
-**负责模块**: 治理层
-**状态**: 待开始
-**描述**: 制定社区行为准则、内容规范
-**产出**:
-- 社区公约
-- 内容审核标准
-- 争议处理流程
-
-**预计工时**: 2 天
-
----
-
-## 下一 Sprint 预览: Phase 1 MVP 开发
-
-### 待规划任务
-- T011: 硅基论坛前端开发
-- T012: 硅基论坛后端 API
-- T013: 内容管理系统
-- T014: 搜索引擎集成
-- T015: 官方任务系统
-- T016: 新手引导流程
-- T017: Agent Dashboard
-- T018: 积分钱包 UI
-
----
-
-## 任务认领规则
-
-### Agent 认领
-1. 在社区内发布任务认领申请
-2. 提供能力证明（历史贡献、技能标签）
-3. 通过审核后获得任务权限
-4. 完成后提交 PR，经审核后获得积分奖励
-
-### 人类开发者认领
-1. 在 GitHub Issues 中认领任务
-2. Fork 项目并创建分支
-3. 完成开发并提交 PR
-4. Code Review 通过后合并
-
----
-
-## 积分奖励标准
-
-| 任务优先级 | 基础积分 | 质量加成 | 速度加成 |
-|----------|---------|---------|---------|
-| 🔴 高优先级 | 500-1000 | +50% | +30% |
-| 🟡 中优先级 | 200-500 | +30% | +20% |
-| 🟢 低优先级 | 50-200 | +20% | +10% |
-
-**质量加成**: 代码质量、测试覆盖率、文档完整度
-**速度加成**: 提前完成任务
-
----
-
-## 任务状态说明
-
-- **待开始**: 任务已规划，等待认领
-- **进行中**: 任务已被认领，正在开发
-- **待审核**: 任务已完成，等待 Code Review
-- **已完成**: 任务已合并到主分支
-- **已搁置**: 任务暂时搁置
-- **已取消**: 任务被取消
-
----
-
-最后更新: 2026-03-08
+最后更新: 2026-03-09

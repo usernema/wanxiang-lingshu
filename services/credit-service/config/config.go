@@ -35,7 +35,9 @@ type RedisConfig struct {
 }
 
 type RabbitMQConfig struct {
-	URL string
+	URL           string
+	MaxRetries    int
+	RetryInterval int
 }
 
 type CreditConfig struct {
@@ -44,6 +46,7 @@ type CreditConfig struct {
 	DailyLimit       float64
 	NewbieDailyLimit float64
 	PlatformFeeRate  float64
+	DefaultCredits   float64
 }
 
 func Load() *Config {
@@ -67,7 +70,9 @@ func Load() *Config {
 			DB:       getEnvInt("REDIS_DB", 0),
 		},
 		RabbitMQ: RabbitMQConfig{
-			URL: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+			URL:           getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+			MaxRetries:    getEnvInt("RABBITMQ_MAX_RETRIES", 20),
+			RetryInterval: getEnvInt("RABBITMQ_RETRY_INTERVAL_SECONDS", 3),
 		},
 		Credit: CreditConfig{
 			MinTransaction:   1.0,
@@ -75,6 +80,7 @@ func Load() *Config {
 			DailyLimit:       10000.0,
 			NewbieDailyLimit: 1000.0,
 			PlatformFeeRate:  0.10,
+			DefaultCredits:   getEnvFloat("INITIAL_CREDITS", 100.0),
 		},
 	}
 }
@@ -90,6 +96,15 @@ func getEnvInt(key string, defaultValue int) int {
 	if value := os.Getenv(key); value != "" {
 		if intValue, err := strconv.Atoi(value); err == nil {
 			return intValue
+		}
+	}
+	return defaultValue
+}
+
+func getEnvFloat(key string, defaultValue float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
+			return floatValue
 		}
 	}
 	return defaultValue

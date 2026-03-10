@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/a2ahub/credit-service/config"
 	"github.com/a2ahub/credit-service/database"
@@ -38,7 +39,11 @@ func main() {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
 
-	notificationQueue, err := service.NewNotificationQueue(cfg.RabbitMQ.URL)
+	notificationQueue, err := service.NewNotificationQueue(
+		cfg.RabbitMQ.URL,
+		cfg.RabbitMQ.MaxRetries,
+		time.Duration(cfg.RabbitMQ.RetryInterval)*time.Second,
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}

@@ -5,6 +5,7 @@ import httpx
 
 from app.db.database import get_db
 from app.schemas.task import (
+    TaskConsistencyReport,
     TaskCreate, TaskUpdate, TaskResponse,
     TaskApplicationCreate, TaskApplicationResponse,
     TaskCompleteRequest,
@@ -67,13 +68,33 @@ async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
 async def update_task(
     task_id: str,
     task_data: TaskUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """更新任务"""
-    task = await TaskService.update_task(db, task_id, task_data)
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+
+    existing_task = await TaskService.get_task(db, task_id)
+    if not existing_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if existing_task.employer_aid != x_agent_id:
+        raise HTTPException(status_code=403, detail="Only employer can update the task")
+
+    try:
+        task = await TaskService.update_task(db, task_id, task_data)
+    except ValueError as e:
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
+
+
+@router.get("/tasks/diagnostics/consistency", response_model=TaskConsistencyReport)
+async def diagnose_task_consistency(db: AsyncSession = Depends(get_db)):
+    """诊断任务一致性"""
+    return await TaskService.diagnose_task_consistency(db)
 
 
 @router.post("/tasks/{task_id}/apply", response_model=TaskApplicationResponse, status_code=201)
@@ -121,9 +142,9 @@ async def assign_task(
     if not worker_aid:
         raise HTTPException(status_code=400, detail="worker_aid is required")
     if task.status != "open":
-        raise HTTPException(status_code=400, detail="Task is not open for assignment")
+        raise HTTPException(status_code=409, detail="Task is not open for assignment")
     if task.worker_aid or task.escrow_id:
-        raise HTTPException(status_code=400, detail="Task is already assigned")
+        raise HTTPException(status_code=409, detail="Task is already assigned")
 
     try:
         escrow = await CreditService.create_escrow(
@@ -146,7 +167,7 @@ async def assign_task(
             await CreditService.refund_escrow(escrow_id, task.employer_aid)
         except httpx.HTTPStatusError:
             pass
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=TaskResponse)
@@ -169,7 +190,7 @@ async def cancel_task(
             raise HTTPException(status_code=409, detail="Completed task cannot be cancelled")
         if task.status == "cancelled":
             raise HTTPException(status_code=409, detail="Task is already cancelled")
-        raise HTTPException(status_code=400, detail=f"Task cannot be cancelled from status: {task.status}")
+        raise HTTPException(status_code=409, detail=f"Task cannot be cancelled from status: {task.status}")
 
     if task.escrow_id:
         try:
@@ -183,7 +204,7 @@ async def cancel_task(
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
 
 @router.post("/tasks/{task_id}/complete")
@@ -204,7 +225,11 @@ async def complete_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     if task.status != "in_progress":
-        raise HTTPException(status_code=400, detail="Task is not in progress")
+        if task.status == "completed":
+            raise HTTPException(status_code=409, detail="Task is already completed")
+        if task.status == "cancelled":
+            raise HTTPException(status_code=409, detail="Cancelled task cannot be completed")
+        raise HTTPException(status_code=409, detail="Task is not in progress")
     if task.worker_aid != complete_data.worker_aid:
         raise HTTPException(status_code=400, detail="Only assigned worker can complete the task")
     if not task.escrow_id:
@@ -219,7 +244,7 @@ async def complete_task(
     try:
         await TaskService.complete_task(db, task_id, complete_data.worker_aid)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
     return {
         "task_id": task_id,

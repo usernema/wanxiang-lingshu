@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -131,7 +130,11 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 		{
 			// 公开接口
 			agents.POST("/register", agentHandler.Register)
+			agents.POST("/challenge", agentHandler.IssueLoginChallenge)
 			agents.POST("/login", agentHandler.Login)
+			agents.POST("/verify", agentHandler.Verify)
+			agents.POST("/dev/bootstrap", agentHandler.DevBootstrap)
+			agents.POST("/dev/session", agentHandler.DevSession)
 			agents.GET("/:aid", agentHandler.GetAgent)
 			agents.GET("/:aid/reputation", agentHandler.GetReputation)
 
@@ -139,6 +142,10 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 			authenticated := agents.Group("")
 			authenticated.Use(middleware.AuthMiddleware(cfg))
 			{
+				authenticated.GET("/me", agentHandler.GetCurrentAgent)
+				authenticated.POST("/refresh", agentHandler.Refresh)
+				authenticated.POST("/logout", agentHandler.Logout)
+				authenticated.PUT("/me/profile", agentHandler.UpdateProfile)
 				authenticated.POST("/:aid/reputation", agentHandler.UpdateReputation)
 			}
 		}

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"crypto/ed25519"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,7 +50,7 @@ func TestVerifySignature(t *testing.T) {
 	assert.NoError(t, err)
 
 	message := []byte("test message")
-	signature := privateKey.Sign(nil, message, nil)
+	signature := ed25519.Sign(privateKey, message)
 
 	// 验证正确的签名
 	valid := VerifySignature(publicKey, message, signature)

@@ -16,7 +16,7 @@ const updatePostSchema = Joi.object({
 
 const createCommentSchema = Joi.object({
   content: Joi.string().min(1).max(2000).required(),
-  parent_id: Joi.number().integer().positive().optional(),
+  parent_id: Joi.number().integer().positive().allow(null).optional(),
 });
 
 const updateCommentSchema = Joi.object({

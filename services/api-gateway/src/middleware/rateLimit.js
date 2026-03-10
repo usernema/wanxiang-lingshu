@@ -1,121 +1,113 @@
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
+const { RedisStore } = require('rate-limit-redis');
 const { getRedisClient } = require('../utils/redis');
 const config = require('../config');
 const logger = require('../utils/logger');
+const { metrics } = require('./metrics');
+const { sendError } = require('./errorHandler');
 
-/**
- * 基于 Agent 信誉等级的动态限流
- */
 function getReputationBasedLimit(reputation) {
-  if (reputation >= 5000) {
-    // 大师级别：1000 请求/分钟
-    return 1000;
-  } else if (reputation >= 1001) {
-    // 专家级别：500 请求/分钟
-    return 500;
-  } else if (reputation >= 501) {
-    // 贡献者级别：300 请求/分钟
-    return 300;
-  } else if (reputation >= 101) {
-    // 活跃级别：150 请求/分钟
-    return 150;
-  } else {
-    // 新手级别：100 请求/分钟
-    return 100;
-  }
+  if (reputation >= 5000) return 1000;
+  if (reputation >= 1001) return 500;
+  if (reputation >= 501) return 300;
+  if (reputation >= 101) return 150;
+  return config.rateLimit.profiles.default.maxRequests;
 }
 
-/**
- * 创建限流中间件
- */
-async function createRateLimiter() {
-  const redis = await getRedisClient();
+function buildStore(redis, prefix) {
+  return new RedisStore({
+    prefix,
+    sendCommand: (...args) => redis.sendCommand(args),
+  });
+}
 
-  return rateLimit({
-    windowMs: config.rateLimit.windowMs,
+function limitExceededResponse(req, res, profile, keyType) {
+  metrics.rateLimitExceeded.inc({ key_type: keyType });
+  logger.warn('Rate limit exceeded', {
+    profile,
+    keyType,
+    requestId: req.id,
+    agent: req.agent?.aid || 'anonymous',
+    path: req.path,
+  });
+
+  return sendError(res, req, {
+    status: 429,
+    code: 'RATE_LIMIT_EXCEEDED',
+    error: 'Too many requests, please try again later',
+    extras: {
+      profile,
+      retryAfter: res.getHeader('Retry-After'),
+    },
+  });
+}
+
+function skipHealthAndMetrics(req) {
+  return req.path === '/health' || req.path === '/health/live' || req.path === '/health/ready' || req.path === '/health/deps' || req.path === '/livez' || req.path === '/readyz' || req.path === '/metrics';
+}
+
+function createLimiterOptions(profileName, redis) {
+  const profile = config.rateLimit.profiles[profileName];
+  if (!profile) {
+    throw new Error(`Unknown rate limit profile: ${profileName}`);
+  }
+
+  const byAgent = profileName !== 'auth' && profileName !== 'health';
+  const prefix = `ratelimit:${profileName}:`;
+
+  return {
+    windowMs: profile.windowMs,
     max: async (req) => {
-      // 如果有 Agent 信息，基于信誉等级限流
-      if (req.agent && req.agent.reputation !== undefined) {
-        const limit = getReputationBasedLimit(req.agent.reputation);
-        logger.debug('Rate limit for agent', {
-          aid: req.agent.aid,
-          reputation: req.agent.reputation,
-          limit,
-        });
-        return limit;
+      if (profileName === 'default' && req.agent?.reputation !== undefined) {
+        return getReputationBasedLimit(req.agent.reputation);
       }
-
-      // 匿名用户或未认证用户使用默认限制
-      return config.rateLimit.maxRequests;
+      return profile.maxRequests;
     },
     keyGenerator: (req) => {
-      // 优先使用 Agent ID，否则使用 IP
-      if (req.agent && req.agent.aid) {
-        return `agent:${req.agent.aid}`;
+      if (profileName === 'auth') {
+        return `auth:ip:${req.ip}`;
       }
-      return `ip:${req.ip}`;
+      if (byAgent && req.agent?.aid) {
+        return `${profileName}:agent:${req.agent.aid}`;
+      }
+      return `${profileName}:ip:${req.ip}`;
     },
-    store: new RedisStore({
-      client: redis,
-      prefix: 'ratelimit:',
-    }),
+    store: buildStore(redis, prefix),
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => {
-      logger.warn('Rate limit exceeded', {
-        key: req.agent ? req.agent.aid : req.ip,
-        requestId: req.id,
-      });
-
-      res.status(429).json({
-        success: false,
-        error: 'Too many requests, please try again later',
-        code: 'RATE_LIMIT_EXCEEDED',
-        retryAfter: res.getHeader('Retry-After'),
-      });
-    },
-    skip: (req) => {
-      // 健康检查端点不限流
-      return req.path === '/health' || req.path === '/metrics';
-    },
-  });
+    handler: (req, res) => limitExceededResponse(req, res, profileName, byAgent && req.agent?.aid ? 'agent' : 'ip'),
+    skip: skipHealthAndMetrics,
+  };
 }
 
-/**
- * IP 限流（防止暴力攻击）
- */
-async function createIpRateLimiter() {
+async function createRateLimiter(profileName = 'default') {
   const redis = await getRedisClient();
+  return rateLimit(createLimiterOptions(profileName, redis));
+}
 
-  return rateLimit({
-    windowMs: 60000, // 1 分钟
-    max: 200, // 每个 IP 最多 200 请求/分钟
-    keyGenerator: (req) => `ip:${req.ip}`,
-    store: new RedisStore({
-      client: redis,
-      prefix: 'ratelimit:ip:',
-    }),
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req, res) => {
-      logger.warn('IP rate limit exceeded', {
-        ip: req.ip,
-        requestId: req.id,
-      });
+async function createProfileLimiters() {
+  const [defaultLimiter, authLimiter, publicReadLimiter, writeLimiter, internalLimiter, healthLimiter] = await Promise.all([
+    createRateLimiter('default'),
+    createRateLimiter('auth'),
+    createRateLimiter('publicRead'),
+    createRateLimiter('write'),
+    createRateLimiter('internal'),
+    createRateLimiter('health'),
+  ]);
 
-      res.status(429).json({
-        success: false,
-        error: 'Too many requests from this IP',
-        code: 'IP_RATE_LIMIT_EXCEEDED',
-      });
-    },
-    skip: (req) => req.path === '/health' || req.path === '/metrics',
-  });
+  return {
+    defaultLimiter,
+    authLimiter,
+    publicReadLimiter,
+    writeLimiter,
+    internalLimiter,
+    healthLimiter,
+  };
 }
 
 module.exports = {
+  createLimiterOptions,
+  createProfileLimiters,
   createRateLimiter,
-  createIpRateLimiter,
   getReputationBasedLimit,
 };

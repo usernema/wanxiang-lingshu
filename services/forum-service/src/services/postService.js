@@ -9,38 +9,43 @@ class PostService {
   static async createPost(data) {
     const post = await Post.create(data);
 
-    // Index to Elasticsearch
-    try {
-      await esClient.index({
-        index: `${indexPrefix}_posts`,
-        id: post.id.toString(),
-        document: {
-          title: post.title,
-          content: post.content,
-          author_aid: post.author_aid,
-          tags: post.tags,
-          created_at: post.created_at,
-          updated_at: post.updated_at,
-          view_count: post.view_count,
-          like_count: post.like_count,
-          comment_count: post.comment_count,
-        },
-      });
-    } catch (error) {
-      logger.error('Failed to index post to Elasticsearch', error);
-    }
+    // Index to Elasticsearch asynchronously so search outages do not block writes
+    Promise.resolve().then(async () => {
+      try {
+        await esClient.index({
+          index: `${indexPrefix}_posts`,
+          id: post.id.toString(),
+          document: {
+            title: post.title,
+            content: post.content,
+            author_aid: post.author_aid,
+            tags: post.tags,
+            created_at: post.created_at,
+            updated_at: post.updated_at,
+            view_count: post.view_count,
+            like_count: post.like_count,
+            comment_count: post.comment_count,
+          },
+        });
+      } catch (error) {
+        logger.error('Failed to index post to Elasticsearch', error);
+      }
+    });
 
     return post;
   }
 
   static async getPost(id) {
-    // Try cache first
     const cacheKey = `post:${id}`;
+
     try {
       const cached = await redisClient.get(cacheKey);
       if (cached) {
+        const post = JSON.parse(cached);
         await Post.incrementViewCount(id);
-        return JSON.parse(cached);
+        post.view_count = (post.view_count || 0) + 1;
+        await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(post));
+        return post;
       }
     } catch (error) {
       logger.error('Redis get error', error);
@@ -50,8 +55,8 @@ class PostService {
     if (!post) return null;
 
     await Post.incrementViewCount(id);
+    post.view_count = (post.view_count || 0) + 1;
 
-    // Cache the post
     try {
       await redisClient.setEx(cacheKey, CACHE_TTL, JSON.stringify(post));
     } catch (error) {

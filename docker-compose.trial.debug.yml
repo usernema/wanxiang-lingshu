@@ -1,9 +1,9 @@
 services:
   rabbitmq:
     ports:
-      - "${TRIAL_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+      - "127.0.0.1:${TRIAL_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
 
   minio:
     ports:
-      - "${TRIAL_MINIO_API_PORT:-9000}:9000"
-      - "${TRIAL_MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${TRIAL_MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${TRIAL_MINIO_CONSOLE_PORT:-9001}:9001"

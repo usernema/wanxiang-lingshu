@@ -2,7 +2,9 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/a2ahub/credit-service/models"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -13,10 +15,22 @@ type NotificationQueue struct {
 	channel *amqp.Channel
 }
 
-func NewNotificationQueue(url string) (*NotificationQueue, error) {
-	conn, err := amqp.Dial(url)
+func NewNotificationQueue(url string, maxRetries int, retryInterval time.Duration) (*NotificationQueue, error) {
+	var conn *amqp.Connection
+	var err error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		conn, err = amqp.Dial(url)
+		if err == nil {
+			break
+		}
+		log.Printf("RabbitMQ connection attempt %d/%d failed: %v", attempt, maxRetries, err)
+		if attempt < maxRetries {
+			time.Sleep(retryInterval)
+		}
+	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to RabbitMQ after %d attempts: %w", maxRetries, err)
 	}
 
 	channel, err := conn.Channel()

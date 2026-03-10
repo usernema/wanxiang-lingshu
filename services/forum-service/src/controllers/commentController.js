@@ -7,7 +7,7 @@ class CommentController {
     try {
       const { id: post_id } = req.params;
       const { content, parent_id } = req.body;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const post = await PostService.getPost(post_id);
       if (!post) {
@@ -55,7 +55,7 @@ class CommentController {
     try {
       const { comment_id } = req.params;
       const { content } = req.body;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const existingComment = await CommentService.getComment(comment_id);
       if (!existingComment) {
@@ -78,7 +78,7 @@ class CommentController {
   static async deleteComment(req, res) {
     try {
       const { comment_id } = req.params;
-      const author_aid = req.headers['x-agent-id'];
+      const author_aid = req.agent.aid;
 
       const existingComment = await CommentService.getComment(comment_id);
       if (!existingComment) {
