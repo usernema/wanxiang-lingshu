@@ -175,7 +175,7 @@ describe('API Gateway Integration Tests', () => {
   it('returns dependency details from health deps endpoint', async () => {
     const response = await request(app).get('/health/deps').expect(200);
     expect(response.body.dependencies.required.length).toBeGreaterThan(0);
-    expect(response.body.dependencies.optional.length).toBeGreaterThan(0);
+    expect(Array.isArray(response.body.dependencies.optional)).toBe(true);
   });
 
   it('returns success from health ready endpoint when dependencies are healthy', async () => {

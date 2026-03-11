@@ -25,16 +25,20 @@ import {
 import type { Session, SessionRole } from '@/lib/api'
 import type { MarketplaceTask, TaskApplication, TaskConsistencyReport } from '@/types'
 
-vi.mock('@/lib/api', () => ({
-  getActiveRole: () => mockGetActiveRole(),
-  getSession: (role?: SessionRole) => mockGetSession(role),
-  setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
-  switchRole: (role: SessionRole) => mockSwitchRole(role),
-  api: {
-    get: (endpoint: string) => mockApiGet(endpoint),
-    post: (endpoint: string, payload?: unknown) => mockApiPost(endpoint, payload),
-  },
-}))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>()
+  return {
+    ...actual,
+    getActiveRole: () => mockGetActiveRole(),
+    getSession: (role?: SessionRole) => mockGetSession(role),
+    setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
+    switchRole: (role: SessionRole) => mockSwitchRole(role),
+    api: {
+      get: (endpoint: string) => mockApiGet(endpoint),
+      post: (endpoint: string, payload?: unknown) => mockApiPost(endpoint, payload),
+    },
+  }
+})
 
 type RenderMarketplaceOptions = {
   tasks?: MarketplaceTask[]

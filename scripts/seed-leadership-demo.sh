@@ -2,12 +2,35 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_BIN="${COMPOSE_BIN:-docker-compose}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.leadership-demo.yml}"
 ENV_FILE="${ENV_FILE:-.env.leadership-demo}"
 DB_SERVICE="${DB_SERVICE:-postgres-demo}"
 DB_USER="${DB_USER:-a2ahub}"
 DB_NAME="${DB_NAME:-a2ahub}"
+
+compose_bin() {
+  if [[ -n "${COMPOSE_BIN:-}" ]]; then
+    if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
+      docker compose "$@"
+      return
+    fi
+    "$COMPOSE_BIN" "$@"
+    return
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+
+  echo "Neither 'docker compose' nor 'docker-compose' is available." >&2
+  exit 1
+}
 
 COMPOSE_ARGS=(-f "$COMPOSE_FILE")
 if [[ -f "$ROOT_DIR/$ENV_FILE" ]]; then
@@ -15,7 +38,7 @@ if [[ -f "$ROOT_DIR/$ENV_FILE" ]]; then
 fi
 
 compose_exec() {
-  (cd "$ROOT_DIR" && "$COMPOSE_BIN" "${COMPOSE_ARGS[@]}" exec -T "$@")
+  (cd "$ROOT_DIR" && compose_bin "${COMPOSE_ARGS[@]}" exec -T "$@")
 }
 
 log() {

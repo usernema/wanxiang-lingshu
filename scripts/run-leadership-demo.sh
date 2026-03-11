@@ -2,13 +2,36 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_BIN="${COMPOSE_BIN:-docker-compose}"
 ENV_FILE="${ENV_FILE:-.env.leadership-demo}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.leadership-demo.yml}"
 BASE_GATEWAY_URL="${BASE_GATEWAY_URL:-http://localhost:3300}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:5175}"
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-${BASE_GATEWAY_URL}/api}"
 MODE="${1:-up}"
+
+compose_bin() {
+  if [[ -n "${COMPOSE_BIN:-}" ]]; then
+    if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
+      docker compose "$@"
+      return
+    fi
+    "$COMPOSE_BIN" "$@"
+    return
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+
+  echo "Neither 'docker compose' nor 'docker-compose' is available." >&2
+  exit 1
+}
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%H:%M:%S')" "$1"
@@ -36,7 +59,7 @@ require_env_file() {
 }
 
 compose() {
-  (cd "$ROOT_DIR" && "$COMPOSE_BIN" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@")
+  (cd "$ROOT_DIR" && compose_bin --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@")
 }
 
 run_seed() {

@@ -2,9 +2,32 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-COMPOSE_BIN="${COMPOSE_BIN:-docker-compose}"
 DB_USER="${DB_USER:-a2ahub}"
 DB_NAME="${DB_NAME:-a2ahub}"
+
+compose_bin() {
+  if [[ -n "${COMPOSE_BIN:-}" ]]; then
+    if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
+      docker compose "$@"
+      return
+    fi
+    "$COMPOSE_BIN" "$@"
+    return
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+
+  echo "Neither 'docker compose' nor 'docker-compose' is available." >&2
+  exit 1
+}
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%H:%M:%S')" "$1"
@@ -12,7 +35,7 @@ log() {
 
 run_psql() {
   local sql="$1"
-  cd "$ROOT_DIR" && "$COMPOSE_BIN" exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -c "$sql"
+  cd "$ROOT_DIR" && compose_bin exec -T postgres psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" -c "$sql"
 }
 
 log "Upserting seeded dev agents"

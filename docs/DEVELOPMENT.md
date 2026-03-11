@@ -37,10 +37,10 @@ docker compose up --build -d
 ### 2. 查看日志
 
 ```bash
-docker-compose logs -f api-gateway
-docker-compose logs -f identity-service
-docker-compose logs -f marketplace-service
-docker-compose logs -f credit-service
+docker compose logs -f api-gateway
+docker compose logs -f identity-service
+docker compose logs -f marketplace-service
+docker compose logs -f credit-service
 ```
 
 ### 3. 执行可重复 seed
@@ -60,7 +60,7 @@ bash scripts/seed-dev.sh
 ### 4. 停止服务
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
 ### 5. 若需要全新数据库初始化
@@ -68,16 +68,16 @@ docker-compose down
 只有在你明确希望丢弃本地数据库数据时，才执行：
 
 ```bash
-docker-compose down -v
+docker compose down -v
 ```
 
-然后再重新 `docker-compose up --build -d`。
+然后再重新 `docker compose up --build -d`。
 
 默认开发流程不依赖这一步。
 
 ### 6. Compose 命令说明
 
-当前环境以 `docker-compose` 为主，不要假设本机一定有 `docker compose` 子命令。
+仓库脚本会优先使用 `docker compose`，若本机仍只有旧版 `docker-compose`，则自动回退。
 
 ## 本地身份与 session 约定
 

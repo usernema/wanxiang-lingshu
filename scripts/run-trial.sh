@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/Users/mac/A2Ahub"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT}/.env.trial"
 EXAMPLE_FILE="${ROOT}/.env.trial.example"
 COMPOSE_FILE="${ROOT}/docker-compose.trial.yml"
@@ -39,6 +39,30 @@ CLI_TRIAL_VITE_APP_MODE="${TRIAL_VITE_APP_MODE-}"
 CLI_TRIAL_VITE_BANNER_LABEL="${TRIAL_VITE_BANNER_LABEL-}"
 CLI_TRIAL_VITE_GATEWAY_LABEL="${TRIAL_VITE_GATEWAY_LABEL-}"
 CLI_TRIAL_VITE_RESET_SESSIONS_ON_LOAD="${TRIAL_VITE_RESET_SESSIONS_ON_LOAD-}"
+
+compose() {
+  if [[ -n "${COMPOSE_BIN:-}" ]]; then
+    if [[ "$COMPOSE_BIN" == "docker compose" ]]; then
+      docker compose "$@"
+      return
+    fi
+    "$COMPOSE_BIN" "$@"
+    return
+  fi
+
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+    return
+  fi
+
+  if command -v docker-compose >/dev/null 2>&1; then
+    docker-compose "$@"
+    return
+  fi
+
+  echo "Neither 'docker compose' nor 'docker-compose' is available." >&2
+  exit 1
+}
 
 restore_cli_override() {
   local name="$1"
@@ -199,12 +223,12 @@ if [[ -n "$OPTIONAL_SERVICES" ]]; then
   fi
 fi
 
-COMPOSE_ARGS=(--project-directory "$ROOT" -f "$COMPOSE_FILE")
+COMPOSE_ARGS=(--project-directory "$ROOT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 if [[ "${TRIAL_ENABLE_DEBUG_OVERLAY:-false}" == "true" ]]; then
   COMPOSE_ARGS+=(-f "$DEBUG_COMPOSE_FILE")
 fi
 
-docker-compose "${COMPOSE_ARGS[@]}" up -d --build
+compose "${COMPOSE_ARGS[@]}" up -d --build
 
 PUBLIC_SCHEME="http"
 PUBLIC_HOST="${TRIAL_PUBLIC_HOSTNAME:-localhost}"

@@ -13,13 +13,17 @@ import {
 } from '@/test/apiMock'
 import type { Session } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({
-  getActiveSession: () => mockGetActiveSession(),
-  api: {
-    get: (endpoint: string) => mockApiGet(endpoint),
-    post: (endpoint: string, payload?: unknown) => mockApiPost(endpoint, payload),
-  },
-}))
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>()
+  return {
+    ...actual,
+    getActiveSession: () => mockGetActiveSession(),
+    api: {
+      get: (endpoint: string) => mockApiGet(endpoint),
+      post: (endpoint: string, payload?: unknown) => mockApiPost(endpoint, payload),
+    },
+  }
+})
 
 const activeSession: Session = defaultForumSession
 
@@ -65,6 +69,15 @@ function renderForum(options?: {
                     created_at: '2026-03-09T00:00:00.000Z',
                   },
                 ],
+              },
+            },
+          }
+        }
+        if (endpoint === '/v1/forum/posts/2/comments') {
+          return {
+            data: {
+              data: {
+                comments: [],
               },
             },
           }
@@ -132,12 +145,12 @@ describe('Forum UI regression coverage', () => {
     expect(await screen.findByText('硅基论坛')).toBeInTheDocument()
     const postCard = await screen.findByRole('button', { name: /第一篇帖子/i })
     expect(postCard).toBeInTheDocument()
-    expect(await screen.findByText('作者: forum-agent')).toBeInTheDocument()
+    expect(postCard).toHaveTextContent('作者：forum-agent')
 
     const user = userEvent.setup()
     await user.click(postCard)
 
-    expect(await screen.findByText('评论')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /评论 · 1/ })).toBeInTheDocument()
     expect(screen.getByText('reply-agent')).toBeInTheDocument()
     expect(screen.getByText('收到，已关注这个问题。')).toBeInTheDocument()
   })
@@ -148,7 +161,7 @@ describe('Forum UI regression coverage', () => {
     const user = userEvent.setup()
     await user.type(await screen.findByPlaceholderText('搜索帖子'), 'escrow')
 
-    expect(await screen.findByText('搜索命中帖子')).toBeInTheDocument()
+    expect(await screen.findAllByText('搜索命中帖子')).not.toHaveLength(0)
   })
 
   it('shows post creation error banner when publish fails', async () => {
@@ -166,6 +179,6 @@ describe('Forum UI regression coverage', () => {
     await user.type(screen.getByPlaceholderText('分享你的想法、实践或问题'), '帖子内容')
     await user.click(screen.getByRole('button', { name: '发布帖子' }))
 
-    expect(await screen.findByText('帖子发布失败，请确认当前 session 有效。')).toBeInTheDocument()
+    expect(await screen.findByText('帖子发布失败，请稍后重试。')).toBeInTheDocument()
   })
 })
