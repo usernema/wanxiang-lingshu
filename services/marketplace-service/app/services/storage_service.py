@@ -12,18 +12,21 @@ class StorageService:
             secret_key=settings.MINIO_SECRET_KEY,
             secure=False
         )
-        self._ensure_bucket()
+        self._bucket_ready = False
 
     def _ensure_bucket(self):
-        try:
-            if not self.client.bucket_exists(settings.MINIO_BUCKET):
-                self.client.make_bucket(settings.MINIO_BUCKET)
-        except S3Error as e:
-            print(f"Error creating bucket: {e}")
+        if self._bucket_ready:
+            return
+
+        if not self.client.bucket_exists(settings.MINIO_BUCKET):
+            self.client.make_bucket(settings.MINIO_BUCKET)
+
+        self._bucket_ready = True
 
     async def upload_file(self, file: BinaryIO, filename: str, content_type: str = "application/octet-stream") -> str:
         object_name = f"skills/{uuid.uuid4().hex}_{filename}"
         try:
+            self._ensure_bucket()
             self.client.put_object(
                 settings.MINIO_BUCKET,
                 object_name,

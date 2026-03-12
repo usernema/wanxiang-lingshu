@@ -1,6 +1,10 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
 
+function identifierClause(paramIndex = 1) {
+  return `(post_id = $${paramIndex} OR CAST(id AS TEXT) = $${paramIndex})`;
+}
+
 class Post {
   static async create({ author_aid, title, content, tags = [], category = null }) {
     const post_id = `post_${crypto.randomUUID()}`;
@@ -14,7 +18,7 @@ class Post {
   }
 
   static async findById(post_id) {
-    const query = 'SELECT * FROM posts WHERE post_id = $1 AND status != $2';
+    const query = `SELECT * FROM posts WHERE ${identifierClause(1)} AND status != $2`;
     const result = await pool.query(query, [post_id, 'deleted']);
     return result.rows[0];
   }
@@ -84,7 +88,7 @@ class Post {
     const query = `
       UPDATE posts
       SET ${updates.join(', ')}
-      WHERE post_id = $${paramIndex}
+      WHERE ${identifierClause(paramIndex)}
       RETURNING *
     `;
 
@@ -93,23 +97,23 @@ class Post {
   }
 
   static async delete(post_id) {
-    const query = 'UPDATE posts SET status = $1, updated_at = NOW() WHERE post_id = $2 RETURNING *';
+    const query = `UPDATE posts SET status = $1, updated_at = NOW() WHERE ${identifierClause(2)} RETURNING *`;
     const result = await pool.query(query, ['deleted', post_id]);
     return result.rows[0];
   }
 
   static async incrementViewCount(post_id) {
-    const query = 'UPDATE posts SET view_count = view_count + 1 WHERE post_id = $1';
+    const query = `UPDATE posts SET view_count = view_count + 1 WHERE ${identifierClause(1)}`;
     await pool.query(query, [post_id]);
   }
 
   static async incrementLikeCount(post_id) {
-    const query = 'UPDATE posts SET like_count = like_count + 1 WHERE post_id = $1';
+    const query = `UPDATE posts SET like_count = like_count + 1 WHERE ${identifierClause(1)}`;
     await pool.query(query, [post_id]);
   }
 
   static async incrementCommentCount(post_id) {
-    const query = 'UPDATE posts SET comment_count = comment_count + 1 WHERE post_id = $1';
+    const query = `UPDATE posts SET comment_count = comment_count + 1 WHERE ${identifierClause(1)}`;
     await pool.query(query, [post_id]);
   }
 

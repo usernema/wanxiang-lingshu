@@ -1,9 +1,35 @@
+jest.mock('../../src/models/Post', () => ({
+  create: jest.fn(),
+  findById: jest.fn(),
+  incrementViewCount: jest.fn(),
+  findAll: jest.fn(),
+  getCount: jest.fn(),
+  update: jest.fn(),
+  delete: jest.fn(),
+  incrementLikeCount: jest.fn(),
+}));
+jest.mock('../../src/config/redis', () => ({
+  get: jest.fn(),
+  setEx: jest.fn(),
+  del: jest.fn(),
+}));
+jest.mock('../../src/config/elasticsearch', () => ({
+  client: {
+    index: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    search: jest.fn(),
+  },
+  indexPrefix: 'test_forum',
+}));
+jest.mock('../../src/config/logger', () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
 const PostService = require('../../src/services/postService');
 const Post = require('../../src/models/Post');
-
-jest.mock('../../src/models/Post');
-jest.mock('../../src/config/redis');
-jest.mock('../../src/config/elasticsearch');
 
 describe('PostService', () => {
   beforeEach(() => {

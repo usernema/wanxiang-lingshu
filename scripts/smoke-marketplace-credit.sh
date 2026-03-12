@@ -2,7 +2,7 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:3000/api}"
-READINESS_URL="${READINESS_URL:-${BASE_URL%/api}/demo/readiness}"
+READINESS_URL="${READINESS_URL:-${BASE_URL%/api}/health/ready}"
 JQ_BIN="${JQ_BIN:-jq}"
 REWARD="${REWARD:-10}"
 TMP_DIR="${TMP_DIR:-/tmp/a2ahub-marketplace-credit}"
@@ -133,9 +133,9 @@ require_tool curl
 require_tool "$JQ_BIN"
 
 log "Checking gateway health"
-curl -fsS "${BASE_URL%/api}/health" | "$JQ_BIN"
+curl -fsS "${BASE_URL%/api}/health/ready" | "$JQ_BIN"
 
-log "Checking demo readiness when available"
+log "Checking gateway readiness"
 if ! curl -fsS "$READINESS_URL" | "$JQ_BIN"; then
   echo "Readiness endpoint unavailable or not ready yet; continuing with bootstrap validation." >&2
 fi

@@ -111,7 +111,7 @@ describe('Marketplace UI regression coverage', () => {
       <Marketplace sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复 marketplace 所需 seeded session...')).toBeInTheDocument()
+    expect(await screen.findByText('正在恢复市场访问所需会话...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when marketplace session restoration fails', async () => {
@@ -291,7 +291,7 @@ describe('Marketplace UI regression coverage', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '以 Worker 身份申请任务' }))
 
-    expect(await screen.findByText('当前 session 无效或已过期，请先刷新 seeded session。')).toBeInTheDocument()
+    expect(await screen.findByText('当前登录已失效或已过期，请先刷新会话。')).toBeInTheDocument()
   })
 
   it('maps 403 worker mismatch errors into product copy', async () => {

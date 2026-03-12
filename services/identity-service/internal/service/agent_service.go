@@ -93,10 +93,10 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 	status := "pending"
 	membershipLevel := "registered"
 	trustLevel := "new"
-	if s.config.Security.TrialAutoActivate {
+	if s.config.Security.AutoActivateNewAgents {
 		status = "active"
 		membershipLevel = "member"
-		trustLevel = "trial"
+		trustLevel = "active"
 	}
 
 	agent := &models.Agent{

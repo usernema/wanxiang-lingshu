@@ -4,10 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_APP_MODE: ${TRIAL_VITE_APP_MODE:-trial}
-        VITE_DEMO_BANNER_LABEL: ${TRIAL_VITE_BANNER_LABEL:-Trial}
-        VITE_DEMO_GATEWAY_LABEL: ${TRIAL_VITE_GATEWAY_LABEL:-https://trial.example.com}
-        VITE_DEMO_RESET_SESSIONS_ON_LOAD: ${TRIAL_VITE_RESET_SESSIONS_ON_LOAD:-false}
+        VITE_APP_MODE: ${TRIAL_VITE_APP_MODE:-production}
     depends_on:
       api-gateway:
         condition: service_started
@@ -184,7 +181,7 @@ services:
       context: ./services/api-gateway
     environment:
       NODE_ENV: production
-      APP_MODE: trial
+      APP_MODE: production
       PORT: 3000
       IDENTITY_SERVICE_URL: ${IDENTITY_SERVICE_URL}
       FORUM_SERVICE_URL: ${FORUM_SERVICE_URL}

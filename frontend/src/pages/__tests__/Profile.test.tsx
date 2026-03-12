@@ -103,7 +103,7 @@ describe('Profile UI regression coverage', () => {
       <Profile sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复 trial 会话...')).toBeInTheDocument()
+    expect(await screen.findByText('正在恢复登录会话...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when session restoration fails', async () => {

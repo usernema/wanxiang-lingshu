@@ -25,7 +25,7 @@ function parseList(value, fallback = []) {
 
 const env = process.env.NODE_ENV || 'development';
 const appMode = process.env.APP_MODE || env;
-const isProductionLike = env === 'production' || appMode === 'trial';
+const isProductionLike = env === 'production' || appMode === 'production';
 const defaultDevOrigins = ['http://localhost:3000', 'http://localhost:8080'];
 const allowedOrigins = parseList(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '', isProductionLike ? [] : defaultDevOrigins);
 
@@ -56,11 +56,11 @@ module.exports = {
     ranking: process.env.RANKING_SERVICE_URL || 'http://localhost:3006',
   },
 
-  demo: {
-    readinessTimeout: parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000),
-    bootstrapPath: process.env.DEMO_BOOTSTRAP_PATH || '/api/v1/agents/dev/bootstrap',
-    balancePath: process.env.DEMO_BALANCE_PATH || '/api/v1/credits/balance',
-    mode: process.env.DEMO_MODE || 'disabled',
+  bootstrap: {
+    readinessTimeout: parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000)),
+    path: process.env.BOOTSTRAP_PATH || process.env.DEMO_BOOTSTRAP_PATH || '/api/v1/agents/dev/bootstrap',
+    balancePath: process.env.BALANCE_PATH || process.env.DEMO_BALANCE_PATH || '/api/v1/credits/balance',
+    mode: process.env.BOOTSTRAP_MODE || process.env.DEMO_MODE || 'disabled',
   },
 
   redis: {
@@ -128,7 +128,7 @@ module.exports = {
   },
 
   health: {
-    readinessTimeout: parseInteger(process.env.READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000)),
+    readinessTimeout: parseInteger(process.env.READINESS_TIMEOUT_MS, parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000))),
     dependencyTimeout: parseInteger(process.env.HEALTH_DEPENDENCY_TIMEOUT_MS, 2500),
     redisRequired: parseBoolean(process.env.HEALTH_REDIS_REQUIRED, true),
     requiredServices: parseList(process.env.HEALTH_REQUIRED_SERVICES, defaultRequiredServices),

@@ -130,7 +130,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   }
 
   if (sessionState.bootstrapState === 'loading') {
-    return <Panel title="个人中心">正在恢复 trial 会话...</Panel>
+    return <Panel title="个人中心">正在恢复登录会话...</Panel>
   }
 
   if (sessionState.bootstrapState === 'error') {
@@ -156,7 +156,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || 'Agent'}</h1>
               <p className="mt-2 text-sm text-gray-600">{profile?.aid || session.aid}</p>
-              <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '为 trial 社区展示你的身份、能力标签、合作方式与任务履历。'}</p>
+              <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向社区展示你的身份、能力标签、合作方式与任务履历。'}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <IdentityChip tone="slate" label={`状态: ${profile?.status || session.status || 'unknown'}`} />
                 <IdentityChip tone="green" label={`信誉分: ${profile?.reputation ?? session.reputation ?? '—'}`} />
@@ -209,7 +209,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">Trial readiness</h2>
+          <h2 className="text-xl font-semibold">协作准备度</h2>
           <div className="mt-4 space-y-3">
             {profileStrength.items.map((item) => (
               <div key={item.label} className="flex items-center justify-between rounded-xl bg-gray-50 px-4 py-3 text-sm">
@@ -293,7 +293,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Wallet / Credit 变化解释</h2>
-            <p className="mt-1 text-sm text-gray-600">帮助 trial 用户理解积分、托管资金与任务状态的关系。</p>
+            <p className="mt-1 text-sm text-gray-600">帮助你理解积分、托管资金与任务状态之间的关系。</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <StatusChip label="Balance" value={toNumber(balance?.balance)} />

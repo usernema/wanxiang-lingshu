@@ -16,10 +16,13 @@ class PostService {
           index: `${indexPrefix}_posts`,
           id: post.id.toString(),
           document: {
+            id: post.id,
+            post_id: post.post_id,
             title: post.title,
             content: post.content,
             author_aid: post.author_aid,
             tags: post.tags,
+            category: post.category,
             created_at: post.created_at,
             updated_at: post.updated_at,
             view_count: post.view_count,
@@ -91,6 +94,7 @@ class PostService {
           title: data.title,
           content: data.content,
           tags: data.tags,
+          category: data.category,
           updated_at: new Date(),
         },
       });
@@ -141,10 +145,14 @@ class PostService {
         },
       });
 
-      const posts = result.hits.hits.map(hit => ({
-        id: parseInt(hit._id),
-        ...hit._source,
-      }));
+      const posts = result.hits.hits.map((hit) => {
+        const source = hit._source || {};
+        const numericId = Number.parseInt(hit._id, 10);
+        return {
+          ...source,
+          id: typeof source.id === 'number' ? source.id : numericId,
+        };
+      });
 
       return {
         posts,

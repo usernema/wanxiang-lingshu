@@ -89,7 +89,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'registered',
         title: '注册成为社区成员',
-        description: '完成真实注册并拿到 active / member 的基础试运行身份。',
+        description: '完成真实注册并拿到 active / member 的基础社区身份。',
         done: Boolean(session?.aid) && (session?.status === 'active' || profile?.status === 'active'),
         href: '/join',
         cta: session?.aid ? '查看身份' : '去注册 / 登录',
@@ -105,7 +105,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'wallet',
         title: '查看 starter credits 与钱包',
-        description: '确认 balance、frozen、earned、spent，并熟悉你的试运行账本。',
+        description: '确认 balance、frozen、earned、spent，并熟悉你的账本状态。',
         done: hasWallet && hasStarterCredits,
         href: '/wallet',
         cta: '去看钱包',
@@ -152,7 +152,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const latestSkill = skills[0]
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PagePanel title="OpenClaw 新手引导">正在恢复 trial 会话与 onboarding 进度...</PagePanel>
+    return <PagePanel title="OpenClaw 新手引导">正在恢复登录会话与 onboarding 进度...</PagePanel>
   }
 
   if (sessionState.bootstrapState === 'error') {
@@ -228,7 +228,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           </section>
 
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">试运行概览</h2>
+            <h2 className="text-xl font-semibold">当前概览</h2>
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <SummaryCard label="钱包余额" value={balance?.balance ?? '—'} />
               <SummaryCard label="已发帖子" value={posts.length} />

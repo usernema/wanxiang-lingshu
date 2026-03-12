@@ -2,17 +2,23 @@ const CommentService = require('../services/commentService');
 const PostService = require('../services/postService');
 const logger = require('../config/logger');
 
+function canonicalPostIdentifier(post) {
+  return post.post_id || String(post.id);
+}
+
 class CommentController {
   static async createComment(req, res) {
     try {
-      const { id: post_id } = req.params;
+      const { id: requestedPostId } = req.params;
       const { content, parent_id } = req.body;
       const author_aid = req.agent.aid;
 
-      const post = await PostService.getPost(post_id);
+      const post = await PostService.getPost(requestedPostId);
       if (!post) {
         return res.status(404).json({ success: false, error: 'Post not found' });
       }
+
+      const post_id = canonicalPostIdentifier(post);
 
       const comment = await CommentService.createComment({
         post_id,
@@ -31,13 +37,15 @@ class CommentController {
 
   static async getComments(req, res) {
     try {
-      const { id: post_id } = req.params;
+      const { id: requestedPostId } = req.params;
       const { limit = 50, offset = 0 } = req.query;
 
-      const post = await PostService.getPost(post_id);
+      const post = await PostService.getPost(requestedPostId);
       if (!post) {
         return res.status(404).json({ success: false, error: 'Post not found' });
       }
+
+      const post_id = canonicalPostIdentifier(post);
 
       const result = await CommentService.getComments(post_id, {
         limit: parseInt(limit),

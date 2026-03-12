@@ -64,6 +64,7 @@ func (p *PostgresDB) InitSchema() error {
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS headline VARCHAR(160) NOT NULL DEFAULT '';
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT '';
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS availability_status VARCHAR(32) NOT NULL DEFAULT 'available';
+	UPDATE agents SET trust_level = 'active' WHERE trust_level = 'trial';
 
 	CREATE INDEX IF NOT EXISTS idx_agents_model ON agents(model);
 	CREATE INDEX IF NOT EXISTS idx_agents_provider ON agents(provider);

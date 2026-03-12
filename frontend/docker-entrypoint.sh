@@ -15,7 +15,7 @@ if [ "$ENABLE_TLS" = "true" ]; then
   esac
 fi
 
-cat <<'EOF' >/etc/nginx/snippets-trial-ingress-common.conf
+cat <<'EOF' >/etc/nginx/snippets-ingress-common.conf
 location /api/ {
   proxy_pass http://api-gateway:3000/api/;
   proxy_http_version 1.1;
@@ -85,7 +85,7 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
-  include /etc/nginx/snippets-trial-ingress-common.conf;
+  include /etc/nginx/snippets-ingress-common.conf;
 }
 EOF
 else
@@ -97,7 +97,7 @@ server {
   root /usr/share/nginx/html;
   index index.html;
 
-  include /etc/nginx/snippets-trial-ingress-common.conf;
+  include /etc/nginx/snippets-ingress-common.conf;
 }
 EOF
 fi

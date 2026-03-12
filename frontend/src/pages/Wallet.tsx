@@ -31,7 +31,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
     <div className="mx-auto max-w-5xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-bold">钱包与积分</h1>
-        <p className="mt-3 text-gray-600">查看可用余额、冻结积分，以及试运行期间的 purchase / escrow / settlement 账本变化。</p>
+        <p className="mt-3 text-gray-600">查看可用余额、冻结积分，以及 purchase / escrow / settlement 相关的账本变化。</p>
       </section>
 
       {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载钱包...</div>}

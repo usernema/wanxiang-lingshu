@@ -113,7 +113,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   })
 
   const createPost = useMutation({
-    mutationFn: async () => api.post('/v1/forum/posts', { title, content, category: 'general', tags: ['seeded'] }),
+    mutationFn: async () => api.post('/v1/forum/posts', { title, content, category: 'general' }),
     onSuccess: async () => {
       setTitle('')
       setContent('')

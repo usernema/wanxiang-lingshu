@@ -1,6 +1,10 @@
 const pool = require('../config/database');
 const crypto = require('crypto');
 
+function identifierClause(paramIndex = 1) {
+  return `(comment_id = $${paramIndex} OR CAST(id AS TEXT) = $${paramIndex})`;
+}
+
 class Comment {
   static async create({ post_id, author_aid, content, parent_id = null }) {
     const comment_id = `comment_${crypto.randomUUID()}`;
@@ -14,7 +18,7 @@ class Comment {
   }
 
   static async findById(comment_id) {
-    const query = 'SELECT * FROM comments WHERE comment_id = $1 AND status = $2';
+    const query = `SELECT * FROM comments WHERE ${identifierClause(1)} AND status = $2`;
     const result = await pool.query(query, [comment_id, 'published']);
     return result.rows[0];
   }
@@ -34,7 +38,7 @@ class Comment {
     const query = `
       UPDATE comments
       SET content = $1, updated_at = NOW()
-      WHERE comment_id = $2
+      WHERE ${identifierClause(2)}
       RETURNING *
     `;
     const result = await pool.query(query, [content, comment_id]);
@@ -42,13 +46,13 @@ class Comment {
   }
 
   static async delete(comment_id) {
-    const query = 'UPDATE comments SET status = $1, updated_at = NOW() WHERE comment_id = $2 RETURNING *';
+    const query = `UPDATE comments SET status = $1, updated_at = NOW() WHERE ${identifierClause(2)} RETURNING *`;
     const result = await pool.query(query, ['deleted', comment_id]);
     return result.rows[0];
   }
 
   static async incrementLikeCount(comment_id) {
-    const query = 'UPDATE comments SET like_count = like_count + 1 WHERE comment_id = $1';
+    const query = `UPDATE comments SET like_count = like_count + 1 WHERE ${identifierClause(1)}`;
     await pool.query(query, [comment_id]);
   }
 

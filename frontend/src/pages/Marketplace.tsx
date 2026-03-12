@@ -686,11 +686,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   }
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PageStateCard message="正在恢复 marketplace 所需 seeded session..." />
+    return <PageStateCard message="正在恢复市场访问所需会话..." />
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PageStateCard message={sessionState.errorMessage || 'Marketplace session 恢复失败。'} tone="error" />
+    return <PageStateCard message={sessionState.errorMessage || '市场访问会话恢复失败。'} tone="error" />
   }
 
   return (
@@ -699,7 +699,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold">能力市场</h1>
-            <p className="mt-2 text-sm text-gray-600">当前页面使用 seeded employer / worker 身份进行产品级本地联调。</p>
+            <p className="mt-2 text-sm text-gray-600">当前页面支持在雇主 / 工作者视角之间切换，便于管理任务、申请与交付。</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="Employer" aid={employerSession?.aid} />
@@ -1049,7 +1049,7 @@ function mapMarketplaceError(error: unknown, action:
     const status = error.response?.status
     const detail = normalizeDetail(error.response?.data?.detail || error.response?.data?.message)
 
-    if (status === 401) return '当前 session 无效或已过期，请先刷新 seeded session。'
+    if (status === 401) return '当前登录已失效或已过期，请先刷新会话。'
     if (status === 403) {
       if (action === 'createTask' || action === 'assignTask' || action === 'cancelTask') return '当前 employer 身份与任务所有者不匹配。'
       if (action === 'applyTask' || action === 'completeTask') return '当前 worker 身份与请求中的执行者不匹配。'
@@ -1115,7 +1115,7 @@ function getRecommendedMarketplaceAction(
   if (task.status === 'open' && context.role === 'worker' && !context.applyDisabledReason) {
     return {
       title: '推荐先申请这个任务',
-      description: '当前任务仍处于 open 状态，最顺的演示路径是先以 Worker 身份提交申请。',
+      description: '当前任务仍处于 open 状态，最顺的下一步是先以 Worker 身份提交申请。',
       ctaLabel: '立即申请',
       ctaKind: 'apply',
       hint: '提交申请后，Employer 侧就能看到申请列表并继续分配。',
@@ -1205,7 +1205,7 @@ function RecommendedActionCard({
 
   return (
     <div className={`rounded-xl border p-4 ${toneClass}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-80">推荐演示动作</div>
+      <div className="text-xs font-medium uppercase tracking-wide opacity-80">推荐下一步动作</div>
       <div className="mt-1 text-base font-semibold">{recommendedAction.title}</div>
       <div className="mt-2 text-sm opacity-90">{recommendedAction.description}</div>
       {recommendedAction.ctaLabel && (

@@ -22,6 +22,16 @@ func (m *MockAccountRepository) Create(ctx context.Context, aid string) error {
 	return args.Error(0)
 }
 
+func (m *MockAccountRepository) CreateWithInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error {
+	args := m.Called(ctx, aid, initialBalance)
+	return args.Error(0)
+}
+
+func (m *MockAccountRepository) UpsertInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error {
+	args := m.Called(ctx, aid, initialBalance)
+	return args.Error(0)
+}
+
 func (m *MockAccountRepository) GetBalance(ctx context.Context, aid string) (*models.Account, error) {
 	args := m.Called(ctx, aid)
 	if args.Get(0) == nil {
@@ -147,6 +157,8 @@ func TestValidateTransfer(t *testing.T) {
 	})
 
 	t.Run("Insufficient balance should fail", func(t *testing.T) {
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent1", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent2", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
 		mockAccountRepo.On("GetBalance", ctx, "agent1").Return(&models.Account{
 			AID:     "agent1",
 			Balance: decimal.NewFromInt(50),
@@ -159,6 +171,8 @@ func TestValidateTransfer(t *testing.T) {
 	})
 
 	t.Run("Daily limit exceeded should fail", func(t *testing.T) {
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent3", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent2", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
 		mockAccountRepo.On("GetBalance", ctx, "agent3").Return(&models.Account{
 			AID:     "agent3",
 			Balance: decimal.NewFromInt(20000),
@@ -171,6 +185,8 @@ func TestValidateTransfer(t *testing.T) {
 	})
 
 	t.Run("Valid transfer should pass", func(t *testing.T) {
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent4", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
+		mockAccountRepo.On("CreateWithInitialBalance", ctx, "agent2", decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil).Once()
 		mockAccountRepo.On("GetBalance", ctx, "agent4").Return(&models.Account{
 			AID:     "agent4",
 			Balance: decimal.NewFromInt(1000),
@@ -184,14 +200,20 @@ func TestValidateTransfer(t *testing.T) {
 
 func TestCreateAccount(t *testing.T) {
 	mockAccountRepo := new(MockAccountRepository)
+	cfg := &config.Config{
+		Credit: config.CreditConfig{
+			DefaultCredits: 100.0,
+		},
+	}
 	service := &CreditService{
+		cfg:         cfg,
 		accountRepo: mockAccountRepo,
 	}
 
 	ctx := context.Background()
 	aid := "agent1"
 
-	mockAccountRepo.On("Create", ctx, aid).Return(nil)
+	mockAccountRepo.On("CreateWithInitialBalance", ctx, aid, decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil)
 
 	err := service.CreateAccount(ctx, aid)
 	assert.NoError(t, err)
@@ -200,7 +222,13 @@ func TestCreateAccount(t *testing.T) {
 
 func TestGetBalance(t *testing.T) {
 	mockAccountRepo := new(MockAccountRepository)
+	cfg := &config.Config{
+		Credit: config.CreditConfig{
+			DefaultCredits: 100.0,
+		},
+	}
 	service := &CreditService{
+		cfg:         cfg,
 		accountRepo: mockAccountRepo,
 	}
 
@@ -215,6 +243,7 @@ func TestGetBalance(t *testing.T) {
 		TotalSpent:    decimal.NewFromInt(4000),
 	}
 
+	mockAccountRepo.On("CreateWithInitialBalance", ctx, aid, decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil)
 	mockAccountRepo.On("GetBalance", ctx, aid).Return(expectedAccount, nil)
 
 	account, err := service.GetBalance(ctx, aid)

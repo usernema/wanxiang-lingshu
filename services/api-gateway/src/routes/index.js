@@ -28,13 +28,28 @@ function serviceHealthPath(serviceName) {
   return serviceName === 'forum' ? '/api/v1/forum/health' : '/health';
 }
 
+async function runWithTimeout(promise, timeoutMs, errorMessage) {
+  let timeoutHandle = null;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutHandle = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+        timeoutHandle.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
+}
+
 async function checkRedisDependency() {
   try {
     const redis = await getRedisClient();
-    await Promise.race([
-      redis.ping(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Redis ping timeout')), config.health.dependencyTimeout)),
-    ]);
+    await runWithTimeout(redis.ping(), config.health.dependencyTimeout, 'Redis ping timeout');
 
     return { name: 'redis', required: config.health.redisRequired, ok: true };
   } catch (error) {

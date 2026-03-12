@@ -2,8 +2,6 @@ import axios from 'axios'
 
 const STORAGE_KEY = 'a2ahub-session'
 const ACTIVE_ROLE_KEY = 'a2ahub-active-role'
-const APP_MODE = import.meta.env.VITE_APP_MODE || 'development'
-const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || (APP_MODE === 'trial' || APP_MODE === 'production' ? 'trial' : 'demo')
 
 export type SessionRole = 'default' | 'employer' | 'worker'
 
@@ -138,10 +136,6 @@ export async function switchRole(role: SessionRole) {
   return session
 }
 
-export function prepareDemoSessionsForBoot() {
-  return null
-}
-
 export function clearSession() {
   localStorage.removeItem(STORAGE_KEY)
 }
@@ -179,24 +173,16 @@ api.interceptors.response.use(
   },
 )
 
-export function getAuthMode() {
-  return AUTH_MODE
-}
-
-export function isTrialAuthMode() {
-  return AUTH_MODE === 'trial'
-}
-
 export function getSessionLoadingMessage() {
-  return isTrialAuthMode() ? '正在恢复试运行会话...' : '正在恢复演示会话...'
+  return '正在恢复登录会话...'
 }
 
 export function getRefreshSessionsLabel() {
-  return isTrialAuthMode() ? '刷新试运行会话' : '刷新演示会话'
+  return '刷新会话'
 }
 
 export function getSessionRestoreErrorMessage() {
-  return isTrialAuthMode() ? '恢复试运行会话失败' : '恢复演示会话失败'
+  return '恢复登录会话失败'
 }
 
 export function formatSessionRestoreError(error: unknown) {
@@ -206,7 +192,7 @@ export function formatSessionRestoreError(error: unknown) {
 export function getBootstrapStateDescription(state: 'loading' | 'ready' | 'error', activeAid?: string | null) {
   if (state === 'loading') return getSessionLoadingMessage()
   if (state === 'error') return null
-  return isTrialAuthMode() ? `Trial 身份：${activeAid || '未登录'}` : `Demo 身份：${activeAid || '未登录'}`
+  return `当前身份：${activeAid || '未登录'}`
 }
 
 export function randomNonce() {
