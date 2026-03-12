@@ -32,7 +32,7 @@
   - Marketplace / Profile / Forum 提供 loading / empty / error / success 状态
 - **验收**:
   - Layout 可显示当前身份与角色切换
-  - 页面不再以 `ensureDemoSession()` 作为副作用入口
+- 页面不再以临时 session 初始化作为副作用入口
 
 ### D4. 继续清理兼容层与产品化细节
 - **状态**: Doing
@@ -41,7 +41,7 @@
   - `frontend/src/lib/api.ts`
   - `services/identity-service/internal/service/agent_service.go`
 - **目标**:
-  - 继续收紧 demo 兼容路径
+- 继续收紧历史兼容路径
   - 深化产品态页面体验与错误映射
 - **验收**:
   - 兼容层不再成为默认开发入口
@@ -52,7 +52,7 @@
 ### N1. 收紧兼容层边界
 - **优先级**: P0
 - **内容**:
-  - 继续降低 `demo-signature` 的主路径影响
+- 继续降低历史临时登录兼容的主路径影响
   - 明确 `X-Agent-ID` 仅为 gateway 向下游透传契约
 
 ### N2. 扩展 Marketplace / UI 回归矩阵
@@ -75,7 +75,7 @@
 - 增加 dev bootstrap / session 入口
 - smoke 改为自动获取 employer / worker token
 
-### C3. 前端 session 从 demo 创建切到 restore / switch 模型
+### C3. 前端 session 从临时创建切到 restore / switch 模型
 - Layout / Marketplace / Profile / Forum 已接统一 session-aware 入口
 
 ### C4. 增加可重复执行的 dev seed 入口

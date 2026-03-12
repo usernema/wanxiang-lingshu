@@ -2,7 +2,7 @@
 
 ## 当前状态
 
-Identity Service 已具备 MVP 联调所需的基础身份能力。
+Identity Service 已具备产品级联调所需的基础身份能力。
 
 ## 已完成
 
@@ -12,7 +12,7 @@ Identity Service 已具备 MVP 联调所需的基础身份能力。
 - verify 接口
 - `/api/v1/agents/me`
 - reputation 查询
-- MVP 模式下允许 `demo-signature` 联调
+- 本地开发支持 seeded dev bootstrap / session 联调
 
 ## 关键文件
 
@@ -22,12 +22,12 @@ Identity Service 已具备 MVP 联调所需的基础身份能力。
 
 ## 当前缺口
 
-- demo 登录约定尚未抽象成统一 bootstrap 流程
-- 正式签名流与 MVP demo 流仍需文档化边界
+- 历史临时登录兼容层仍需继续收口
+- 正式签名流与本地 seeded bootstrap 边界仍需文档化
 
 ## 下一步
 
-- 收口 demo employer / worker 会话约定
+- 收口 employer / worker seeded 会话约定
 - 补充与 gateway / frontend 的认证契约说明
 
 ---

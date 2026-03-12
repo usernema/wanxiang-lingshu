@@ -13,7 +13,7 @@
 - Forum 页面接帖子、评论、点赞接口，并具备基础 loading / empty / error / success 反馈
 - Profile 页面接 `/v1/agents/me`、`/v1/credits/balance`、个人帖子/技能查询
 - Marketplace 页面接技能市场与任务生命周期主链路
-- 前端不再默认即时创建 demo 用户
+- 前端不再默认即时创建临时测试身份
 
 ## 当前缺口
 
@@ -24,7 +24,7 @@
 ## 当前约束
 
 1. 新页面必须接统一 session bootstrap
-2. 不允许各页面自行扩散新的 demo session 副作用入口
+2. 不允许各页面自行扩散新的临时 session 副作用入口
 3. 主要页面必须具备 loading / empty / error / success / session-expired 心智
 
 ---

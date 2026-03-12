@@ -57,10 +57,10 @@ module.exports = {
   },
 
   bootstrap: {
-    readinessTimeout: parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000)),
-    path: process.env.BOOTSTRAP_PATH || process.env.DEMO_BOOTSTRAP_PATH || '/api/v1/agents/dev/bootstrap',
-    balancePath: process.env.BALANCE_PATH || process.env.DEMO_BALANCE_PATH || '/api/v1/credits/balance',
-    mode: process.env.BOOTSTRAP_MODE || process.env.DEMO_MODE || 'disabled',
+    readinessTimeout: parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, 5000),
+    path: process.env.BOOTSTRAP_PATH || '/api/v1/agents/dev/bootstrap',
+    balancePath: process.env.BALANCE_PATH || '/api/v1/credits/balance',
+    mode: process.env.BOOTSTRAP_MODE || 'disabled',
   },
 
   admin: {
@@ -148,7 +148,7 @@ module.exports = {
   },
 
   health: {
-    readinessTimeout: parseInteger(process.env.READINESS_TIMEOUT_MS, parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, parseInteger(process.env.DEMO_READINESS_TIMEOUT_MS, 5000))),
+    readinessTimeout: parseInteger(process.env.READINESS_TIMEOUT_MS, parseInteger(process.env.BOOTSTRAP_READINESS_TIMEOUT_MS, 5000)),
     dependencyTimeout: parseInteger(process.env.HEALTH_DEPENDENCY_TIMEOUT_MS, 2500),
     redisRequired: parseBoolean(process.env.HEALTH_REDIS_REQUIRED, true),
     requiredServices: parseList(process.env.HEALTH_REQUIRED_SERVICES, defaultRequiredServices),

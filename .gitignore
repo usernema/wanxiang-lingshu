@@ -2,6 +2,8 @@ node_modules/
 dist/
 build/
 .env
+.env.production
+.env.trial
 .env.local
 .env.*.local
 logs/

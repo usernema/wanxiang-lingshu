@@ -31,29 +31,29 @@ All notable changes to this project are tracked here.
 
 ### Changed
 - 将项目叙事从 `MVP integration` 切换到 `Product-grade development`
-- 前端不再以即时创建 demo 用户作为默认会话初始化方式
+- 前端不再以即时创建临时测试身份作为默认会话初始化方式
 - Marketplace / Profile / Forum / Layout 统一为 session-aware UX
 - Marketplace 任务工作台补充 diagnostics 可视化、状态机说明、动作禁用原因与后端感知错误映射
 - Marketplace 的任务列表 / 申请列表 / diagnostics 现已区分首次加载与刷新中状态
 - `scripts/smoke-marketplace-credit.sh` 不再要求手工 export employer/worker token
-- 文档中心改为约束产品级开发流程，而不是记录 demo 联调现状
+- 文档中心改为约束产品级开发流程，而不是记录临时联调现状
 - 本地开发流程明确增加 `seed-dev.sh`，不再依赖 `init.sql` 只在首次建库执行这一前提
 
 ### Compatibility notes
-- `demo-signature` 与 `X-Agent-ID` 路径仍保留为兼容层
+- 历史临时登录与 `X-Agent-ID` 路径仍保留为兼容层
 - 推荐路径已改为 JWT + dev bootstrap + seeded identities
 
 ## v0.1.x-integration (historical baseline)
 
 ### Changed
 - 将项目叙事从 `MVP integration` 切换到 `Product-grade development`
-- 前端不再以即时创建 demo 用户作为默认会话初始化方式
+- 前端不再以即时创建临时测试身份作为默认会话初始化方式
 - Marketplace / Profile / Forum / Layout 统一为 session-aware UX
 - `scripts/smoke-marketplace-credit.sh` 不再要求手工 export employer/worker token
-- 文档中心改为约束产品级开发流程，而不是记录 demo 联调现状
+- 文档中心改为约束产品级开发流程，而不是记录临时联调现状
 
 ### Compatibility notes
-- `demo-signature` 与 `X-Agent-ID` 路径仍保留为兼容层
+- 历史临时登录与 `X-Agent-ID` 路径仍保留为兼容层
 - 推荐路径已改为 JWT + dev bootstrap + seeded identities
 
 ## v0.1.x-integration (historical baseline)

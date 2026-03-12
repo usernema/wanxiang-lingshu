@@ -6,7 +6,6 @@ ENV_FILE="${ENV_FILE:-${ROOT}/.env.production}"
 EXAMPLE_FILE="${EXAMPLE_FILE:-${ROOT}/.env.production.example}"
 COMPOSE_FILE="${COMPOSE_FILE:-${ROOT}/docker-compose.production.yml}"
 DEBUG_COMPOSE_FILE="${DEBUG_COMPOSE_FILE:-${ROOT}/docker-compose.production.debug.yml}"
-LEGACY_ENV_FILE="${ROOT}/.env.trial"
 
 OVERRIDE_VARS=(
   ENABLE_DEBUG_OVERLAY
@@ -15,6 +14,8 @@ OVERRIDE_VARS=(
   MINIO_CONSOLE_PORT
   ENABLE_TLS
   PUBLIC_HOSTNAME
+  PUBLIC_HOSTNAME_ALIASES
+  ADMIN_HOSTNAME
   PUBLIC_SCHEME
   HTTP_PORT
   HTTPS_PORT
@@ -47,23 +48,7 @@ OVERRIDE_VARS=(
   AUTO_ACTIVATE_NEW_AGENTS
   APP_MODE
   VITE_APP_MODE
-  TRIAL_ENABLE_DEBUG_OVERLAY
-  TRIAL_RABBITMQ_MANAGEMENT_PORT
-  TRIAL_MINIO_API_PORT
-  TRIAL_MINIO_CONSOLE_PORT
-  TRIAL_ENABLE_TLS
-  TRIAL_PUBLIC_HOSTNAME
-  TRIAL_PUBLIC_SCHEME
-  TRIAL_HTTP_PORT
-  TRIAL_HTTPS_PORT
-  TRIAL_TLS_CERTS_DIR
-  TRIAL_TLS_CERT_PATH
-  TRIAL_TLS_KEY_PATH
-  TRIAL_VITE_APP_MODE
-  TRIAL_VITE_BANNER_LABEL
-  TRIAL_VITE_GATEWAY_LABEL
-  TRIAL_VITE_RESET_SESSIONS_ON_LOAD
-  TRIAL_AUTO_ACTIVATE
+  VITE_ADMIN_HOSTNAME
 )
 
 capture_override() {
@@ -124,22 +109,6 @@ csv_contains() {
   return 1
 }
 
-promote_legacy_var() {
-  local current_name="$1"
-  local legacy_name="$2"
-  if [[ -z "${!current_name-}" && -n "${!legacy_name-}" ]]; then
-    export "${current_name}=${!legacy_name}"
-  fi
-}
-
-backfill_legacy_var() {
-  local current_name="$1"
-  local legacy_name="$2"
-  if [[ -z "${!legacy_name-}" && -n "${!current_name-}" ]]; then
-    export "${legacy_name}=${!current_name}"
-  fi
-}
-
 ensure_not_placeholders() {
   local name="$1"
   local value="$2"
@@ -167,35 +136,13 @@ warn_optional_service() {
   echo "         Keep HEALTH_OPTIONAL_SERVICES empty unless you intentionally publish and verify that dependency." >&2
 }
 
-legacy_pairs=(
-  "ENABLE_DEBUG_OVERLAY:TRIAL_ENABLE_DEBUG_OVERLAY"
-  "RABBITMQ_MANAGEMENT_PORT:TRIAL_RABBITMQ_MANAGEMENT_PORT"
-  "MINIO_API_PORT:TRIAL_MINIO_API_PORT"
-  "MINIO_CONSOLE_PORT:TRIAL_MINIO_CONSOLE_PORT"
-  "ENABLE_TLS:TRIAL_ENABLE_TLS"
-  "PUBLIC_HOSTNAME:TRIAL_PUBLIC_HOSTNAME"
-  "PUBLIC_SCHEME:TRIAL_PUBLIC_SCHEME"
-  "HTTP_PORT:TRIAL_HTTP_PORT"
-  "HTTPS_PORT:TRIAL_HTTPS_PORT"
-  "TLS_CERTS_DIR:TRIAL_TLS_CERTS_DIR"
-  "TLS_CERT_PATH:TRIAL_TLS_CERT_PATH"
-  "TLS_KEY_PATH:TRIAL_TLS_KEY_PATH"
-  "VITE_APP_MODE:TRIAL_VITE_APP_MODE"
-  "AUTO_ACTIVATE_NEW_AGENTS:TRIAL_AUTO_ACTIVATE"
-)
-
 for name in "${OVERRIDE_VARS[@]}"; do
   capture_override "$name"
 done
 
 if [[ ! -f "$ENV_FILE" ]]; then
-  if [[ -f "$LEGACY_ENV_FILE" ]]; then
-    echo "Missing .env.production. Copying current .env.trial into .env.production ..."
-    cp "$LEGACY_ENV_FILE" "$ENV_FILE"
-  else
-    echo "Missing .env.production. Copying from .env.production.example ..."
-    cp "$EXAMPLE_FILE" "$ENV_FILE"
-  fi
+  echo "Missing .env.production. Copying from .env.production.example ..."
+  cp "$EXAMPLE_FILE" "$ENV_FILE"
   echo "Created $ENV_FILE. Replace all placeholder secrets before exposing this environment publicly."
 fi
 
@@ -207,32 +154,18 @@ for name in "${OVERRIDE_VARS[@]}"; do
   restore_override "$name"
 done
 
-for pair in "${legacy_pairs[@]}"; do
-  IFS=':' read -r current_name legacy_name <<<"$pair"
-  promote_legacy_var "$current_name" "$legacy_name"
-done
-
-if [[ -z "${APP_MODE:-}" || "${APP_MODE:-}" == "trial" ]]; then
-  export APP_MODE="production"
-fi
-if [[ -z "${VITE_APP_MODE:-}" || "${VITE_APP_MODE:-}" == "trial" || "${VITE_APP_MODE:-}" == "leadership-demo" ]]; then
-  export VITE_APP_MODE="production"
-fi
+export APP_MODE="production"
+export VITE_APP_MODE="production"
 if [[ -z "${AUTO_ACTIVATE_NEW_AGENTS:-}" ]]; then
   export AUTO_ACTIVATE_NEW_AGENTS="true"
 fi
-
-for pair in "${legacy_pairs[@]}"; do
-  IFS=':' read -r current_name legacy_name <<<"$pair"
-  backfill_legacy_var "$current_name" "$legacy_name"
-done
 
 if [[ "${ALLOWED_ORIGINS:-}" == "*" ]]; then
   echo "Refusing to start production with wildcard ALLOWED_ORIGINS=*" >&2
   exit 1
 fi
 
-ensure_not_placeholders JWT_SECRET "${JWT_SECRET:-}" "change-this-jwt-secret" "change-this-trial-jwt-secret"
+ensure_not_placeholders JWT_SECRET "${JWT_SECRET:-}" "change-this-jwt-secret"
 ensure_not_placeholders POSTGRES_PASSWORD "${POSTGRES_PASSWORD:-}" "change-this-postgres-password"
 ensure_not_placeholders REDIS_PASSWORD "${REDIS_PASSWORD:-}" "change-this-redis-password"
 ensure_not_placeholders RABBITMQ_DEFAULT_PASS "${RABBITMQ_DEFAULT_PASS:-}" "change-this-rabbitmq-password"
@@ -254,6 +187,14 @@ if [[ "${ENABLE_TLS:-false}" == "true" ]]; then
   if ! csv_contains "${ALLOWED_ORIGINS:-}" "$TLS_ORIGIN"; then
     echo "ENABLE_TLS=true requires ALLOWED_ORIGINS to include ${TLS_ORIGIN}" >&2
     exit 1
+  fi
+
+  if [[ -n "${ADMIN_HOSTNAME:-}" ]]; then
+    ADMIN_TLS_ORIGIN="https://${ADMIN_HOSTNAME}"
+    if ! csv_contains "${ALLOWED_ORIGINS:-}" "$ADMIN_TLS_ORIGIN"; then
+      echo "ADMIN_HOSTNAME requires ALLOWED_ORIGINS to include ${ADMIN_TLS_ORIGIN}" >&2
+      exit 1
+    fi
   fi
 
   if csv_contains "${ALLOWED_ORIGINS:-}" "http://localhost" && [[ "${ENABLE_DEBUG_OVERLAY:-false}" != "true" ]]; then
@@ -315,6 +256,9 @@ fi
 
 echo "Production environment started."
 echo "Public entry:    ${PUBLIC_BASE}/"
+if [[ -n "${ADMIN_HOSTNAME:-}" ]]; then
+  echo "Admin entry:     ${PUBLIC_SCHEME}://${ADMIN_HOSTNAME}/"
+fi
 echo "API base:        ${PUBLIC_BASE}/api"
 echo "Health live:     ${PUBLIC_BASE}/health/live"
 echo "Health ready:    ${PUBLIC_BASE}/health/ready"

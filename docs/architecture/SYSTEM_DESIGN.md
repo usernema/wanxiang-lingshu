@@ -354,8 +354,8 @@ services:
 - **服务网格**: Istio (可选)
 - **CI/CD**: GitHub Actions
 
-### Trial ingress 收口（当前仓库可执行形态）
-- 统一公网入口为 `docker-compose.trial.yml` 中的 `ingress` Nginx 容器。
+### Production ingress 收口（当前仓库可执行形态）
+- 统一公网入口为 `docker-compose.production.yml` 中的 `ingress` Nginx 容器。
 - Nginx 同时负责：
   - 托管前端静态资源；
   - 代理 `/api/` 到 `api-gateway:3000`；
@@ -364,79 +364,81 @@ services:
 - RabbitMQ 管理端口、MinIO console 以及其余基础设施控制面当前也保持内网可见；如后续需要宿主机调试入口，建议通过单独的 debug overlay 或 profile 增加，而不是恢复默认公网暴露。
 - `/health`、`/health/deps`、`/metrics` 在 ingress 层默认不公开，避免把内部依赖拓扑和指标直接暴露到公网。
 - TLS 在入口 Nginx 终止，网关和后端服务继续在 Docker network 内使用 HTTP；网关通过 `TRUST_PROXY=true` 配合 `X-Forwarded-*` 头感知真实来源协议。
-- 当 `TRIAL_ENABLE_TLS=true` 时：
+- 当 `ENABLE_TLS=true` 时：
   - 入口 `80` 端口执行 HTTP → HTTPS 跳转；
   - `443` 端口使用挂载证书提供服务；
-  - 证书目录由 `TRIAL_TLS_CERTS_DIR` 指定，默认 `./frontend/certs`，需包含 `tls.crt` 与 `tls.key`；
-  - `TRIAL_PUBLIC_HOSTNAME` 不能继续使用 `localhost`、`127.0.0.1`、`_` 等本地默认值；
-  - `ALLOWED_ORIGINS` 必须包含 `https://<TRIAL_PUBLIC_HOSTNAME>`。
-- 本地试运行可保留 `TRIAL_ENABLE_TLS=false`，此时统一入口默认为 `http://localhost`；公网试运行再切换到正式域名和证书。
-- 统一入口相关变量定义在 `.env.trial` / `.env.trial.example`：
-  - `TRIAL_PUBLIC_HOSTNAME`
-  - `TRIAL_PUBLIC_SCHEME`
-  - `TRIAL_HTTP_PORT`
-  - `TRIAL_HTTPS_PORT`
-  - `TRIAL_ENABLE_TLS`
-  - `TRIAL_TLS_CERTS_DIR`
-  - `TRIAL_TLS_CERT_PATH`
-  - `TRIAL_TLS_KEY_PATH`
-  - `TRIAL_ENABLE_DEBUG_OVERLAY`
-  - `TRIAL_RABBITMQ_MANAGEMENT_PORT`
-  - `TRIAL_MINIO_API_PORT`
-  - `TRIAL_MINIO_CONSOLE_PORT`
+  - 证书目录由 `TLS_CERTS_DIR` 指定，默认 `./frontend/certs`，需包含 `tls.crt` 与 `tls.key`；
+  - `PUBLIC_HOSTNAME` 不能继续使用 `localhost`、`127.0.0.1`、`_` 等本地默认值；
+  - `ALLOWED_ORIGINS` 必须包含 `https://<PUBLIC_HOSTNAME>`。
+- 本地验证可保留 `ENABLE_TLS=false`，此时统一入口默认为 `http://localhost`；公网发布时再切换到正式域名和证书。
+- 统一入口相关变量定义在 `.env.production` / `.env.production.example`：
+  - `PUBLIC_HOSTNAME`
+  - `PUBLIC_HOSTNAME_ALIASES`
+  - `ADMIN_HOSTNAME`
+  - `PUBLIC_SCHEME`
+  - `HTTP_PORT`
+  - `HTTPS_PORT`
+  - `ENABLE_TLS`
+  - `TLS_CERTS_DIR`
+  - `TLS_CERT_PATH`
+  - `TLS_KEY_PATH`
+  - `ENABLE_DEBUG_OVERLAY`
+  - `RABBITMQ_MANAGEMENT_PORT`
+  - `MINIO_API_PORT`
+  - `MINIO_CONSOLE_PORT`
 
-### Trial 使用约定
-- 启动：`scripts/run-trial.sh`
+### Production 使用约定
+- 启动：`scripts/run-production.sh`
 - 启动脚本会拒绝以下不安全配置：
   - `JWT_SECRET`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`RABBITMQ_DEFAULT_PASS`、`MINIO_ROOT_PASSWORD` 仍为示例占位值；
   - `ALLOWED_ORIGINS=*`；
   - TLS 已开启但 hostname、证书目录、CORS origin 不一致。
-- 如需开启本机调试入口：设置 `TRIAL_ENABLE_DEBUG_OVERLAY=true` 后再运行启动脚本。
+- 如需开启本机调试入口：设置 `ENABLE_DEBUG_OVERLAY=true` 后再运行启动脚本。
 - 默认访问：
   - 前端：`http://localhost/`（或启用 TLS 后的 `https://<hostname>/`）
   - API：`/api`
   - Liveness：`/health/live`
   - Readiness：`/health/ready`
-- 烟测脚本 `scripts/smoke-trial.sh` 默认通过统一入口 `http://localhost/api` 访问；如入口域名或端口不同，可通过 `BASE_URL` 覆盖。
+- 烟测脚本 `scripts/smoke-production.sh` 默认通过统一入口 `http://localhost/api` 访问；如入口域名或端口不同，可通过 `BASE_URL` 覆盖。
 - HTTPS / 自签名验证可通过以下环境变量补充：
   - `BASE_URL=https://<host>/api`
   - `HEALTH_BASE_URL=https://<host>`（通常可省略）
   - `CURL_INSECURE=true`（本机自签名证书）
   - `CURL_RESOLVE=<host>:443:127.0.0.1`（本机域名映射验证）
-- 如需宿主机调试管理控制台，可选加载 `docker-compose.trial.debug.yml`，而不是回退 trial 默认暴露边界。
+- 如需宿主机调试管理控制台，可选加载 `docker-compose.production.debug.yml`，而不是回退默认暴露边界。
 - 当前 debug overlay 仅暴露到 `127.0.0.1`：
   - RabbitMQ 管理端口 `15672`
   - MinIO API `9000`
   - MinIO Console `9001`
-- `TRIAL_ENABLE_DEBUG_OVERLAY=true` 仅用于本机排障，不应视为公网发布配置的一部分。
+- `ENABLE_DEBUG_OVERLAY=true` 仅用于本机排障，不应视为公网发布配置的一部分。
 
-### Trial 可执行上线清单
+### Production 可执行上线清单
 1. **替换所有必改 secrets**
-   - 至少替换：`JWT_SECRET`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`RABBITMQ_DEFAULT_PASS`、`MINIO_ROOT_PASSWORD`。
-   - `scripts/run-trial.sh` 会拒绝示例密码直接启动。
+  - 至少替换：`JWT_SECRET`、`POSTGRES_PASSWORD`、`REDIS_PASSWORD`、`RABBITMQ_DEFAULT_PASS`、`MINIO_ROOT_PASSWORD`。
+  - `scripts/run-production.sh` 会拒绝示例密码直接启动。
 2. **选择明确运行模式**
-   - 本地 HTTP 模式：`TRIAL_ENABLE_TLS=false`、`TRIAL_PUBLIC_HOSTNAME=localhost`、`ALLOWED_ORIGINS=http://localhost`。
-   - 公网 TLS 模式：`TRIAL_ENABLE_TLS=true`、`TRIAL_PUBLIC_HOSTNAME=<public-domain>`、`ALLOWED_ORIGINS` 包含 `https://<public-domain>`。
+  - 本地 HTTP 模式：`ENABLE_TLS=false`、`PUBLIC_HOSTNAME=localhost`、`ALLOWED_ORIGINS=http://localhost`。
+  - 公网 TLS 模式：`ENABLE_TLS=true`、`PUBLIC_HOSTNAME=<public-domain>`、`ALLOWED_ORIGINS` 包含 `https://<public-domain>`。
 3. **准备证书**
-   - 本地自签名验证：将 `tls.crt` / `tls.key` 放入 `TRIAL_TLS_CERTS_DIR`，启动后使用 `CURL_INSECURE=true` 与 `CURL_RESOLVE=<host>:443:127.0.0.1` 跑 smoke。
-   - 正式发布：挂载真实证书到 `TRIAL_TLS_CERTS_DIR`，并确认入口输出的 `Public entry` 为 `https://<public-domain>/`。
+  - 本地自签名验证：将 `tls.crt` / `tls.key` 放入 `TLS_CERTS_DIR`，启动后使用 `CURL_INSECURE=true` 与 `CURL_RESOLVE=<host>:443:127.0.0.1` 跑 smoke。
+  - 正式发布：挂载真实证书到 `TLS_CERTS_DIR`，并确认入口输出的 `Public entry` 为 `https://<public-domain>/`。
 4. **明确 readiness 策略**
-   - 默认 `HEALTH_OPTIONAL_SERVICES=` 为空，避免 `training` / `ranking` 未发布时产生 timeout 噪音。
-   - 若本阶段要发布 training/ranking，必须显式设置 `HEALTH_OPTIONAL_SERVICES=training,ranking`（或子集），同时提供真实 `TRAINING_SERVICE_URL` / `RANKING_SERVICE_URL` 并确保 readiness 通过。
+  - 默认 `HEALTH_OPTIONAL_SERVICES=` 为空，避免 `training` / `ranking` 未发布时产生 timeout 噪音。
+  - 若本阶段要发布 training/ranking，必须显式设置 `HEALTH_OPTIONAL_SERVICES=training,ranking`（或子集），同时提供真实 `TRAINING_SERVICE_URL` / `RANKING_SERVICE_URL` 并确保 readiness 通过。
 5. **保持调试边界收紧**
-   - 公网发布前保持 `TRIAL_ENABLE_DEBUG_OVERLAY=false`。
-   - 只有本机排障时才启用 overlay，且其端口仅绑定到 `127.0.0.1`。
+  - 公网发布前保持 `ENABLE_DEBUG_OVERLAY=false`。
+  - 只有本机排障时才启用 overlay，且其端口仅绑定到 `127.0.0.1`。
 6. **执行入口验证**
-   - HTTP 本地验证：`TRIAL_ENABLE_TLS=false bash scripts/run-trial.sh` 后执行 `bash scripts/smoke-trial.sh`。
-   - HTTPS 验证：`TRIAL_ENABLE_TLS=true bash scripts/run-trial.sh` 后执行 `BASE_URL=https://<host>/api bash scripts/smoke-trial.sh`。
-   - 自签名 / 本机域名验证示例：`BASE_URL=https://trial.local/api CURL_INSECURE=true CURL_RESOLVE=trial.local:443:127.0.0.1 bash scripts/smoke-trial.sh`。
-   - HTTP → HTTPS 跳转验证示例：`curl -I -H 'Host: trial.local' http://127.0.0.1/`，应返回 `301` 并跳转到 `https://trial.local/`。
+  - HTTP 本地验证：`ENABLE_TLS=false bash scripts/run-production.sh` 后执行 `bash scripts/smoke-production.sh`。
+  - HTTPS 验证：`ENABLE_TLS=true bash scripts/run-production.sh` 后执行 `BASE_URL=https://<host>/api bash scripts/smoke-production.sh`。
+  - 自签名 / 本机域名验证示例：`BASE_URL=https://app.local/api CURL_INSECURE=true CURL_RESOLVE=app.local:443:127.0.0.1 bash scripts/smoke-production.sh`。
+  - HTTP → HTTPS 跳转验证示例：`curl -I -H 'Host: app.local' http://127.0.0.1/`，应返回 `301` 并跳转到 `https://app.local/`。
 7. **确认暴露边界**
-   - **允许公开**：`/`、静态资源、`/api/`、`/health/live`、`/health/ready`
-   - **必须非 2xx**：`/health`、`/health/deps`、`/metrics`
-   - **不得默认暴露到宿主机**：数据库、缓存、RabbitMQ、MinIO 及各后端服务原始端口
+  - **允许公开**：`/`、静态资源、`/api/`、`/health/live`、`/health/ready`
+  - **必须非 2xx**：`/health`、`/health/deps`、`/metrics`
+  - **不得默认暴露到宿主机**：数据库、缓存、RabbitMQ、MinIO 及各后端服务原始端口
 
-### Trial 对外暴露边界
+### Production 对外暴露边界
 - **公开**：`/`、静态资源、`/api/`、`/health/live`、`/health/ready`
 - **默认不公开**：`/health`、`/health/deps`、`/metrics`
 - **纯内网**：各后端服务原始端口以及数据库/缓存/消息队列/对象存储服务端口
@@ -456,7 +458,7 @@ services:
 1. 先通过统一入口验证前端与 `/api/` 主链路；
 2. 再收紧宿主机端口暴露；
 3. 最后按需启用 TLS 与公网域名。
-这可以降低 trial 迁移过程中的回退成本。
+这可以降低公网发布切换过程中的回退成本。
 
 **最后更新**: 2026-03-10
 

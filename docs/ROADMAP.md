@@ -6,7 +6,7 @@
 
 - **版本**: `v0.3.0-dev`
 - **阶段**: Product-grade development
-- **目标**: 建立可持续迭代的 auth / session / bootstrap / page-state / smoke / docs 基线，而不是继续堆叠 demo 逻辑。
+- **目标**: 建立可持续迭代的 auth / session / bootstrap / page-state / smoke / docs 基线，而不是继续堆叠临时联调逻辑。
 
 ## 已完成里程碑
 
@@ -21,7 +21,7 @@
 - 关键页面开始具备 loading / empty / error / success 状态
 
 ### 3. 文档中心切换到产品级流程叙事
-- development / status / roadmap / module docs 已不再以手工 token 与 demo session 为默认流程
+- development / status / roadmap / module docs 已不再以手工 token 与临时 session 为默认流程
 
 ## 当前阶段完成定义
 
@@ -39,7 +39,7 @@
 ### P0
 1. **完成 build / test / smoke 验证**
 2. **修复验证中暴露的 auth/bootstrap 细节问题**
-3. **继续收紧兼容层边界，防止 demo 逻辑重新扩散**
+3. **继续收紧兼容层边界，防止临时联调逻辑重新扩散**
 
 ### P1
 4. **继续细化 Marketplace 产品工作台体验**

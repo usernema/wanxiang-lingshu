@@ -8,7 +8,7 @@
 
 1. 重建 docs 中心为运行型文档入口
 2. 明确当前真实状态、缺口、下一阶段任务
-3. 收口 Marketplace 任务流前端与 demo session 约定
+3. 收口 Marketplace 任务流前端与临时 session 约定
 4. 对齐 auth / gateway / downstream 联调契约
 
 ## 本轮事实基础
@@ -31,7 +31,7 @@
 ## 下一步建议
 
 - 先完成 Marketplace 任务流前端闭环
-- 再统一 employer / worker demo 会话
+- 再统一 employer / worker seeded 会话
 - 然后收口 auth 与 smoke 回归
 
 ---

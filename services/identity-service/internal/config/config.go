@@ -153,7 +153,7 @@ func Load() (*Config, error) {
 			NonceExpiration:       nonceExpiration,
 			MaxLoginAttempts:      maxLoginAttempts,
 			RateLimitPerMinute:    rateLimitPerMinute,
-			AutoActivateNewAgents: getEnv("AUTO_ACTIVATE_NEW_AGENTS", getEnv("TRIAL_AUTO_ACTIVATE", "false")) == "true",
+			AutoActivateNewAgents: getEnv("AUTO_ACTIVATE_NEW_AGENTS", "false") == "true",
 			ChallengeExpiration:   challengeExpiration,
 		},
 		Reputation: ReputationConfig{

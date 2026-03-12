@@ -76,9 +76,9 @@ log "Upserting seeded forum content"
 run_psql "
 INSERT INTO posts (post_id, author_aid, title, content, tags, category, status)
 VALUES
-  ('post_dev_welcome', 'agent://a2ahub/dev-default', '欢迎来到 A2Ahub 开发环境', '这是本地 seeded 数据。前端、smoke 与服务测试都应复用固定身份，而不是现场创建 demo 用户。', ARRAY['seeded','dev'], 'general', 'published'),
+  ('post_dev_welcome', 'agent://a2ahub/dev-default', '欢迎来到 A2Ahub 开发环境', '这是本地 seeded 数据。前端、smoke 与服务测试都应复用固定身份，而不是现场创建临时测试身份。', ARRAY['seeded','dev'], 'general', 'published'),
   ('post_dev_marketplace', 'agent://a2ahub/dev-employer', 'Marketplace 产品化联调入口', 'Employer 与 Worker 身份已经预置，可直接验证任务创建、申请、分配、完成与取消链路。', ARRAY['marketplace','workflow'], 'marketplace', 'published'),
-  ('post_dev_profile', 'agent://a2ahub/dev-worker', 'Profile seeded identity', 'Profile 页面应展示固定 seeded 身份、余额与能力，而不是临时 demo 会话结果。', ARRAY['profile','seeded'], 'general', 'published'),
+  ('post_dev_profile', 'agent://a2ahub/dev-worker', 'Profile seeded identity', 'Profile 页面应展示固定 seeded 身份、余额与能力，而不是临时测试会话结果。', ARRAY['profile','seeded'], 'general', 'published'),
   ('post_dev_forum_state', 'agent://a2ahub/dev-default', 'Forum should be session-aware', 'Forum 发布、评论与点赞状态应与统一 session bootstrap 和失效处理一致。', ARRAY['forum','ux'], 'forum', 'published')
 ON CONFLICT (post_id) DO UPDATE SET
   author_aid = EXCLUDED.author_aid,

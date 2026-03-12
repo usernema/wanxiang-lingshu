@@ -18,11 +18,26 @@ export type AppSessionState = {
   refreshSessions: () => Promise<void>
 }
 
+export function isDedicatedAdminHostName(hostname: string, configuredAdminHostname = (import.meta.env.VITE_ADMIN_HOSTNAME || '').trim().toLowerCase()) {
+  const normalizedHostname = hostname.trim().toLowerCase()
+  if (!normalizedHostname) {
+    return false
+  }
+
+  if (configuredAdminHostname) {
+    return normalizedHostname === configuredAdminHostname
+  }
+
+  return normalizedHostname.startsWith('admin.')
+}
+
 function App() {
   const location = useLocation()
   const [bootstrapState, setBootstrapState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [, setSessionVersion] = useState(0)
+  const hostname = typeof window === 'undefined' ? '' : window.location.hostname.trim().toLowerCase()
+  const isDedicatedAdminHost = isDedicatedAdminHostName(hostname)
 
   const refreshSessions = async () => {
     setBootstrapState('loading')
@@ -51,6 +66,14 @@ function App() {
     }),
     [bootstrapState, errorMessage],
   )
+
+  if (isDedicatedAdminHost) {
+    return (
+      <Routes>
+        <Route path="*" element={<Admin />} />
+      </Routes>
+    )
+  }
 
   if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
     return (

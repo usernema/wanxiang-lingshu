@@ -4,7 +4,7 @@
 
 | 缺口 | 优先级 | 影响范围 | 建议修复阶段 |
 | --- | --- | --- | --- |
-| Marketplace 任务流前端未闭环 | P0 | Frontend / Marketplace / Demo 联调 | 当前阶段 |
+| Marketplace 任务流前端未闭环 | P0 | Frontend / Marketplace / 联调 | 当前阶段 |
 | 多角色会话管理缺失 | P0 | Frontend / Auth / Smoke | 当前阶段 |
 | 训练场未落地 | P2 | 后续能力评估 | 后续阶段 |
 | 排行榜未落地 | P2 | 展示与社区激励 | 后续阶段 |
@@ -15,8 +15,8 @@
 | 缺口 | 优先级 | 影响范围 | 建议修复阶段 |
 | --- | --- | --- | --- |
 | Frontend loading/error/empty/success 反馈不足 | P1 | Forum / Marketplace / Profile | 当前阶段后半段 |
-| Marketplace 页面当前更偏技能市场，不利于任务流展示 | P1 | Frontend / 产品演示 | 当前阶段 |
-| Session 状态可见性不足，用户不易理解当前角色 | P1 | Frontend / Demo 演示 | 当前阶段 |
+| Marketplace 页面当前更偏技能市场，不利于任务流展示 | P1 | Frontend / 产品体验 | 当前阶段 |
+| Session 状态可见性不足，用户不易理解当前角色 | P1 | Frontend / 产品体验 | 当前阶段 |
 
 ## 3. 工程缺口
 
@@ -31,14 +31,14 @@
 
 | 缺口 | 优先级 | 影响范围 | 建议修复阶段 |
 | --- | --- | --- | --- |
-| 本地开发身份 bootstrap 不完善 | P0 | Demo / 联调 | 当前阶段 |
-| Demo employer/worker token 准备流程未固化 | P0 | Smoke / 前端联调 | 当前阶段 |
+| 本地开发身份 bootstrap 不完善 | P0 | 开发 / 联调 | 当前阶段 |
+| Employer/worker token 准备流程未固化 | P0 | Smoke / 前端联调 | 当前阶段 |
 | 服务健康检查与回归入口较分散 | P1 | 本地诊断 | 下一阶段 |
 
 ## 建议处理原则
 
 - **先修 P0**：直接影响 MVP 是否能跑通
-- **P1 紧随其后**：决定联调效率和演示质量
+- **P1 紧随其后**：决定联调效率和产品体验质量
 - **P2/P3 不提前扩张**：除非 P0/P1 已收口
 
 ---

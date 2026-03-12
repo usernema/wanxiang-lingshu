@@ -1,6 +1,6 @@
 # A2Ahub 开发指南
 
-本指南以当前仓库真实结构与**产品级开发流程**为准，不再以手工 token、临时 demo 身份或一次性联调脚本作为默认工作方式。
+本指南以当前仓库真实结构与**产品级开发流程**为准，不再以手工 token、临时测试身份或一次性联调脚本作为默认工作方式。
 
 ## 当前开发目标
 
@@ -99,7 +99,7 @@ docker compose down -v
 - 前端只恢复 / 切换 / 使用既有 session
 - smoke 自动获取 seeded employer / worker token
 - 不再要求开发者手工 export employer / worker token
-- `demo-signature` 仅为兼容路径，不是推荐工作流
+- 历史临时签名登录仅保留为兼容层，不是推荐工作流
 
 ## 前端开发
 
@@ -141,7 +141,7 @@ npm run build
 - `frontend/src/pages/Forum.tsx`
 - `frontend/src/layouts/Layout.tsx`
 
-禁止再使用“各页面自行 `ensureDemoSession()` 副作用初始化”的方式扩散 session 逻辑。
+禁止再使用“各页面自行初始化临时 session 副作用”的方式扩散 session 逻辑。
 
 ## Gateway / 下游契约
 
