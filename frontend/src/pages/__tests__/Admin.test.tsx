@@ -3,6 +3,9 @@ import { vi } from 'vitest'
 import Admin from '@/pages/Admin'
 import { renderWithProviders } from '@/test/renderWithProviders'
 
+const mockFetchAdminAuditLogs = vi.fn()
+const mockBatchUpdateAdminAgentStatus = vi.fn()
+const mockBatchUpdateAdminPostStatus = vi.fn()
 const mockGetAdminToken = vi.fn<() => string>()
 const mockSetAdminToken = vi.fn<(token: string) => void>()
 const mockClearAdminToken = vi.fn<() => void>()
@@ -25,8 +28,11 @@ vi.mock('@/lib/admin', () => ({
   fetchAdminAgents: (...args: unknown[]) => mockFetchAdminAgents(...args),
   fetchAdminForumPosts: (...args: unknown[]) => mockFetchAdminForumPosts(...args),
   fetchAdminTasks: (...args: unknown[]) => mockFetchAdminTasks(...args),
+  fetchAdminAuditLogs: (...args: unknown[]) => mockFetchAdminAuditLogs(...args),
   fetchAdminPostComments: (...args: unknown[]) => mockFetchAdminPostComments(...args),
   fetchAdminTaskApplications: (...args: unknown[]) => mockFetchAdminTaskApplications(...args),
+  batchUpdateAdminAgentStatus: (...args: unknown[]) => mockBatchUpdateAdminAgentStatus(...args),
+  batchUpdateAdminPostStatus: (...args: unknown[]) => mockBatchUpdateAdminPostStatus(...args),
   updateAdminAgentStatus: (...args: unknown[]) => mockUpdateAdminAgentStatus(...args),
   updateAdminPostStatus: (...args: unknown[]) => mockUpdateAdminPostStatus(...args),
   updateAdminCommentStatus: (...args: unknown[]) => mockUpdateAdminCommentStatus(...args),
@@ -122,6 +128,8 @@ describe('Admin page', () => {
           id: 1,
           task_id: 'task-1',
           title: '检查生产健康',
+          description: '用于验证任务详情和申请显示',
+          requirements: '确认后台能查看申请',
           employer_aid: 'agent://a2ahub/admin-1',
           worker_aid: 'agent://a2ahub/worker-1',
           status: 'in_progress',
@@ -129,6 +137,25 @@ describe('Admin page', () => {
           created_at: '2026-03-12T00:00:00.000Z',
         },
       ],
+      limit: 20,
+      offset: 0,
+    })
+    mockFetchAdminAuditLogs.mockResolvedValue({
+      items: [
+        {
+          log_id: 'log-1',
+          action: 'admin.agent.status.updated',
+          resource_type: 'agent',
+          resource_id: 'agent://a2ahub/admin-1',
+          details: {
+            status: 'suspended',
+            request_id: 'req-1',
+            batch: false,
+          },
+          created_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
       limit: 20,
       offset: 0,
     })
@@ -171,6 +198,14 @@ describe('Admin page', () => {
       comment_id: 'comment-1',
       status: 'hidden',
     })
+    mockBatchUpdateAdminAgentStatus.mockResolvedValue({
+      items: [{ item: 'agent://a2ahub/admin-1', success: true }],
+      summary: { total: 1, succeeded: 1, failed: 0 },
+    })
+    mockBatchUpdateAdminPostStatus.mockResolvedValue({
+      items: [{ item: 'post-1', success: true }],
+      summary: { total: 1, succeeded: 1, failed: 0 },
+    })
 
     renderWithProviders(<Admin />, { initialEntries: ['/admin'] })
 
@@ -198,17 +233,32 @@ describe('Admin page', () => {
       status: undefined,
       employerAid: undefined,
     })
+    expect(mockFetchAdminAuditLogs).toHaveBeenCalledWith({
+      limit: 20,
+      offset: 0,
+      action: undefined,
+      resourceType: undefined,
+    })
 
     expect(await screen.findByText('Agent 总数')).toBeInTheDocument()
     expect(screen.getByText('Agent 运营')).toBeInTheDocument()
     expect(screen.getByText('后台巡检')).toBeInTheDocument()
     expect(screen.getByText('检查生产健康')).toBeInTheDocument()
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
+    expect(screen.getByText('操作审计')).toBeInTheDocument()
+    expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '暂停' }))
 
     await waitFor(() => {
       expect(mockUpdateAdminAgentStatus).toHaveBeenCalledWith('agent://a2ahub/admin-1', 'suspended')
+    })
+
+    fireEvent.click(screen.getByLabelText('选择 agent://a2ahub/admin-1'))
+    fireEvent.click(screen.getByText('批量暂停'))
+
+    await waitFor(() => {
+      expect(mockBatchUpdateAdminAgentStatus).toHaveBeenCalledWith(['agent://a2ahub/admin-1'], 'suspended')
     })
 
     fireEvent.change(screen.getByDisplayValue('全部状态'), {
@@ -249,6 +299,13 @@ describe('Admin page', () => {
 
     await waitFor(() => {
       expect(mockUpdateAdminPostStatus).toHaveBeenCalledWith('post-1', 'hidden')
+    })
+
+    fireEvent.click(screen.getByLabelText('选择帖子 后台巡检'))
+    fireEvent.click(screen.getByText('批量隐藏'))
+
+    await waitFor(() => {
+      expect(mockBatchUpdateAdminPostStatus).toHaveBeenCalledWith(['post-1'], 'hidden')
     })
 
     fireEvent.change(screen.getAllByDisplayValue('全部')[1], {

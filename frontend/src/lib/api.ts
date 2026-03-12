@@ -41,7 +41,7 @@ export type RegisterPayload = {
   model: string
   provider: string
   capabilities: string[]
-  public_key: string
+  public_key?: string
   proof_of_capability?: {
     challenge: string
     response: string
@@ -53,6 +53,43 @@ export type LoginPayload = {
   timestamp: number
   nonce: string
   signature: string
+}
+
+export type RegisterAgentResponse = {
+  aid: string
+  binding_key: string
+  certificate: string
+  created_at: string
+  initial_credits: number
+  agent?: AgentProfile
+}
+
+export type EmailCodeDispatchResponse = {
+  email: string
+  aid: string
+  expires_at: string
+  delivery: 'smtp' | 'inline'
+  verification_code?: string
+}
+
+export type EmailRegistrationCodePayload = {
+  email: string
+  binding_key: string
+}
+
+export type CompleteEmailRegistrationPayload = {
+  email: string
+  binding_key: string
+  code: string
+}
+
+export type EmailLoginCodePayload = {
+  email: string
+}
+
+export type CompleteEmailLoginPayload = {
+  email: string
+  code: string
 }
 
 export type UpdateProfilePayload = {
@@ -104,6 +141,12 @@ function toSession(agent: AgentProfile | undefined, token: string, expiresAt?: s
     bio: agent?.bio,
     availabilityStatus: agent?.availability_status,
   }
+}
+
+function persistLoginResponse(data: { token: string; expires_at: string; agent: AgentProfile }) {
+  const session = toSession(data.agent, data.token, data.expires_at)
+  setSession(session)
+  return session
 }
 
 export function getSession(_role?: SessionRole): Session | null {
@@ -201,7 +244,7 @@ export function randomNonce() {
 
 export async function registerAgent(payload: RegisterPayload) {
   const response = await api.post('/v1/agents/register', payload)
-  return response.data as { aid: string; created_at: string; initial_credits: number; agent?: AgentProfile }
+  return response.data as RegisterAgentResponse
 }
 
 export async function requestLoginChallenge(aid: string) {
@@ -211,18 +254,32 @@ export async function requestLoginChallenge(aid: string) {
 
 export async function loginAgent(payload: LoginPayload) {
   const response = await api.post('/v1/agents/login', payload)
-  const data = response.data as { token: string; expires_at: string; agent: AgentProfile }
-  const session = toSession(data.agent, data.token, data.expires_at)
-  setSession(session)
-  return session
+  return persistLoginResponse(response.data as { token: string; expires_at: string; agent: AgentProfile })
 }
 
 export async function refreshSession() {
   const response = await api.post('/v1/agents/refresh')
-  const data = response.data as { token: string; expires_at: string; agent: AgentProfile }
-  const session = toSession(data.agent, data.token, data.expires_at)
-  setSession(session)
-  return session
+  return persistLoginResponse(response.data as { token: string; expires_at: string; agent: AgentProfile })
+}
+
+export async function requestEmailRegistrationCode(payload: EmailRegistrationCodePayload) {
+  const response = await api.post('/v1/agents/email/register/request-code', payload)
+  return response.data as EmailCodeDispatchResponse
+}
+
+export async function completeEmailRegistration(payload: CompleteEmailRegistrationPayload) {
+  const response = await api.post('/v1/agents/email/register/complete', payload)
+  return persistLoginResponse(response.data as { token: string; expires_at: string; agent: AgentProfile })
+}
+
+export async function requestEmailLoginCode(payload: EmailLoginCodePayload) {
+  const response = await api.post('/v1/agents/email/login/request-code', payload)
+  return response.data as EmailCodeDispatchResponse
+}
+
+export async function completeEmailLogin(payload: CompleteEmailLoginPayload) {
+  const response = await api.post('/v1/agents/email/login/complete', payload)
+  return persistLoginResponse(response.data as { token: string; expires_at: string; agent: AgentProfile })
 }
 
 export async function fetchCurrentAgent() {

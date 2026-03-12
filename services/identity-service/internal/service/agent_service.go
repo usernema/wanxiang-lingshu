@@ -23,6 +23,10 @@ type AgentService interface {
 	Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
 	IssueLoginChallenge(ctx context.Context, aid string) (*LoginChallengeResponse, error)
 	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
+	RequestEmailRegistrationCode(ctx context.Context, req *EmailRegistrationCodeRequest) (*EmailCodeDispatchResponse, error)
+	CompleteEmailRegistration(ctx context.Context, req *CompleteEmailRegistrationRequest) (*LoginResponse, error)
+	RequestEmailLoginCode(ctx context.Context, req *EmailLoginCodeRequest) (*EmailCodeDispatchResponse, error)
+	CompleteEmailLogin(ctx context.Context, req *CompleteEmailLoginRequest) (*LoginResponse, error)
 	Refresh(ctx context.Context, aid string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
@@ -57,13 +61,14 @@ type RegisterRequest struct {
 	Model             string                    `json:"model" binding:"required"`
 	Provider          string                    `json:"provider" binding:"required"`
 	Capabilities      []string                  `json:"capabilities" binding:"required"`
-	PublicKey         string                    `json:"public_key" binding:"required"`
+	PublicKey         string                    `json:"public_key"`
 	ProofOfCapability *models.ProofOfCapability `json:"proof_of_capability"`
 }
 
 // RegisterResponse 注册响应
 type RegisterResponse struct {
 	AID            string        `json:"aid"`
+	BindingKey     string        `json:"binding_key"`
 	Certificate    string        `json:"certificate"`
 	InitialCredits int           `json:"initial_credits"`
 	CreatedAt      time.Time     `json:"created_at"`
@@ -89,6 +94,10 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 
 	// 生成 AID
 	aid := utils.GenerateAID("a2ahub", req.Model)
+	bindingKey, bindingKeyHash, err := generateBindingKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate binding key: %w", err)
+	}
 
 	// 创建 Agent
 	now := time.Now()
@@ -112,6 +121,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 		MembershipLevel:    membershipLevel,
 		TrustLevel:         trustLevel,
 		AvailabilityStatus: "available",
+		BindingKeyHash:     bindingKeyHash,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
@@ -134,6 +144,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 
 	return &RegisterResponse{
 		AID:            aid,
+		BindingKey:     bindingKey,
 		Certificate:    certificate,
 		InitialCredits: s.config.Reputation.InitialReputation,
 		CreatedAt:      now,
@@ -162,6 +173,34 @@ type LoginResponse struct {
 	Token     string        `json:"token"`
 	ExpiresAt time.Time     `json:"expires_at"`
 	Agent     *models.Agent `json:"agent"`
+}
+
+type EmailRegistrationCodeRequest struct {
+	Email      string `json:"email" binding:"required"`
+	BindingKey string `json:"binding_key" binding:"required"`
+}
+
+type CompleteEmailRegistrationRequest struct {
+	Email      string `json:"email" binding:"required"`
+	BindingKey string `json:"binding_key" binding:"required"`
+	Code       string `json:"code" binding:"required"`
+}
+
+type EmailLoginCodeRequest struct {
+	Email string `json:"email" binding:"required"`
+}
+
+type CompleteEmailLoginRequest struct {
+	Email string `json:"email" binding:"required"`
+	Code  string `json:"code" binding:"required"`
+}
+
+type EmailCodeDispatchResponse struct {
+	Email            string    `json:"email"`
+	AID              string    `json:"aid"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	Delivery         string    `json:"delivery"`
+	VerificationCode string    `json:"verification_code,omitempty"`
 }
 
 type UpdateProfileRequest struct {

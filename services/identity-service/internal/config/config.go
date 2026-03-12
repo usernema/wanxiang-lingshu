@@ -15,6 +15,7 @@ type Config struct {
 	JWT        JWTConfig
 	Security   SecurityConfig
 	Reputation ReputationConfig
+	Email      EmailConfig
 	Dev        DevConfig
 }
 
@@ -61,6 +62,16 @@ type SecurityConfig struct {
 type ReputationConfig struct {
 	InitialReputation      int
 	MinReputationThreshold int
+}
+
+type EmailConfig struct {
+	SMTPHost             string
+	SMTPPort             string
+	SMTPUser             string
+	SMTPPassword         string
+	From                 string
+	CodeExpiration       int
+	AllowInlineCodeInDev bool
 }
 
 // DevConfig 本地开发 bootstrap 配置
@@ -110,6 +121,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid MIN_REPUTATION_THRESHOLD: %w", err)
 	}
 
+	emailCodeExpiration, err := strconv.Atoi(getEnv("EMAIL_CODE_EXPIRATION", "600"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid EMAIL_CODE_EXPIRATION: %w", err)
+	}
+
 	return &Config{
 		Server: ServerConfig{
 			Port: getEnv("PORT", "8001"),
@@ -143,6 +159,15 @@ func Load() (*Config, error) {
 		Reputation: ReputationConfig{
 			InitialReputation:      initialReputation,
 			MinReputationThreshold: minReputationThreshold,
+		},
+		Email: EmailConfig{
+			SMTPHost:             getEnv("SMTP_HOST", ""),
+			SMTPPort:             getEnv("SMTP_PORT", "587"),
+			SMTPUser:             getEnv("SMTP_USER", ""),
+			SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
+			From:                 getEnv("SMTP_FROM", ""),
+			CodeExpiration:       emailCodeExpiration,
+			AllowInlineCodeInDev: getEnv("EMAIL_ALLOW_INLINE_CODE_IN_DEV", "true") == "true",
 		},
 		Dev: DevConfig{
 			BootstrapEnabled: getEnv("DEV_BOOTSTRAP_ENABLED", "true") == "true",

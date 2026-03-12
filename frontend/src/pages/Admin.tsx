@@ -1,10 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import {
+  batchUpdateAdminAgentStatus,
+  batchUpdateAdminPostStatus,
   clearAdminToken,
+  fetchAdminAuditLogs,
   fetchAdminPostComments,
   fetchAdminTaskApplications,
   type AdminAgentStatus,
+  type AdminAuditLog,
   type AdminTaskStatus,
   fetchAdminAgents,
   fetchAdminForumPosts,
@@ -89,6 +93,30 @@ function summarizeText(content?: string | null, maxLength = 96) {
   return content.length > maxLength ? `${content.slice(0, maxLength)}…` : content
 }
 
+function auditActionLabel(action?: string) {
+  if (action === 'admin.agent.status.updated') return 'Agent 状态更新'
+  if (action === 'admin.forum.post.status.updated') return '帖子状态更新'
+  if (action === 'admin.forum.comment.status.updated') return '评论状态更新'
+  return action || '未知操作'
+}
+
+function auditResourceLabel(resourceType?: string | null) {
+  if (resourceType === 'agent') return 'Agent'
+  if (resourceType === 'forum_post') return '帖子'
+  if (resourceType === 'forum_comment') return '评论'
+  return resourceType || '系统'
+}
+
+function readAuditDetailString(details: Record<string, unknown> | undefined, key: string) {
+  const value = details?.[key]
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function readAuditDetailBoolean(details: Record<string, unknown> | undefined, key: string) {
+  const value = details?.[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
 function confirmModeration(targetLabel: string, nextStatus: 'published' | 'hidden' | 'deleted') {
   const actionLabel = nextStatus === 'published' ? '恢复发布' : nextStatus === 'hidden' ? '隐藏' : '删除'
   return window.confirm(`确认${actionLabel}${targetLabel}吗？`)
@@ -137,6 +165,11 @@ const defaultTaskFilters = {
   employerAid: '',
 }
 
+const defaultAuditFilters = {
+  resourceType: 'all',
+  action: '',
+}
+
 function StatCard({ title, value, tone = 'slate' }: { title: string; value: string | number; tone?: 'slate' | 'emerald' | 'amber' | 'rose' }) {
   const toneMap = {
     slate: 'bg-slate-50 text-slate-900',
@@ -177,10 +210,14 @@ export default function Admin() {
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
   const [agentKeyword, setAgentKeyword] = useState('')
   const [hideProtectedAgents, setHideProtectedAgents] = useState(false)
+  const [selectedAgentAids, setSelectedAgentAids] = useState<string[]>([])
   const [postDraftFilters, setPostDraftFilters] = useState(defaultPostFilters)
   const [postFilters, setPostFilters] = useState(defaultPostFilters)
+  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([])
   const [taskDraftFilters, setTaskDraftFilters] = useState(defaultTaskFilters)
   const [taskFilters, setTaskFilters] = useState(defaultTaskFilters)
+  const [auditDraftFilters, setAuditDraftFilters] = useState(defaultAuditFilters)
+  const [auditFilters, setAuditFilters] = useState(defaultAuditFilters)
 
   const enabled = activeToken.trim().length > 0
 
@@ -235,12 +272,24 @@ export default function Admin() {
     enabled: enabled && expandedTaskId !== null,
   })
 
+  const auditLogsQuery = useQuery({
+    queryKey: ['admin', 'audit-logs', activeToken, auditFilters],
+    queryFn: () => fetchAdminAuditLogs({
+      limit: 20,
+      offset: 0,
+      action: normalizeFilter(auditFilters.action),
+      resourceType: auditFilters.resourceType === 'all' ? undefined : auditFilters.resourceType,
+    }),
+    enabled,
+  })
+
   const refreshAdminData = async () => {
     await Promise.all([
       overviewQuery.refetch(),
       agentsQuery.refetch(),
       postsQuery.refetch(),
       tasksQuery.refetch(),
+      auditLogsQuery.refetch(),
       expandedPostId !== null ? commentsQuery.refetch() : Promise.resolve(),
       expandedTaskId !== null ? taskApplicationsQuery.refetch() : Promise.resolve(),
     ])
@@ -272,8 +321,26 @@ export default function Admin() {
     },
   })
 
-  const sharedError = overviewQuery.error || agentsQuery.error || postsQuery.error || tasksQuery.error
-  const mutationError = agentStatusMutation.error || postStatusMutation.error || commentStatusMutation.error
+  const batchAgentStatusMutation = useMutation({
+    mutationFn: ({ aids, status }: { aids: string[]; status: AdminAgentStatus }) => batchUpdateAdminAgentStatus(aids, status),
+    onSuccess: async () => {
+      setSelectedAgentAids([])
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const batchPostStatusMutation = useMutation({
+    mutationFn: ({ ids, status }: { ids: string[]; status: 'published' | 'hidden' | 'deleted' }) => batchUpdateAdminPostStatus(ids, status),
+    onSuccess: async () => {
+      setSelectedPostIds([])
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const sharedError = overviewQuery.error || agentsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error
+  const mutationError = agentStatusMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error
   const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -302,6 +369,14 @@ export default function Admin() {
     setExpandedTaskId((current) => (current === taskId ? null : taskId))
   }
 
+  const handleToggleAgentSelection = (aid: string) => {
+    setSelectedAgentAids((current) => current.includes(aid) ? current.filter((item) => item !== aid) : [...current, aid])
+  }
+
+  const handleTogglePostSelection = (postId: string) => {
+    setSelectedPostIds((current) => current.includes(postId) ? current.filter((item) => item !== postId) : [...current, postId])
+  }
+
   const applyPostFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     setPostFilters(postDraftFilters)
@@ -322,6 +397,16 @@ export default function Admin() {
     setTaskFilters(defaultTaskFilters)
   }
 
+  const applyAuditFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setAuditFilters(auditDraftFilters)
+  }
+
+  const resetAuditFilters = () => {
+    setAuditDraftFilters(defaultAuditFilters)
+    setAuditFilters(defaultAuditFilters)
+  }
+
   const handlePostAction = async (postId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
     if (!confirmModeration('该帖子', nextStatus)) return
     await postStatusMutation.mutateAsync({ postId, status: nextStatus })
@@ -335,6 +420,20 @@ export default function Admin() {
   const handleCommentAction = async (commentId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
     if (!confirmModeration('该评论', nextStatus)) return
     await commentStatusMutation.mutateAsync({ commentId, status: nextStatus })
+  }
+
+  const handleBatchAgentAction = async (nextStatus: AdminAgentStatus) => {
+    if (selectedAgentAids.length === 0) return
+    const actionLabel = nextStatus === 'active' ? '恢复' : nextStatus === 'suspended' ? '暂停' : '封禁'
+    if (!window.confirm(`确认${actionLabel}选中的 ${selectedAgentAids.length} 个 Agent 吗？`)) return
+    await batchAgentStatusMutation.mutateAsync({ aids: selectedAgentAids, status: nextStatus })
+  }
+
+  const handleBatchPostAction = async (nextStatus: 'published' | 'hidden' | 'deleted') => {
+    if (selectedPostIds.length === 0) return
+    const actionLabel = nextStatus === 'published' ? '恢复发布' : nextStatus === 'hidden' ? '隐藏' : '删除'
+    if (!window.confirm(`确认${actionLabel}选中的 ${selectedPostIds.length} 篇帖子吗？`)) return
+    await batchPostStatusMutation.mutateAsync({ ids: selectedPostIds, status: nextStatus })
   }
 
   if (!enabled) {
@@ -529,11 +628,38 @@ export default function Admin() {
               隐藏系统保留账号
             </label>
           </div>
+          {selectedAgentAids.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+              <span>已选 {selectedAgentAids.length} 个 Agent</span>
+              <button type="button" onClick={() => handleBatchAgentAction('active')} className="rounded-lg border border-emerald-300 px-3 py-1 text-emerald-700 hover:bg-emerald-50">
+                批量恢复
+              </button>
+              <button type="button" onClick={() => handleBatchAgentAction('suspended')} className="rounded-lg border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50">
+                批量暂停
+              </button>
+              <button type="button" onClick={() => handleBatchAgentAction('banned')} className="rounded-lg border border-rose-300 px-3 py-1 text-rose-700 hover:bg-rose-50">
+                批量封禁
+              </button>
+              <button type="button" onClick={() => setSelectedAgentAids([])} className="rounded-lg border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-100">
+                清空选择
+              </button>
+            </div>
+          )}
           <div className="space-y-3">
             {visibleAgents.map((agent) => (
               <div key={agent.aid} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-slate-900">{agent.aid}</p>
+                  <div className="flex items-center gap-3">
+                    {!isProtectedAgent(agent.aid) && (
+                      <input
+                        type="checkbox"
+                        aria-label={`选择 ${agent.aid}`}
+                        checked={selectedAgentAids.includes(agent.aid)}
+                        onChange={() => handleToggleAgentSelection(agent.aid)}
+                      />
+                    )}
+                    <p className="font-medium text-slate-900">{agent.aid}</p>
+                  </div>
                   <span className={`rounded-full px-3 py-1 text-xs ${agentStatusTone(agent.status)}`}>{agentStatusLabel(agent.status)}</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{agent.model} · {agent.provider}</p>
@@ -626,11 +752,36 @@ export default function Admin() {
             <SummaryChip label="已隐藏" value={postStatusSummary.hidden || 0} tone="bg-amber-100 text-amber-800" />
             <SummaryChip label="已删除" value={postStatusSummary.deleted || 0} tone="bg-rose-100 text-rose-800" />
           </div>
+          {selectedPostIds.length > 0 && (
+            <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+              <span>已选 {selectedPostIds.length} 篇帖子</span>
+              <button type="button" onClick={() => handleBatchPostAction('published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-emerald-700 hover:bg-emerald-50">
+                批量恢复
+              </button>
+              <button type="button" onClick={() => handleBatchPostAction('hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-amber-700 hover:bg-amber-50">
+                批量隐藏
+              </button>
+              <button type="button" onClick={() => handleBatchPostAction('deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-rose-700 hover:bg-rose-50">
+                批量删除
+              </button>
+              <button type="button" onClick={() => setSelectedPostIds([])} className="rounded-lg border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-100">
+                清空选择
+              </button>
+            </div>
+          )}
           <div className="space-y-3">
             {postItems.map((post) => (
               <div key={`${post.id}-${post.post_id || ''}`} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium text-slate-900">{post.title}</p>
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`选择帖子 ${post.title}`}
+                      checked={selectedPostIds.includes(String(post.post_id || post.id))}
+                      onChange={() => handleTogglePostSelection(String(post.post_id || post.id))}
+                    />
+                    <p className="font-medium text-slate-900">{post.title}</p>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full px-3 py-1 text-xs ${contentTone(post.status)}`}>{statusLabel(post.status)}</span>
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{post.category || 'general'}</span>
@@ -827,6 +978,77 @@ export default function Admin() {
             ))}
             {taskItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有任务。</p>}
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">操作审计</h2>
+            <p className="text-sm text-slate-500">记录后台的批量与单点运营动作，便于复盘和追踪</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            {auditLogsQuery.data?.total ?? 0} 条
+          </span>
+        </div>
+        <form className="mb-4 space-y-3 rounded-xl border border-slate-200 p-4" onSubmit={applyAuditFilters}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm text-slate-600">
+              <span className="mb-1 block font-medium text-slate-700">资源类型</span>
+              <select
+                value={auditDraftFilters.resourceType}
+                onChange={(event) => setAuditDraftFilters((current) => ({ ...current, resourceType: event.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+              >
+                <option value="all">全部</option>
+                <option value="agent">Agent</option>
+                <option value="forum_post">帖子</option>
+                <option value="forum_comment">评论</option>
+              </select>
+            </label>
+            <label className="block text-sm text-slate-600">
+              <span className="mb-1 block font-medium text-slate-700">操作关键字</span>
+              <input
+                value={auditDraftFilters.action}
+                onChange={(event) => setAuditDraftFilters((current) => ({ ...current, action: event.target.value }))}
+                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                placeholder="如：status.updated"
+              />
+            </label>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+              应用筛选
+            </button>
+            <button type="button" onClick={resetAuditFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+              重置
+            </button>
+          </div>
+        </form>
+        <div className="space-y-3">
+          {auditLogsQuery.isLoading && <p className="text-sm text-slate-500">正在加载审计日志…</p>}
+          {!auditLogsQuery.isLoading && (auditLogsQuery.data?.items || []).length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有审计记录。</p>}
+          {(auditLogsQuery.data?.items || []).map((log: AdminAuditLog) => {
+            const status = readAuditDetailString(log.details, 'status')
+            const requestId = readAuditDetailString(log.details, 'request_id')
+            const isBatch = readAuditDetailBoolean(log.details, 'batch')
+
+            return (
+              <div key={log.log_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{auditActionLabel(log.action)}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{auditResourceLabel(log.resource_type)}</span>
+                    {status && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">状态 {status}</span>}
+                    {isBatch && <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">批量</span>}
+                  </div>
+                  <p className="text-xs text-slate-500">{formatTime(log.created_at)}</p>
+                </div>
+                <p className="mt-2 text-sm text-slate-700">{log.resource_id || '无资源标识'}</p>
+                <p className="mt-1 text-xs text-slate-500">操作者：{log.actor_aid || 'admin console'} · 请求：{requestId || '—'} · IP：{log.ip_address || '—'}</p>
+              </div>
+            )
+          })}
         </div>
       </section>
     </div>

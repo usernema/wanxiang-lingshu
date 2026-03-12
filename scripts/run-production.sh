@@ -23,6 +23,13 @@ OVERRIDE_VARS=(
   TLS_KEY_PATH
   ALLOWED_ORIGINS
   JWT_SECRET
+  SMTP_HOST
+  SMTP_PORT
+  SMTP_USER
+  SMTP_PASSWORD
+  SMTP_FROM
+  EMAIL_CODE_EXPIRATION
+  EMAIL_ALLOW_INLINE_CODE_IN_DEV
   POSTGRES_PASSWORD
   REDIS_PASSWORD
   RABBITMQ_DEFAULT_PASS
@@ -230,6 +237,10 @@ ensure_not_placeholders POSTGRES_PASSWORD "${POSTGRES_PASSWORD:-}" "change-this-
 ensure_not_placeholders REDIS_PASSWORD "${REDIS_PASSWORD:-}" "change-this-redis-password"
 ensure_not_placeholders RABBITMQ_DEFAULT_PASS "${RABBITMQ_DEFAULT_PASS:-}" "change-this-rabbitmq-password"
 ensure_not_placeholders MINIO_ROOT_PASSWORD "${MINIO_ROOT_PASSWORD:-}" "change-this-minio-password"
+
+if [[ -z "${SMTP_HOST:-}" || -z "${SMTP_FROM:-}" ]]; then
+  echo "Warning: SMTP_HOST / SMTP_FROM is not configured. Email-code registration and login will fail in production." >&2
+fi
 
 if [[ "${ENABLE_TLS:-false}" == "true" ]]; then
   case "${PUBLIC_HOSTNAME:-}" in

@@ -6,8 +6,10 @@ const { requireAdminAccess } = require('../middleware/admin');
 const { createRouteProxies } = require('./proxy');
 const { metricsHandler } = require('../middleware/metrics');
 const { getRedisClient } = require('../utils/redis');
+const { query } = require('../utils/postgres');
 const { asyncHandler, createHttpError, sendError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
+const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
@@ -39,6 +41,24 @@ function normalizeOffset(value) {
     return 0;
   }
   return parsed;
+}
+
+function normalizeQueryText(value) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeBatchItems(items) {
+  if (!Array.isArray(items)) return [];
+
+  const unique = new Set();
+  for (const item of items) {
+    const normalized = typeof item === 'string' || typeof item === 'number' ? String(item).trim() : '';
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+
+  return Array.from(unique);
 }
 
 function serviceHealthPath(serviceName) {
@@ -162,6 +182,139 @@ function internalAdminHeaders() {
   return config.admin.consoleToken ? { 'X-Internal-Admin-Token': config.admin.consoleToken } : {};
 }
 
+function buildAdminAuditDetails(req, details = {}) {
+  return {
+    source: 'admin_console',
+    request_id: req.id,
+    method: req.method,
+    path: req.originalUrl,
+    ...details,
+  };
+}
+
+async function insertAdminAuditLog(entry) {
+  const logId = entry.logId || `log_${uuidv4().replace(/-/g, '')}`;
+  const payload = {
+    logId,
+    actorAid: entry.actorAid || null,
+    action: entry.action,
+    resourceType: entry.resourceType || null,
+    resourceId: entry.resourceId || null,
+    details: entry.details || {},
+    ipAddress: entry.ipAddress || null,
+    userAgent: entry.userAgent || null,
+  };
+
+  await query(
+    `INSERT INTO audit_logs (log_id, actor_aid, action, resource_type, resource_id, details, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)`,
+    [
+      payload.logId,
+      payload.actorAid,
+      payload.action,
+      payload.resourceType,
+      payload.resourceId,
+      JSON.stringify(payload.details),
+      payload.ipAddress,
+      payload.userAgent,
+    ],
+  );
+
+  return payload.logId;
+}
+
+async function recordAdminAudit(req, entry) {
+  try {
+    await insertAdminAuditLog({
+      ...entry,
+      details: buildAdminAuditDetails(req, entry.details),
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent') || null,
+    });
+  } catch (error) {
+    logger.error('Failed to persist admin audit log', {
+      error: error.message,
+      action: entry.action,
+      resourceType: entry.resourceType,
+      resourceId: entry.resourceId,
+      requestId: req.id,
+    });
+  }
+}
+
+async function listAdminAuditLogs(filters = {}) {
+  const conditions = [];
+  const params = [];
+
+  const actorAid = normalizeQueryText(filters.actorAid);
+  const action = normalizeQueryText(filters.action);
+  const resourceType = normalizeQueryText(filters.resourceType);
+  const resourceId = normalizeQueryText(filters.resourceId);
+  const limit = normalizeLimit(filters.limit);
+  const offset = normalizeOffset(filters.offset);
+
+  if (actorAid) {
+    params.push(actorAid);
+    conditions.push(`actor_aid = $${params.length}`);
+  }
+
+  if (action) {
+    params.push(`%${action}%`);
+    conditions.push(`action ILIKE $${params.length}`);
+  }
+
+  if (resourceType) {
+    params.push(resourceType);
+    conditions.push(`resource_type = $${params.length}`);
+  }
+
+  if (resourceId) {
+    params.push(`%${resourceId}%`);
+    conditions.push(`resource_id ILIKE $${params.length}`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+  const countParams = [...params];
+  params.push(limit);
+  params.push(offset);
+
+  const [itemsResult, countResult] = await Promise.all([
+    query(
+      `SELECT log_id, actor_aid, action, resource_type, resource_id, details, ip_address::text AS ip_address, user_agent, created_at
+       FROM audit_logs
+       ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    ),
+    query(`SELECT COUNT(*)::int AS total FROM audit_logs ${whereClause}`, countParams),
+  ]);
+
+  return {
+    items: itemsResult.rows || [],
+    total: countResult.rows?.[0]?.total || 0,
+    limit,
+    offset,
+  };
+}
+
+async function executeBatch(items, handler) {
+  return Promise.all(items.map(async (item) => {
+    try {
+      const data = await handler(item);
+      return { item, success: true, data };
+    } catch (error) {
+      return {
+        item,
+        success: false,
+        error: error.message || 'Batch item failed',
+        code: error.code || 'BATCH_ITEM_FAILED',
+        status: error.status || error.statusCode || 500,
+      };
+    }
+  }));
+}
+
 async function getAdminOverviewData() {
   const [dependencies, agents, posts, tasks, consistency] = await Promise.all([
     getDependencyStatus(),
@@ -189,6 +342,7 @@ async function getAdminOverviewData() {
 
 router.get('/live', (req, res) => success(res, req, 200, { success: true, status: 'alive', uptime: process.uptime(), mode: config.server.appMode }));
 router.get('/health/live', (req, res) => success(res, req, 200, { success: true, status: 'alive', uptime: process.uptime(), mode: config.server.appMode }));
+router.get('/api/health/live', (req, res) => success(res, req, 200, { success: true, status: 'alive', uptime: process.uptime(), mode: config.server.appMode }));
 router.get('/livez', (req, res) => success(res, req, 200, { success: true, status: 'alive' }));
 
 router.get('/ready', asyncHandler(async (req, res) => {
@@ -211,6 +365,25 @@ router.get('/ready', asyncHandler(async (req, res) => {
   });
 }));
 router.get('/health/ready', asyncHandler(async (req, res) => {
+  const dependencies = await getDependencyStatus();
+  const ready = isReady(dependencies);
+
+  if (!ready) {
+    return sendError(res, req, {
+      status: 503,
+      code: 'SERVICE_UNREADY',
+      error: 'Gateway is not ready to receive traffic',
+      extras: { status: 'unready', dependencies },
+    });
+  }
+
+  return success(res, req, 200, {
+    success: true,
+    status: 'ready',
+    dependencies,
+  });
+}));
+router.get('/api/health/ready', asyncHandler(async (req, res) => {
   const dependencies = await getDependencyStatus();
   const ready = isReady(dependencies);
 
@@ -252,8 +425,30 @@ router.get('/health', asyncHandler(async (req, res) => {
     dependencies,
   });
 }));
+router.get('/api/health', asyncHandler(async (req, res) => {
+  const dependencies = await getDependencyStatus();
+  const ready = isReady(dependencies);
+  return res.status(ready ? 200 : 503).json({
+    success: ready,
+    status: ready ? 'healthy' : 'degraded',
+    uptime: process.uptime(),
+    mode: config.server.appMode,
+    ...buildMeta(req),
+    dependencies,
+  });
+}));
 
 router.get('/health/deps', asyncHandler(async (req, res) => {
+  const dependencies = await getDependencyStatus();
+  const ready = isReady(dependencies);
+  return res.status(ready ? 200 : 503).json({
+    success: ready,
+    status: ready ? 'healthy' : 'degraded',
+    ...buildMeta(req),
+    dependencies,
+  });
+}));
+router.get('/api/health/deps', asyncHandler(async (req, res) => {
   const dependencies = await getDependencyStatus();
   const ready = isReady(dependencies);
   return res.status(ready ? 200 : 503).json({
@@ -288,6 +483,19 @@ router.get('/api/v1/admin/overview', requireAdminAccess, asyncHandler(async (req
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/audit-logs', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await listAdminAuditLogs({
+    limit: req.query.limit,
+    offset: req.query.offset,
+    actorAid: req.query.actor_aid,
+    action: req.query.action,
+    resourceType: req.query.resource_type,
+    resourceId: req.query.resource_id,
+  });
+
+  return success(res, req, 200, { success: true, data });
+}));
+
 router.get('/api/v1/admin/agents', requireAdminAccess, asyncHandler(async (req, res) => {
   const limit = normalizeLimit(req.query.limit);
   const offset = normalizeOffset(req.query.offset);
@@ -307,8 +515,51 @@ async function handleAdminAgentStatusUpdate(req, res) {
       data: { aid, status },
     },
   );
+  await recordAdminAudit(req, {
+    action: 'admin.agent.status.updated',
+    resourceType: 'agent',
+    resourceId: aid,
+    details: { status, batch: false },
+  });
   return success(res, req, 200, { success: true, data });
 }
+
+router.patch('/api/v1/admin/agents/status/batch', requireAdminAccess, asyncHandler(async (req, res) => {
+  const aids = normalizeBatchItems(req.body?.aids);
+  const status = normalizeQueryText(req.body?.status) || '';
+
+  if (!aids.length) {
+    throw createHttpError(400, 'INVALID_BATCH_INPUT', 'aids is required');
+  }
+  if (aids.length > config.admin.maxBatchSize) {
+    throw createHttpError(400, 'BATCH_LIMIT_EXCEEDED', `aids cannot exceed ${config.admin.maxBatchSize} items`);
+  }
+
+  const items = await executeBatch(aids, async (aid) => {
+    const data = await callService('identity', 'patch', '/api/v1/admin/agents/status', {
+      data: { aid, status },
+    });
+    await recordAdminAudit(req, {
+      action: 'admin.agent.status.updated',
+      resourceType: 'agent',
+      resourceId: aid,
+      details: { status, batch: true, total_items: aids.length },
+    });
+    return data;
+  });
+
+  return success(res, req, 200, {
+    success: true,
+    data: {
+      items,
+      summary: {
+        total: items.length,
+        succeeded: items.filter((item) => item.success).length,
+        failed: items.filter((item) => !item.success).length,
+      },
+    },
+  });
+}));
 
 router.patch('/api/v1/admin/agents/status', requireAdminAccess, asyncHandler(handleAdminAgentStatusUpdate));
 router.patch('/api/v1/admin/agents/:aid/status', requireAdminAccess, asyncHandler(handleAdminAgentStatusUpdate));
@@ -352,7 +603,56 @@ router.patch('/api/v1/admin/forum/posts/:id/status', requireAdminAccess, asyncHa
       headers: internalAdminHeaders(),
     },
   );
+  await recordAdminAudit(req, {
+    action: 'admin.forum.post.status.updated',
+    resourceType: 'forum_post',
+    resourceId: String(req.params.id),
+    details: { status, batch: false },
+  });
   return success(res, req, 200, { success: true, data: data?.data || null });
+}));
+
+router.patch('/api/v1/admin/forum/posts/status/batch', requireAdminAccess, asyncHandler(async (req, res) => {
+  const ids = normalizeBatchItems(req.body?.ids);
+  const status = normalizeQueryText(req.body?.status) || '';
+
+  if (!ids.length) {
+    throw createHttpError(400, 'INVALID_BATCH_INPUT', 'ids is required');
+  }
+  if (ids.length > config.admin.maxBatchSize) {
+    throw createHttpError(400, 'BATCH_LIMIT_EXCEEDED', `ids cannot exceed ${config.admin.maxBatchSize} items`);
+  }
+
+  const items = await executeBatch(ids, async (id) => {
+    const data = await callService(
+      'forum',
+      'patch',
+      `/api/v1/forum/internal/admin/posts/${encodeURIComponent(id)}/status`,
+      {
+        data: { status },
+        headers: internalAdminHeaders(),
+      },
+    );
+    await recordAdminAudit(req, {
+      action: 'admin.forum.post.status.updated',
+      resourceType: 'forum_post',
+      resourceId: id,
+      details: { status, batch: true, total_items: ids.length },
+    });
+    return data?.data || null;
+  });
+
+  return success(res, req, 200, {
+    success: true,
+    data: {
+      items,
+      summary: {
+        total: items.length,
+        succeeded: items.filter((item) => item.success).length,
+        failed: items.filter((item) => !item.success).length,
+      },
+    },
+  });
 }));
 
 router.patch('/api/v1/admin/forum/comments/:commentId/status', requireAdminAccess, asyncHandler(async (req, res) => {
@@ -366,6 +666,12 @@ router.patch('/api/v1/admin/forum/comments/:commentId/status', requireAdminAcces
       headers: internalAdminHeaders(),
     },
   );
+  await recordAdminAudit(req, {
+    action: 'admin.forum.comment.status.updated',
+    resourceType: 'forum_comment',
+    resourceId: String(req.params.commentId),
+    details: { status, batch: false },
+  });
   return success(res, req, 200, { success: true, data: data?.data || null });
 }));
 
@@ -413,6 +719,10 @@ function setupRoutes(app, middleware = {}) {
   } = middleware;
 
   app.use('/api/v1/agents/register', ...(authLimiter ? [authLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents/email/register/request-code', ...(authLimiter ? [authLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents/email/register/complete', ...(authLimiter ? [authLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents/email/login/request-code', ...(authLimiter ? [authLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents/email/login/complete', ...(authLimiter ? [authLimiter] : []), proxies.identity);
   app.use('/api/v1/agents/challenge', ...(authLimiter ? [authLimiter] : []), proxies.identity);
   app.use('/api/v1/agents/login', ...(authLimiter ? [authLimiter] : []), proxies.identity);
   app.use('/api/v1/agents/verify', ...(authLimiter ? [authLimiter] : []), proxies.identity);
@@ -459,9 +769,14 @@ module.exports = {
   fetchServiceJson,
   getAdminOverviewData,
   getDependencyStatus,
+  insertAdminAuditLog,
   isReady,
+  listAdminAuditLogs,
   normalizeLimit,
   normalizeOffset,
+  normalizeBatchItems,
+  normalizeQueryText,
+  recordAdminAudit,
   router,
   setupRoutes,
 };

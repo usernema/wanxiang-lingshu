@@ -53,6 +53,11 @@ jest.mock('../src/utils/logger', () => ({
   debug: jest.fn(),
 }));
 
+jest.mock('../src/utils/postgres', () => ({
+  query: jest.fn(),
+  closePostgresPool: jest.fn().mockResolvedValue(),
+}));
+
 jest.mock('jsonwebtoken', () => ({
   verify: jest.fn(() => {
     throw new Error('invalid token');
@@ -67,6 +72,7 @@ const { authenticate } = require('../src/middleware/auth');
 const { notFoundHandler, errorHandler } = require('../src/middleware/errorHandler');
 const { buildCorsOptions, bodyLimitForRequest } = require('../src/index');
 const { getRedisClient } = require('../src/utils/redis');
+const { query } = require('../src/utils/postgres');
 
 function jsonBodyParser() {
   return (req, res, next) => express.json({ limit: bodyLimitForRequest(req) })(req, res, next);
@@ -160,6 +166,7 @@ describe('API Gateway Integration Tests', () => {
     });
     axios.get.mockImplementation((url) => Promise.resolve({ status: 200, data: { success: true, url } }));
     axios.request.mockResolvedValue({ data: { success: true, data: {} } });
+    query.mockResolvedValue({ rows: [], rowCount: 1 });
     config.admin.enabled = originalAdminEnabled;
     config.admin.consoleToken = originalAdminToken;
   });
@@ -193,6 +200,14 @@ describe('API Gateway Integration Tests', () => {
   it('returns success from health ready endpoint when dependencies are healthy', async () => {
     const response = await request(app).get('/health/ready').expect(200);
     expect(response.body).toMatchObject({ success: true, status: 'ready' });
+  });
+
+  it('returns alias health endpoints under /api', async () => {
+    const health = await request(app).get('/api/health').expect(200);
+    expect(health.body).toMatchObject({ success: true, status: 'healthy' });
+
+    const ready = await request(app).get('/api/health/ready').expect(200);
+    expect(ready.body).toMatchObject({ success: true, status: 'ready' });
   });
 
   it('returns degraded status from readyz when redis is unavailable', async () => {
@@ -241,6 +256,16 @@ describe('API Gateway Integration Tests', () => {
   it('applies auth limiter to auth routes', async () => {
     const response = await request(app).post('/api/v1/agents/login').expect(502);
     expect(response.headers['x-limiter-auth']).toBe('true');
+  });
+
+  it('exposes email auth routes without agent authentication', async () => {
+    const response = await request(app)
+      .post('/api/v1/agents/email/login/request-code')
+      .send({ email: 'owner@example.com' })
+      .expect(502);
+
+    expect(response.headers['x-limiter-auth']).toBe('true');
+    expect(response.body.service).toBe('identity');
   });
 
   it('rejects admin routes without a token', async () => {
@@ -330,6 +355,7 @@ describe('API Gateway Integration Tests', () => {
       url: expect.stringContaining('/api/v1/admin/agents/status'),
       data: { aid: 'agent://a2ahub/worker-1', status: 'suspended' },
     }));
+    expect(query).toHaveBeenCalled();
   });
 
   it('updates forum moderation status through admin routes', async () => {
@@ -378,6 +404,52 @@ describe('API Gateway Integration Tests', () => {
 
     expect(response.body.data).toHaveLength(1);
     expect(response.body.data[0].applicant_aid).toBe('agent://a2ahub/worker-1');
+  });
+
+  it('returns admin audit logs from persistence layer', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          log_id: 'log_1',
+          actor_aid: null,
+          action: 'admin.agent.status.updated',
+          resource_type: 'agent',
+          resource_id: 'agent://a2ahub/worker-1',
+          details: { status: 'suspended' },
+          ip_address: '127.0.0.1',
+          user_agent: 'jest',
+          created_at: '2026-03-12T00:00:00.000Z',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] });
+
+    const response = await request(app)
+      .get('/api/v1/admin/audit-logs?resource_type=agent')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    expect(response.body.data.items).toHaveLength(1);
+    expect(response.body.data.total).toBe(1);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('updates agent status in batch through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request
+      .mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-1', status: 'suspended' } })
+      .mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-2', status: 'suspended' } });
+
+    const response = await request(app)
+      .patch('/api/v1/admin/agents/status/batch')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .send({ aids: ['agent://a2ahub/worker-1', 'agent://a2ahub/worker-2'], status: 'suspended' })
+      .expect(200);
+
+    expect(response.body.data.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it('applies public-read limiter to public get routes', async () => {
@@ -517,6 +589,12 @@ describe('API Gateway Integration Tests', () => {
 
     const identity = await request(app).get('/api/v1/agents/agent-123').expect(502);
     expect(identity.body.service).toBe('identity');
+
+    const emailAuth = await request(app)
+      .post('/api/v1/agents/email/register/request-code')
+      .send({ email: 'owner@example.com', binding_key: 'bind_test' })
+      .expect(502);
+    expect(emailAuth.body.service).toBe('identity');
 
     const forum = await request(app).get('/api/v1/forum/posts').expect(502);
     expect(forum.body.service).toBe('forum');

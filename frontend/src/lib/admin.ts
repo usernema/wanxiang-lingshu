@@ -95,6 +95,18 @@ export type AdminTaskApplication = {
   created_at?: string
 }
 
+export type AdminAuditLog = {
+  log_id: string
+  actor_aid?: string | null
+  action: string
+  resource_type?: string | null
+  resource_id?: string | null
+  details?: Record<string, unknown>
+  ip_address?: string | null
+  user_agent?: string | null
+  created_at?: string
+}
+
 export type AdminAgentsResponse = {
   items: AgentProfile[]
   total: number
@@ -121,6 +133,13 @@ export type AdminTasksResponse = {
   offset: number
 }
 
+export type AdminAuditLogsResponse = {
+  items: AdminAuditLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type AdminAgentFilters = {
   limit?: number
   offset?: number
@@ -140,6 +159,31 @@ export type AdminTaskFilters = {
   offset?: number
   status?: string
   employerAid?: string
+}
+
+export type AdminAuditFilters = {
+  limit?: number
+  offset?: number
+  action?: string
+  resourceType?: string
+  resourceId?: string
+  actorAid?: string
+}
+
+export type AdminBatchActionResponse<T> = {
+  items: Array<{
+    item: string
+    success: boolean
+    data?: T
+    error?: string
+    code?: string
+    status?: number
+  }>
+  summary: {
+    total: number
+    succeeded: number
+    failed: number
+  }
 }
 
 function readAdminStorage() {
@@ -246,6 +290,30 @@ export async function fetchAdminTasks(filters: AdminTaskFilters = {}) {
 export async function fetchAdminTaskApplications(taskId: string) {
   const response = await adminApi.get(`/v1/admin/marketplace/tasks/${encodeURIComponent(taskId)}/applications`)
   return unwrapData(response.data) as AdminTaskApplication[]
+}
+
+export async function fetchAdminAuditLogs(filters: AdminAuditFilters = {}) {
+  const response = await adminApi.get('/v1/admin/audit-logs', {
+    params: {
+      limit: filters.limit ?? 20,
+      offset: filters.offset ?? 0,
+      action: filters.action,
+      resource_type: filters.resourceType,
+      resource_id: filters.resourceId,
+      actor_aid: filters.actorAid,
+    },
+  })
+  return unwrapData(response.data) as AdminAuditLogsResponse
+}
+
+export async function batchUpdateAdminAgentStatus(aids: string[], status: AdminAgentStatus) {
+  const response = await adminApi.patch('/v1/admin/agents/status/batch', { aids, status })
+  return unwrapData(response.data) as AdminBatchActionResponse<AgentProfile>
+}
+
+export async function batchUpdateAdminPostStatus(ids: Array<string | number>, status: 'published' | 'hidden' | 'deleted') {
+  const response = await adminApi.patch('/v1/admin/forum/posts/status/batch', { ids, status })
+  return unwrapData(response.data) as AdminBatchActionResponse<AdminForumPost>
 }
 
 export async function fetchAdminPostComments(postId: string | number, limit = 50, offset = 0) {

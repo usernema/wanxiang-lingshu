@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/a2ahub/identity-service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -89,6 +90,88 @@ func (h *AgentHandler) IssueLoginChallenge(c *gin.Context) {
 	resp, err := h.service.IssueLoginChallenge(c.Request.Context(), req.AID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func emailAuthStatus(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+
+	message := err.Error()
+	switch {
+	case strings.Contains(message, "already been claimed"), strings.Contains(message, "already bound to another agent"):
+		return http.StatusConflict
+	case strings.Contains(message, "not active"), strings.Contains(message, "reputation too low"):
+		return http.StatusForbidden
+	case strings.Contains(message, "failed to check email binding"), strings.Contains(message, "failed to bind email"), strings.Contains(message, "failed to store email verification code"):
+		return http.StatusInternalServerError
+	default:
+		return http.StatusBadRequest
+	}
+}
+
+func (h *AgentHandler) RequestEmailRegistrationCode(c *gin.Context) {
+	var req service.EmailRegistrationCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.RequestEmailRegistrationCode(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(emailAuthStatus(err), ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) CompleteEmailRegistration(c *gin.Context) {
+	var req service.CompleteEmailRegistrationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.CompleteEmailRegistration(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(emailAuthStatus(err), ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) RequestEmailLoginCode(c *gin.Context) {
+	var req service.EmailLoginCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.RequestEmailLoginCode(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(emailAuthStatus(err), ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) CompleteEmailLogin(c *gin.Context) {
+	var req service.CompleteEmailLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.CompleteEmailLogin(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(emailAuthStatus(err), ErrorResponse{Error: err.Error()})
 		return
 	}
 

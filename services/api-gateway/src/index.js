@@ -4,6 +4,7 @@ const cors = require('cors');
 const config = require('./config');
 const logger = require('./utils/logger');
 const { createRedisClient, closeRedisClient } = require('./utils/redis');
+const { closePostgresPool } = require('./utils/postgres');
 const requestId = require('./middleware/requestId');
 const requestLogger = require('./middleware/requestLogger');
 const { metricsMiddleware } = require('./middleware/metrics');
@@ -141,6 +142,7 @@ async function startServer() {
       server.close(async () => {
         try {
           await closeRedisClient();
+          await closePostgresPool();
           logger.info('Graceful shutdown completed');
           process.exit(0);
         } catch (error) {

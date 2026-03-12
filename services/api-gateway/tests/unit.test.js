@@ -41,11 +41,17 @@ jest.mock('../src/utils/logger', () => ({
   error: jest.fn(),
 }));
 
+jest.mock('../src/utils/postgres', () => ({
+  query: jest.fn(),
+  closePostgresPool: jest.fn().mockResolvedValue(),
+}));
+
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const { getRedisClient } = require('../src/utils/redis');
 const { metrics } = require('../src/middleware/metrics');
 const logger = require('../src/utils/logger');
+const { query } = require('../src/utils/postgres');
 const { fixRequestBody, createProxyMiddleware } = require('http-proxy-middleware');
 const config = require('../src/config');
 const {
@@ -88,6 +94,7 @@ const {
   checkServiceHealth,
   getDependencyStatus,
   isReady,
+  normalizeBatchItems,
   setupRoutes,
 } = require('../src/routes');
 
@@ -123,6 +130,7 @@ function createRes() {
 describe('auth middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    query.mockResolvedValue({ rows: [], rowCount: 1 });
     getRedisClient.mockResolvedValue({
       get: jest.fn().mockResolvedValue(null),
       setEx: jest.fn().mockResolvedValue('OK'),
@@ -808,6 +816,7 @@ describe('route helpers', () => {
     setupRoutes(app, middleware);
 
     expect(app.use).toHaveBeenCalledWith('/api/v1/agents/register', 'authLimiter', expect.anything());
+    expect(app.use).toHaveBeenCalledWith('/api/v1/agents/email/register/request-code', 'authLimiter', expect.anything());
     expect(app.get).toHaveBeenCalledWith('/api/v1/agents/:aid', 'publicReadLimiter', expect.anything());
     expect(app.use).toHaveBeenCalledWith('/api/v1/forum', expect.any(Function), 'writeLimiter', expect.anything());
     expect(logger.info).toHaveBeenCalledWith('Routes configured successfully');
@@ -827,6 +836,10 @@ describe('route helpers', () => {
       headers: expect.objectContaining({ 'X-Internal-Admin-Token': 'secret-token' }),
     }));
     expect(result).toEqual({ success: true, data: { ok: true } });
+  });
+
+  it('normalizes batch items by trimming and deduplicating', () => {
+    expect(normalizeBatchItems([' a ', 'b', 'a', '', null, 123])).toEqual(['a', 'b', '123']);
   });
 });
 

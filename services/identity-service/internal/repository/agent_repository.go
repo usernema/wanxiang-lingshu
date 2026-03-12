@@ -4,19 +4,24 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/a2ahub/identity-service/internal/database"
 	"github.com/a2ahub/identity-service/internal/models"
+	"github.com/lib/pq"
 )
 
 // AgentRepository Agent 数据仓库接口
 type AgentRepository interface {
 	Create(ctx context.Context, agent *models.Agent) error
 	GetByAID(ctx context.Context, aid string) (*models.Agent, error)
+	GetByBindingKeyHash(ctx context.Context, bindingKeyHash string) (*models.Agent, error)
+	GetByOwnerEmail(ctx context.Context, email string) (*models.Agent, error)
 	List(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
 	Update(ctx context.Context, agent *models.Agent) error
+	BindEmail(ctx context.Context, aid, email string, verifiedAt time.Time) (*models.Agent, error)
 	UpdateProfile(ctx context.Context, aid string, headline, bio, availabilityStatus string, capabilities models.Capabilities) (*models.Agent, error)
 	UpdateReputation(ctx context.Context, aid string, change int, reason string) error
 	GetReputationHistory(ctx context.Context, aid string, limit int) ([]models.ReputationHistory, error)
@@ -41,8 +46,8 @@ func (r *agentRepository) Create(ctx context.Context, agent *models.Agent) error
 	}
 
 	query := `
-		INSERT INTO agents (aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		INSERT INTO agents (aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, binding_key_hash, owner_email, owner_email_verified_at, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 	`
 
 	_, err = r.db.DB.ExecContext(ctx, query,
@@ -58,6 +63,9 @@ func (r *agentRepository) Create(ctx context.Context, agent *models.Agent) error
 		agent.Headline,
 		agent.Bio,
 		agent.AvailabilityStatus,
+		agent.BindingKeyHash,
+		agent.OwnerEmail,
+		agent.OwnerEmailVerified,
 		agent.CreatedAt,
 		agent.UpdatedAt,
 	)
@@ -72,7 +80,7 @@ func (r *agentRepository) Create(ctx context.Context, agent *models.Agent) error
 // GetByAID 根据 AID 获取 Agent
 func (r *agentRepository) GetByAID(ctx context.Context, aid string) (*models.Agent, error) {
 	query := `
-		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, created_at, updated_at
+		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, binding_key_hash, owner_email, owner_email_verified_at, created_at, updated_at
 		FROM agents
 		WHERE aid = $1
 	`
@@ -93,6 +101,9 @@ func (r *agentRepository) GetByAID(ctx context.Context, aid string) (*models.Age
 		&agent.Headline,
 		&agent.Bio,
 		&agent.AvailabilityStatus,
+		&agent.BindingKeyHash,
+		&agent.OwnerEmail,
+		&agent.OwnerEmailVerified,
 		&agent.CreatedAt,
 		&agent.UpdatedAt,
 	)
@@ -102,6 +113,94 @@ func (r *agentRepository) GetByAID(ctx context.Context, aid string) (*models.Age
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get agent: %w", err)
+	}
+
+	if err := json.Unmarshal(capabilitiesJSON, &agent.Capabilities); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal capabilities: %w", err)
+	}
+
+	return agent, nil
+}
+
+func (r *agentRepository) GetByBindingKeyHash(ctx context.Context, bindingKeyHash string) (*models.Agent, error) {
+	query := `
+		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, binding_key_hash, owner_email, owner_email_verified_at, created_at, updated_at
+		FROM agents
+		WHERE binding_key_hash = $1
+	`
+
+	agent := &models.Agent{}
+	var capabilitiesJSON []byte
+
+	err := r.db.DB.QueryRowContext(ctx, query, bindingKeyHash).Scan(
+		&agent.AID,
+		&agent.Model,
+		&agent.Provider,
+		&agent.PublicKey,
+		&capabilitiesJSON,
+		&agent.Reputation,
+		&agent.Status,
+		&agent.MembershipLevel,
+		&agent.TrustLevel,
+		&agent.Headline,
+		&agent.Bio,
+		&agent.AvailabilityStatus,
+		&agent.BindingKeyHash,
+		&agent.OwnerEmail,
+		&agent.OwnerEmailVerified,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("agent not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent by binding key: %w", err)
+	}
+
+	if err := json.Unmarshal(capabilitiesJSON, &agent.Capabilities); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal capabilities: %w", err)
+	}
+
+	return agent, nil
+}
+
+func (r *agentRepository) GetByOwnerEmail(ctx context.Context, email string) (*models.Agent, error) {
+	query := `
+		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, binding_key_hash, owner_email, owner_email_verified_at, created_at, updated_at
+		FROM agents
+		WHERE owner_email = $1
+	`
+
+	agent := &models.Agent{}
+	var capabilitiesJSON []byte
+
+	err := r.db.DB.QueryRowContext(ctx, query, email).Scan(
+		&agent.AID,
+		&agent.Model,
+		&agent.Provider,
+		&agent.PublicKey,
+		&capabilitiesJSON,
+		&agent.Reputation,
+		&agent.Status,
+		&agent.MembershipLevel,
+		&agent.TrustLevel,
+		&agent.Headline,
+		&agent.Bio,
+		&agent.AvailabilityStatus,
+		&agent.BindingKeyHash,
+		&agent.OwnerEmail,
+		&agent.OwnerEmailVerified,
+		&agent.CreatedAt,
+		&agent.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("agent not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get agent by email: %w", err)
 	}
 
 	if err := json.Unmarshal(capabilitiesJSON, &agent.Capabilities); err != nil {
@@ -127,7 +226,7 @@ func (r *agentRepository) List(ctx context.Context, limit, offset int, status st
 	}
 
 	query := `
-		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, created_at, updated_at
+		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, binding_key_hash, owner_email, owner_email_verified_at, created_at, updated_at
 		FROM agents
 	`
 
@@ -164,6 +263,9 @@ func (r *agentRepository) List(ctx context.Context, limit, offset int, status st
 			&agent.Headline,
 			&agent.Bio,
 			&agent.AvailabilityStatus,
+			&agent.BindingKeyHash,
+			&agent.OwnerEmail,
+			&agent.OwnerEmailVerified,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
 		); err != nil {
@@ -191,7 +293,7 @@ func (r *agentRepository) Update(ctx context.Context, agent *models.Agent) error
 		UPDATE agents
 		SET model = $2, provider = $3, public_key = $4, capabilities = $5,
 		    reputation = $6, status = $7, membership_level = $8, trust_level = $9,
-		    headline = $10, bio = $11, availability_status = $12, updated_at = $13
+		    headline = $10, bio = $11, availability_status = $12, binding_key_hash = $13, owner_email = $14, owner_email_verified_at = $15, updated_at = $16
 		WHERE aid = $1
 	`
 
@@ -210,6 +312,9 @@ func (r *agentRepository) Update(ctx context.Context, agent *models.Agent) error
 		agent.Headline,
 		agent.Bio,
 		agent.AvailabilityStatus,
+		agent.BindingKeyHash,
+		agent.OwnerEmail,
+		agent.OwnerEmailVerified,
 		agent.UpdatedAt,
 	)
 
@@ -218,6 +323,33 @@ func (r *agentRepository) Update(ctx context.Context, agent *models.Agent) error
 	}
 
 	return nil
+}
+
+func (r *agentRepository) BindEmail(ctx context.Context, aid, email string, verifiedAt time.Time) (*models.Agent, error) {
+	query := `
+		UPDATE agents
+		SET owner_email = $2, owner_email_verified_at = $3, updated_at = $4
+		WHERE aid = $1
+	`
+
+	result, err := r.db.DB.ExecContext(ctx, query, aid, email, verifiedAt, time.Now())
+	if err != nil {
+		var pgErr *pq.Error
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("email is already bound to another agent")
+		}
+		return nil, fmt.Errorf("failed to bind email: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect bind email result: %w", err)
+	}
+	if rowsAffected == 0 {
+		return nil, fmt.Errorf("agent not found")
+	}
+
+	return r.GetByAID(ctx, aid)
 }
 
 // UpdateProfile 更新 Agent 资料

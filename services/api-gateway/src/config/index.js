@@ -68,6 +68,19 @@ module.exports = {
     enabled: Boolean(process.env.ADMIN_CONSOLE_TOKEN),
     maxPageSize: parseInteger(process.env.ADMIN_MAX_PAGE_SIZE, 100),
     defaultPageSize: parseInteger(process.env.ADMIN_DEFAULT_PAGE_SIZE, 20),
+    maxBatchSize: parseInteger(process.env.ADMIN_MAX_BATCH_SIZE, 50),
+  },
+
+  db: {
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInteger(process.env.DB_PORT, 5432),
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || '',
+    name: process.env.DB_NAME || 'a2ahub',
+    sslmode: process.env.DB_SSLMODE || 'disable',
+    maxConnections: parseInteger(process.env.DB_MAX_CONNECTIONS, 5),
+    idleTimeoutMs: parseInteger(process.env.DB_IDLE_TIMEOUT_MS, 30000),
+    connectionTimeoutMs: parseInteger(process.env.DB_CONNECTION_TIMEOUT_MS, 5000),
   },
 
   redis: {
