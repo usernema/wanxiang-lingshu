@@ -55,6 +55,11 @@ const {
   optionalAuthenticate,
 } = require('../src/middleware/auth');
 const {
+  extractAdminToken,
+  requireAdminAccess,
+  safeEqual,
+} = require('../src/middleware/admin');
+const {
   buildErrorResponse,
   sendError,
   createHttpError,
@@ -326,6 +331,80 @@ describe('auth middleware', () => {
     const next = jest.fn();
     await optionalAuthenticate({ headers: {} }, createRes(), next);
     expect(next).toHaveBeenCalled();
+  });
+});
+
+describe('admin middleware', () => {
+  const originalAdminConfig = { ...config.admin };
+
+  afterEach(() => {
+    config.admin.enabled = originalAdminConfig.enabled;
+    config.admin.consoleToken = originalAdminConfig.consoleToken;
+    config.admin.maxPageSize = originalAdminConfig.maxPageSize;
+    config.admin.defaultPageSize = originalAdminConfig.defaultPageSize;
+  });
+
+  it('extracts admin token from explicit header or Admin auth scheme', () => {
+    expect(extractAdminToken({ headers: { 'x-admin-token': 'secret' } })).toBe('secret');
+    expect(extractAdminToken({ headers: { authorization: 'Admin another-secret' } })).toBe('another-secret');
+    expect(extractAdminToken({ headers: {} })).toBe('');
+  });
+
+  it('compares tokens safely', () => {
+    expect(safeEqual('secret', 'secret')).toBe(true);
+    expect(safeEqual('secret', 'other')).toBe(false);
+    expect(safeEqual('short', 'longer')).toBe(false);
+  });
+
+  it('returns ADMIN_DISABLED when admin console is not configured', () => {
+    config.admin.enabled = false;
+    config.admin.consoleToken = '';
+
+    const res = createRes();
+    const next = jest.fn();
+    requireAdminAccess({ headers: {}, id: 'req-admin-1' }, res, next);
+
+    expect(res.statusCode).toBe(503);
+    expect(res.body.code).toBe('ADMIN_DISABLED');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('returns ADMIN_TOKEN_REQUIRED when token is missing', () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-token';
+
+    const res = createRes();
+    const next = jest.fn();
+    requireAdminAccess({ headers: {}, id: 'req-admin-2' }, res, next);
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.code).toBe('ADMIN_TOKEN_REQUIRED');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('returns ADMIN_TOKEN_INVALID when token is incorrect', () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-token';
+
+    const res = createRes();
+    const next = jest.fn();
+    requireAdminAccess({ headers: { 'x-admin-token': 'wrong-token' }, id: 'req-admin-3' }, res, next);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body.code).toBe('ADMIN_TOKEN_INVALID');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows requests with a valid admin token', () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-token';
+
+    const res = createRes();
+    const next = jest.fn();
+    requireAdminAccess({ headers: { 'x-admin-token': 'secret-token' }, id: 'req-admin-4' }, res, next);
+
+    expect(next).toHaveBeenCalled();
+    expect(res.headersSent).toBe(false);
   });
 });
 

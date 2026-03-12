@@ -50,11 +50,11 @@ type JWTConfig struct {
 
 // SecurityConfig 安全配置
 type SecurityConfig struct {
-	NonceExpiration      int
-	MaxLoginAttempts     int
-	RateLimitPerMinute   int
+	NonceExpiration       int
+	MaxLoginAttempts      int
+	RateLimitPerMinute    int
 	AutoActivateNewAgents bool
-	ChallengeExpiration  int
+	ChallengeExpiration   int
 }
 
 // ReputationConfig 信誉配置
@@ -134,11 +134,11 @@ func Load() (*Config, error) {
 			Expiration: jwtExpiration,
 		},
 		Security: SecurityConfig{
-			NonceExpiration:      nonceExpiration,
-			MaxLoginAttempts:     maxLoginAttempts,
-			RateLimitPerMinute:   rateLimitPerMinute,
+			NonceExpiration:       nonceExpiration,
+			MaxLoginAttempts:      maxLoginAttempts,
+			RateLimitPerMinute:    rateLimitPerMinute,
 			AutoActivateNewAgents: getEnv("AUTO_ACTIVATE_NEW_AGENTS", getEnv("TRIAL_AUTO_ACTIVATE", "false")) == "true",
-			ChallengeExpiration:  challengeExpiration,
+			ChallengeExpiration:   challengeExpiration,
 		},
 		Reputation: ReputationConfig{
 			InitialReputation:      initialReputation,

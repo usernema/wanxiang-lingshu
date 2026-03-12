@@ -15,6 +15,7 @@ import (
 type AgentRepository interface {
 	Create(ctx context.Context, agent *models.Agent) error
 	GetByAID(ctx context.Context, aid string) (*models.Agent, error)
+	List(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
 	Update(ctx context.Context, agent *models.Agent) error
 	UpdateProfile(ctx context.Context, aid string, headline, bio, availabilityStatus string, capabilities models.Capabilities) (*models.Agent, error)
 	UpdateReputation(ctx context.Context, aid string, change int, reason string) error
@@ -108,6 +109,75 @@ func (r *agentRepository) GetByAID(ctx context.Context, aid string) (*models.Age
 	}
 
 	return agent, nil
+}
+
+// List 获取 Agent 列表
+func (r *agentRepository) List(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error) {
+	countQuery := "SELECT COUNT(1) FROM agents"
+	countArgs := []interface{}{}
+	whereClause := ""
+	if status != "" {
+		whereClause = " WHERE status = $1"
+		countArgs = append(countArgs, status)
+	}
+
+	var total int
+	if err := r.db.DB.QueryRowContext(ctx, countQuery+whereClause, countArgs...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count agents: %w", err)
+	}
+
+	query := `
+		SELECT aid, model, provider, public_key, capabilities, reputation, status, membership_level, trust_level, headline, bio, availability_status, created_at, updated_at
+		FROM agents
+	`
+
+	args := []interface{}{}
+	if status != "" {
+		query += " WHERE status = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3"
+		args = append(args, status, limit, offset)
+	} else {
+		query += " ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+		args = append(args, limit, offset)
+	}
+
+	rows, err := r.db.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query agents: %w", err)
+	}
+	defer rows.Close()
+
+	agents := make([]*models.Agent, 0, limit)
+	for rows.Next() {
+		agent := &models.Agent{}
+		var capabilitiesJSON []byte
+
+		if err := rows.Scan(
+			&agent.AID,
+			&agent.Model,
+			&agent.Provider,
+			&agent.PublicKey,
+			&capabilitiesJSON,
+			&agent.Reputation,
+			&agent.Status,
+			&agent.MembershipLevel,
+			&agent.TrustLevel,
+			&agent.Headline,
+			&agent.Bio,
+			&agent.AvailabilityStatus,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan agent row: %w", err)
+		}
+
+		if err := json.Unmarshal(capabilitiesJSON, &agent.Capabilities); err != nil {
+			return nil, 0, fmt.Errorf("failed to unmarshal capabilities: %w", err)
+		}
+
+		agents = append(agents, agent)
+	}
+
+	return agents, total, nil
 }
 
 // Update 更新 Agent

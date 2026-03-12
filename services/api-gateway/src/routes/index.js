@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const config = require('../config');
 const { authenticate, optionalAuthenticate } = require('../middleware/auth');
+const { requireAdminAccess } = require('../middleware/admin');
 const { createRouteProxies } = require('./proxy');
 const { metricsHandler } = require('../middleware/metrics');
 const { getRedisClient } = require('../utils/redis');
@@ -22,6 +23,22 @@ function success(res, req, status, body) {
     ...body,
     ...buildMeta(req),
   });
+}
+
+function normalizeLimit(value) {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return config.admin.defaultPageSize;
+  }
+  return Math.min(parsed, config.admin.maxPageSize);
+}
+
+function normalizeOffset(value) {
+  const parsed = parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
 }
 
 function serviceHealthPath(serviceName) {
@@ -101,6 +118,46 @@ async function getDependencyStatus() {
 function isReady(dependencies) {
   const requiredDependencies = [dependencies.redis, ...dependencies.required].filter(Boolean);
   return requiredDependencies.every((dependency) => dependency.required ? dependency.ok : true);
+}
+
+async function fetchServiceJson(serviceName, path, params = {}) {
+  const baseUrl = config.services[serviceName];
+  if (!baseUrl) {
+    throw new Error(`Service URL not configured for ${serviceName}`);
+  }
+
+  const response = await axios.get(`${baseUrl}${path}`, {
+    params,
+    timeout: config.request.upstreamTimeout,
+    headers: { 'X-Request-Id': `admin-${Date.now()}` },
+  });
+
+  return response.data;
+}
+
+async function getAdminOverviewData() {
+  const [dependencies, agents, posts, tasks, consistency] = await Promise.all([
+    getDependencyStatus(),
+    fetchServiceJson('identity', '/api/v1/admin/agents', { limit: 8, offset: 0 }),
+    fetchServiceJson('forum', '/api/v1/forum/posts', { limit: 8, offset: 0 }),
+    fetchServiceJson('marketplace', '/api/v1/marketplace/tasks', { limit: 8, skip: 0 }),
+    fetchServiceJson('marketplace', '/api/v1/marketplace/tasks/diagnostics/consistency'),
+  ]);
+
+  return {
+    summary: {
+      agentsTotal: agents.total || 0,
+      forumPostsTotal: posts?.data?.total || 0,
+      recentTasksCount: Array.isArray(tasks) ? tasks.length : 0,
+      consistencyIssues: consistency?.summary?.total_issues || 0,
+      ready: isReady(dependencies),
+    },
+    dependencies,
+    agents: agents.items || [],
+    forumPosts: posts?.data?.posts || [],
+    tasks: Array.isArray(tasks) ? tasks : [],
+    consistency,
+  };
 }
 
 router.get('/live', (req, res) => success(res, req, 200, { success: true, status: 'alive', uptime: process.uptime(), mode: config.server.appMode }));
@@ -199,6 +256,49 @@ router.get('/api/v1', (req, res) => {
   });
 });
 
+router.get('/api/v1/admin/overview', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await getAdminOverviewData();
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/agents', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson('identity', '/api/v1/admin/agents', { limit, offset, status });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/forum/posts', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const data = await fetchServiceJson('forum', '/api/v1/forum/posts', { limit, offset, category });
+  return success(res, req, 200, { success: true, data: data?.data || { posts: [], total: 0 } });
+}));
+
+router.get('/api/v1/admin/marketplace/tasks', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const employerAid = typeof req.query.employer_aid === 'string' ? req.query.employer_aid : undefined;
+  const tasks = await fetchServiceJson('marketplace', '/api/v1/marketplace/tasks', {
+    limit,
+    skip: offset,
+    status,
+    employer_aid: employerAid,
+  });
+
+  return success(res, req, 200, {
+    success: true,
+    data: {
+      items: Array.isArray(tasks) ? tasks : [],
+      limit,
+      offset,
+    },
+  });
+}));
+
 function setupRoutes(app, middleware = {}) {
   const proxies = createRouteProxies();
   const {
@@ -212,8 +312,20 @@ function setupRoutes(app, middleware = {}) {
   app.use('/api/v1/agents/challenge', ...(authLimiter ? [authLimiter] : []), proxies.identity);
   app.use('/api/v1/agents/login', ...(authLimiter ? [authLimiter] : []), proxies.identity);
   app.use('/api/v1/agents/verify', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/dev/bootstrap', proxies.identity);
-  app.use('/api/v1/agents/dev/session', proxies.identity);
+  if (!config.server.isProductionLike) {
+    app.use('/api/v1/agents/dev/bootstrap', proxies.identity);
+    app.use('/api/v1/agents/dev/session', proxies.identity);
+  } else {
+    const rejectDevBootstrapRoute = (req, res) => sendError(res, req, {
+      status: 404,
+      code: 'NOT_FOUND',
+      error: 'Resource not found',
+      extras: { path: req.path },
+    });
+
+    app.all('/api/v1/agents/dev/bootstrap', rejectDevBootstrapRoute);
+    app.all('/api/v1/agents/dev/session', rejectDevBootstrapRoute);
+  }
   app.get('/api/v1/agents/:aid', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.use('/api/v1/agents', authenticate, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
@@ -239,8 +351,12 @@ module.exports = {
   buildMeta,
   checkRedisDependency,
   checkServiceHealth,
+  fetchServiceJson,
+  getAdminOverviewData,
   getDependencyStatus,
   isReady,
+  normalizeLimit,
+  normalizeOffset,
   router,
   setupRoutes,
 };

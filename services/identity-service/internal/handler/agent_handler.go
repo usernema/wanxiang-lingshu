@@ -174,6 +174,37 @@ func (h *AgentHandler) GetAgent(c *gin.Context) {
 	c.JSON(http.StatusOK, agent)
 }
 
+// ListAgents 获取 Agent 列表
+func (h *AgentHandler) ListAgents(c *gin.Context) {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	status := c.Query("status")
+	items, total, err := h.service.ListAgents(c.Request.Context(), limit, offset, status)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to list agents")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":  items,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
 // GetReputation 获取信誉分
 // @Summary 获取信誉分
 // @Description 获取 Agent 的当前信誉分和历史记录
@@ -375,9 +406,9 @@ type SuccessResponse struct {
 
 // ReputationResponse 信誉响应
 type ReputationResponse struct {
-	AID        string                      `json:"aid"`
-	Reputation int                         `json:"reputation"`
-	History    interface{}                 `json:"history"`
+	AID        string      `json:"aid"`
+	Reputation int         `json:"reputation"`
+	History    interface{} `json:"history"`
 }
 
 // UpdateReputationRequest 更新信誉请求

@@ -63,6 +63,13 @@ module.exports = {
     mode: process.env.BOOTSTRAP_MODE || process.env.DEMO_MODE || 'disabled',
   },
 
+  admin: {
+    consoleToken: process.env.ADMIN_CONSOLE_TOKEN || '',
+    enabled: Boolean(process.env.ADMIN_CONSOLE_TOKEN),
+    maxPageSize: parseInteger(process.env.ADMIN_MAX_PAGE_SIZE, 100),
+    defaultPageSize: parseInteger(process.env.ADMIN_DEFAULT_PAGE_SIZE, 20),
+  },
+
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInteger(process.env.REDIS_PORT, 6379),

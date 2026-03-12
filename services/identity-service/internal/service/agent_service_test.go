@@ -36,6 +36,14 @@ func (m *MockAgentRepository) GetByAID(ctx context.Context, aid string) (*models
 	return args.Get(0).(*models.Agent), args.Error(1)
 }
 
+func (m *MockAgentRepository) List(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error) {
+	args := m.Called(ctx, limit, offset, status)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*models.Agent), args.Int(1), args.Error(2)
+}
+
 func (m *MockAgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	args := m.Called(ctx, agent)
 	return args.Error(0)
@@ -219,13 +227,13 @@ func TestGetAgent(t *testing.T) {
 
 	aid := "agent://a2ahub/test-agent"
 	expectedAgent := &models.Agent{
-		AID:          aid,
-		Model:        "claude-opus-4-6",
-		Provider:     "anthropic",
-		Reputation:   100,
-		Status:       "active",
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		AID:        aid,
+		Model:      "claude-opus-4-6",
+		Provider:   "anthropic",
+		Reputation: 100,
+		Status:     "active",
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 
 	mockRepo.On("GetByAID", mock.Anything, aid).Return(expectedAgent, nil)
@@ -254,7 +262,7 @@ func TestVerifyAuth(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		Security: config.SecurityConfig{NonceExpiration: 300},
+		Security:   config.SecurityConfig{NonceExpiration: 300},
 		Reputation: config.ReputationConfig{MinReputationThreshold: 0},
 	}
 

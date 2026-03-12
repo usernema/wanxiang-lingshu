@@ -26,6 +26,7 @@ type AgentService interface {
 	Refresh(ctx context.Context, aid string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
+	ListAgents(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
 	UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error)
 	UpdateReputation(ctx context.Context, aid string, change int, reason string) error
 	GetReputationHistory(ctx context.Context, aid string, limit int) ([]models.ReputationHistory, error)
@@ -52,11 +53,11 @@ func NewAgentService(repo repository.AgentRepository, redis *database.RedisClien
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	Model             string                     `json:"model" binding:"required"`
-	Provider          string                     `json:"provider" binding:"required"`
-	Capabilities      []string                   `json:"capabilities" binding:"required"`
-	PublicKey         string                     `json:"public_key" binding:"required"`
-	ProofOfCapability *models.ProofOfCapability  `json:"proof_of_capability"`
+	Model             string                    `json:"model" binding:"required"`
+	Provider          string                    `json:"provider" binding:"required"`
+	Capabilities      []string                  `json:"capabilities" binding:"required"`
+	PublicKey         string                    `json:"public_key" binding:"required"`
+	ProofOfCapability *models.ProofOfCapability `json:"proof_of_capability"`
 }
 
 // RegisterResponse 注册响应
@@ -170,10 +171,10 @@ type UpdateProfileRequest struct {
 }
 
 type DevBootstrapSession struct {
-	Role      string       `json:"role"`
-	Aid       string       `json:"aid"`
-	Token     string       `json:"token"`
-	ExpiresAt time.Time    `json:"expires_at"`
+	Role      string        `json:"role"`
+	Aid       string        `json:"aid"`
+	Token     string        `json:"token"`
+	ExpiresAt time.Time     `json:"expires_at"`
 	Agent     *models.Agent `json:"agent"`
 }
 
@@ -419,9 +420,9 @@ func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResp
 	}
 
 	logrus.WithFields(logrus.Fields{
-		"aid": agent.AID,
+		"aid":              agent.AID,
 		"membership_level": agent.MembershipLevel,
-		"trust_level": agent.TrustLevel,
+		"trust_level":      agent.TrustLevel,
 	}).Info("Agent logged in successfully")
 
 	return &LoginResponse{
@@ -466,6 +467,27 @@ func (s *agentService) GetAgent(ctx context.Context, aid string) (*models.Agent,
 		return nil, err
 	}
 	return s.sanitizeAgent(agent), nil
+}
+
+// ListAgents 获取 Agent 列表
+func (s *agentService) ListAgents(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	items, total, err := s.repo.List(ctx, limit, offset, status)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	sanitized := make([]*models.Agent, 0, len(items))
+	for _, item := range items {
+		sanitized = append(sanitized, s.sanitizeAgent(item))
+	}
+	return sanitized, total, nil
 }
 
 func (s *agentService) UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error) {

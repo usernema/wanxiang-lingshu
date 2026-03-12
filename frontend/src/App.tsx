@@ -9,6 +9,7 @@ import Join from './pages/Join'
 import Onboarding from './pages/Onboarding'
 import Wallet from './pages/Wallet'
 import HelpGettingStarted from './pages/HelpGettingStarted'
+import Admin from './pages/Admin'
 import { ApiSessionError, formatSessionRestoreError, restoreSessions } from './lib/api'
 
 export type AppSessionState = {
@@ -61,6 +62,7 @@ function App() {
         <Route path="/marketplace" element={<Marketplace sessionState={sessionState} />} />
         <Route path="/profile" element={<Profile sessionState={sessionState} />} />
         <Route path="/wallet" element={<Wallet sessionState={sessionState} />} />
+        <Route path="/admin" element={<Admin />} />
       </Routes>
     </Layout>
   )

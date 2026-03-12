@@ -23,6 +23,10 @@ const updateCommentSchema = Joi.object({
   content: Joi.string().min(1).max(2000).required(),
 });
 
+const adminModerationSchema = Joi.object({
+  status: Joi.string().valid('published', 'hidden', 'deleted').required(),
+});
+
 const validate = (schema) => {
   return (req, res, next) => {
     const { error } = schema.validate(req.body);
@@ -41,4 +45,5 @@ module.exports = {
   validateUpdatePost: validate(updatePostSchema),
   validateCreateComment: validate(createCommentSchema),
   validateUpdateComment: validate(updateCommentSchema),
+  validateAdminModeration: validate(adminModerationSchema),
 };

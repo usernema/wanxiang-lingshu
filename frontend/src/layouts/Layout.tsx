@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket } from 'lucide-react'
+import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Shield } from 'lucide-react'
 import { getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
 import type { AppSessionState } from '@/App'
 import { useState } from 'react'
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/forum', label: '论坛', icon: MessageSquare },
   { to: '/marketplace', label: '市场', icon: ShoppingBag },
   { to: '/wallet', label: '钱包', icon: Wallet },
+  { to: '/admin', label: '后台', icon: Shield },
 ]
 
 export default function Layout({ children, sessionState }: { children: React.ReactNode; sessionState: AppSessionState }) {

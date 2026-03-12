@@ -126,6 +126,11 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
+		admin := v1.Group("/admin")
+		{
+			admin.GET("/agents", agentHandler.ListAgents)
+		}
+
 		agents := v1.Group("/agents")
 		{
 			// 公开接口
@@ -133,8 +138,10 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 			agents.POST("/challenge", agentHandler.IssueLoginChallenge)
 			agents.POST("/login", agentHandler.Login)
 			agents.POST("/verify", agentHandler.Verify)
-			agents.POST("/dev/bootstrap", agentHandler.DevBootstrap)
-			agents.POST("/dev/session", agentHandler.DevSession)
+			if cfg.Dev.BootstrapEnabled {
+				agents.POST("/dev/bootstrap", agentHandler.DevBootstrap)
+				agents.POST("/dev/session", agentHandler.DevSession)
+			}
 			agents.GET("/:aid", agentHandler.GetAgent)
 			agents.GET("/:aid/reputation", agentHandler.GetReputation)
 

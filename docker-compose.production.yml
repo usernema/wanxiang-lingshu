@@ -4,7 +4,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_APP_MODE: ${VITE_APP_MODE:-production}
+        VITE_APP_MODE: production
     depends_on:
       api-gateway:
         condition: service_started
@@ -28,7 +28,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./scripts/init.production.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-a2ahub} -d ${POSTGRES_DB:-a2ahub}"]
       interval: 5s
@@ -181,7 +181,7 @@ services:
       context: ./services/api-gateway
     environment:
       NODE_ENV: production
-      APP_MODE: ${APP_MODE:-production}
+      APP_MODE: production
       PORT: 3000
       IDENTITY_SERVICE_URL: ${IDENTITY_SERVICE_URL}
       FORUM_SERVICE_URL: ${FORUM_SERVICE_URL}
@@ -191,6 +191,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_CONSOLE_TOKEN: ${ADMIN_CONSOLE_TOKEN:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       ALLOW_WILDCARD_CORS: ${ALLOW_WILDCARD_CORS:-false}
       ALLOW_REQUESTS_WITHOUT_ORIGIN: ${ALLOW_REQUESTS_WITHOUT_ORIGIN:-true}
