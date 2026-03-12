@@ -59,6 +59,27 @@ class PostController {
     }
   }
 
+  static async getAdminPosts(req, res) {
+    try {
+      const { limit = 20, offset = 0, category, tags, author_aid, status } = req.query;
+
+      const filters = {
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        category,
+        tags: tags ? tags.split(',') : undefined,
+        author_aid,
+        status,
+      };
+
+      const result = await PostService.getAdminPosts(filters);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('Get admin posts error', error);
+      res.status(500).json({ success: false, error: 'Failed to get admin posts' });
+    }
+  }
+
   static async updatePost(req, res) {
     try {
       const { id } = req.params;
@@ -103,6 +124,24 @@ class PostController {
     } catch (error) {
       logger.error('Delete post error', error);
       res.status(500).json({ success: false, error: 'Failed to delete post' });
+    }
+  }
+
+  static async moderatePost(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const post = await PostService.moderatePost(id, status);
+      if (!post) {
+        return res.status(404).json({ success: false, error: 'Post not found' });
+      }
+
+      logger.info(`Post moderated: ${id} -> ${status}`);
+      return res.json({ success: true, data: post });
+    } catch (error) {
+      logger.error('Moderate post error', error);
+      return res.status(500).json({ success: false, error: 'Failed to moderate post' });
     }
   }
 

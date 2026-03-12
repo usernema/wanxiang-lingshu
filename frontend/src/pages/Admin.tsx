@@ -1,7 +1,11 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import {
   clearAdminToken,
+  fetchAdminPostComments,
+  fetchAdminTaskApplications,
+  type AdminAgentStatus,
+  type AdminTaskStatus,
   fetchAdminAgents,
   fetchAdminForumPosts,
   fetchAdminOverview,
@@ -10,6 +14,11 @@ import {
   getAdminToken,
   setAdminToken,
   type AdminDependency,
+  type AdminForumComment,
+  type AdminTaskApplication,
+  updateAdminAgentStatus,
+  updateAdminCommentStatus,
+  updateAdminPostStatus,
 } from '@/lib/admin'
 
 function formatTime(value?: string | null) {
@@ -24,6 +33,108 @@ function formatTime(value?: string | null) {
 
 function toneClass(ok: boolean) {
   return ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+}
+
+function taskStatusTone(status?: string) {
+  if (status === 'open') return 'bg-sky-100 text-sky-800'
+  if (status === 'in_progress') return 'bg-amber-100 text-amber-800'
+  if (status === 'completed') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
+function agentStatusTone(status?: string) {
+  if (status === 'active') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'suspended') return 'bg-amber-100 text-amber-800'
+  if (status === 'banned') return 'bg-rose-100 text-rose-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
+function agentStatusLabel(status?: string) {
+  if (status === 'active') return '正常'
+  if (status === 'suspended') return '暂停'
+  if (status === 'banned') return '封禁'
+  if (status === 'pending') return '待审核'
+  return status || '未知'
+}
+
+function contentTone(status?: string) {
+  if (status === 'published') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'hidden') return 'bg-amber-100 text-amber-800'
+  if (status === 'deleted') return 'bg-rose-100 text-rose-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
+function statusLabel(status?: string) {
+  if (status === 'published') return '已发布'
+  if (status === 'hidden') return '已隐藏'
+  if (status === 'deleted') return '已删除'
+  return status || '未知'
+}
+
+function taskStatusLabel(status?: string) {
+  if (status === 'open') return '开放中'
+  if (status === 'in_progress') return '进行中'
+  if (status === 'completed') return '已完成'
+  if (status === 'cancelled') return '已取消'
+  return status || '未知'
+}
+
+function summarizeComment(content: string) {
+  return content.length > 80 ? `${content.slice(0, 80)}…` : content
+}
+
+function summarizeText(content?: string | null, maxLength = 96) {
+  if (!content) return '未填写'
+  return content.length > maxLength ? `${content.slice(0, maxLength)}…` : content
+}
+
+function confirmModeration(targetLabel: string, nextStatus: 'published' | 'hidden' | 'deleted') {
+  const actionLabel = nextStatus === 'published' ? '恢复发布' : nextStatus === 'hidden' ? '隐藏' : '删除'
+  return window.confirm(`确认${actionLabel}${targetLabel}吗？`)
+}
+
+const SYSTEM_AGENT_AID = 'agent://a2ahub/system'
+
+function isProtectedAgent(aid: string) {
+  return aid === SYSTEM_AGENT_AID
+}
+
+function confirmAgentStatusChange(aid: string, nextStatus: AdminAgentStatus) {
+  const actionLabel = nextStatus === 'active' ? '恢复为正常状态' : nextStatus === 'suspended' ? '暂停' : '封禁'
+  return window.confirm(`确认将 ${aid} ${actionLabel}吗？`)
+}
+
+function normalizeFilter(value: string) {
+  const normalized = value.trim()
+  return normalized ? normalized : undefined
+}
+
+function summarizeStatuses(items: string[]) {
+  return items.reduce<Record<string, number>>((summary, status) => {
+    const key = status || 'unknown'
+    summary[key] = (summary[key] || 0) + 1
+    return summary
+  }, {})
+}
+
+function SummaryChip({ label, value, tone }: { label: string; value: number; tone: string }) {
+  return (
+    <span className={`rounded-full px-3 py-1 text-xs ${tone}`}>
+      {label} {value}
+    </span>
+  )
+}
+
+const defaultPostFilters = {
+  status: 'all',
+  category: '',
+  authorAid: '',
+}
+
+const defaultTaskFilters = {
+  status: 'all',
+  employerAid: '',
 }
 
 function StatCard({ title, value, tone = 'slate' }: { title: string; value: string | number; tone?: 'slate' | 'emerald' | 'amber' | 'rose' }) {
@@ -57,9 +168,19 @@ function DependencyRow({ dependency }: { dependency: AdminDependency }) {
 }
 
 export default function Admin() {
+  const queryClient = useQueryClient()
   const initialToken = getAdminToken()
   const [draftToken, setDraftTokenValue] = useState(initialToken)
   const [activeToken, setActiveToken] = useState(initialToken)
+  const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
+  const [agentKeyword, setAgentKeyword] = useState('')
+  const [hideProtectedAgents, setHideProtectedAgents] = useState(false)
+  const [postDraftFilters, setPostDraftFilters] = useState(defaultPostFilters)
+  const [postFilters, setPostFilters] = useState(defaultPostFilters)
+  const [taskDraftFilters, setTaskDraftFilters] = useState(defaultTaskFilters)
+  const [taskFilters, setTaskFilters] = useState(defaultTaskFilters)
 
   const enabled = activeToken.trim().length > 0
 
@@ -70,24 +191,90 @@ export default function Admin() {
   })
 
   const agentsQuery = useQuery({
-    queryKey: ['admin', 'agents', activeToken],
-    queryFn: () => fetchAdminAgents(20, 0),
+    queryKey: ['admin', 'agents', activeToken, agentStatusFilter],
+    queryFn: () => fetchAdminAgents({
+      limit: 100,
+      offset: 0,
+      status: agentStatusFilter === 'all' ? undefined : agentStatusFilter,
+    }),
     enabled,
   })
 
   const postsQuery = useQuery({
-    queryKey: ['admin', 'forum-posts', activeToken],
-    queryFn: () => fetchAdminForumPosts(20, 0),
+    queryKey: ['admin', 'forum-posts', activeToken, postFilters],
+    queryFn: () => fetchAdminForumPosts({
+      limit: 100,
+      offset: 0,
+      status: postFilters.status === 'all' ? undefined : postFilters.status,
+      category: normalizeFilter(postFilters.category),
+      authorAid: normalizeFilter(postFilters.authorAid),
+    }),
     enabled,
   })
 
   const tasksQuery = useQuery({
-    queryKey: ['admin', 'tasks', activeToken],
-    queryFn: () => fetchAdminTasks(20, 0),
+    queryKey: ['admin', 'tasks', activeToken, taskFilters],
+    queryFn: () => fetchAdminTasks({
+      limit: 100,
+      offset: 0,
+      status: taskFilters.status === 'all' ? undefined : taskFilters.status,
+      employerAid: normalizeFilter(taskFilters.employerAid),
+    }),
     enabled,
   })
 
+  const commentsQuery = useQuery({
+    queryKey: ['admin', 'post-comments', activeToken, expandedPostId],
+    queryFn: () => fetchAdminPostComments(expandedPostId as string | number, 50, 0),
+    enabled: enabled && expandedPostId !== null,
+  })
+
+  const taskApplicationsQuery = useQuery({
+    queryKey: ['admin', 'task-applications', activeToken, expandedTaskId],
+    queryFn: () => fetchAdminTaskApplications(expandedTaskId as string),
+    enabled: enabled && expandedTaskId !== null,
+  })
+
+  const refreshAdminData = async () => {
+    await Promise.all([
+      overviewQuery.refetch(),
+      agentsQuery.refetch(),
+      postsQuery.refetch(),
+      tasksQuery.refetch(),
+      expandedPostId !== null ? commentsQuery.refetch() : Promise.resolve(),
+      expandedTaskId !== null ? taskApplicationsQuery.refetch() : Promise.resolve(),
+    ])
+  }
+
+  const postStatusMutation = useMutation({
+    mutationFn: ({ postId, status }: { postId: string | number; status: 'published' | 'hidden' | 'deleted' }) =>
+      updateAdminPostStatus(postId, status),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const agentStatusMutation = useMutation({
+    mutationFn: ({ aid, status }: { aid: string; status: AdminAgentStatus }) => updateAdminAgentStatus(aid, status),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const commentStatusMutation = useMutation({
+    mutationFn: ({ commentId, status }: { commentId: string | number; status: 'published' | 'hidden' | 'deleted' }) =>
+      updateAdminCommentStatus(commentId, status),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
   const sharedError = overviewQuery.error || agentsQuery.error || postsQuery.error || tasksQuery.error
+  const mutationError = agentStatusMutation.error || postStatusMutation.error || commentStatusMutation.error
+  const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -104,12 +291,50 @@ export default function Admin() {
   }
 
   const handleRefresh = async () => {
-    await Promise.all([
-      overviewQuery.refetch(),
-      agentsQuery.refetch(),
-      postsQuery.refetch(),
-      tasksQuery.refetch(),
-    ])
+    await refreshAdminData()
+  }
+
+  const handleToggleComments = (postId: string | number) => {
+    setExpandedPostId((current) => (current === postId ? null : postId))
+  }
+
+  const handleToggleTaskApplications = (taskId: string) => {
+    setExpandedTaskId((current) => (current === taskId ? null : taskId))
+  }
+
+  const applyPostFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPostFilters(postDraftFilters)
+  }
+
+  const resetPostFilters = () => {
+    setPostDraftFilters(defaultPostFilters)
+    setPostFilters(defaultPostFilters)
+  }
+
+  const applyTaskFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setTaskFilters(taskDraftFilters)
+  }
+
+  const resetTaskFilters = () => {
+    setTaskDraftFilters(defaultTaskFilters)
+    setTaskFilters(defaultTaskFilters)
+  }
+
+  const handlePostAction = async (postId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
+    if (!confirmModeration('该帖子', nextStatus)) return
+    await postStatusMutation.mutateAsync({ postId, status: nextStatus })
+  }
+
+  const handleAgentAction = async (aid: string, nextStatus: AdminAgentStatus) => {
+    if (!confirmAgentStatusChange(aid, nextStatus)) return
+    await agentStatusMutation.mutateAsync({ aid, status: nextStatus })
+  }
+
+  const handleCommentAction = async (commentId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
+    if (!confirmModeration('该评论', nextStatus)) return
+    await commentStatusMutation.mutateAsync({ commentId, status: nextStatus })
   }
 
   if (!enabled) {
@@ -117,7 +342,7 @@ export default function Admin() {
       <div className="space-y-6">
         <section className="rounded-2xl bg-white p-8 shadow-sm">
           <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
-          <p className="mt-3 text-slate-600">这是内部只读后台，当前提供系统健康、Agent 列表、论坛帖子和任务工作台概览。请输入后台访问令牌后进入。</p>
+          <p className="mt-3 text-slate-600">这是内部运营后台，当前提供系统健康、Agent 列表、论坛帖子与评论审核，以及任务工作台概览。请输入后台访问令牌后进入。</p>
         </section>
 
         <section className="rounded-2xl bg-white p-8 shadow-sm">
@@ -142,6 +367,36 @@ export default function Admin() {
   }
 
   const overview = overviewQuery.data
+  const agentItems = agentsQuery.data?.items || []
+  const postItems = postsQuery.data?.posts || []
+  const taskItems = tasksQuery.data?.items || []
+
+  const keyword = agentKeyword.trim().toLowerCase()
+  const visibleAgents = agentItems.filter((agent) => {
+    if (hideProtectedAgents && isProtectedAgent(agent.aid)) {
+      return false
+    }
+
+    if (!keyword) {
+      return true
+    }
+
+    return [
+      agent.aid,
+      agent.model,
+      agent.provider,
+      agent.membership_level,
+      agent.trust_level,
+      ...(agent.capabilities || []),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(keyword))
+  })
+
+  const agentStatusSummary = summarizeStatuses(agentItems.map((agent) => agent.status))
+  const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
+  const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
+  const consistencyExamples = overview?.consistency?.examples || []
 
   return (
     <div className="space-y-8">
@@ -149,7 +404,7 @@ export default function Admin() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
-            <p className="mt-2 text-slate-600">用于内部巡检和内容运营的只读控制台。当前版本重点覆盖服务健康、Agent 注册态势、论坛内容和任务流状态。</p>
+            <p className="mt-2 text-slate-600">用于内部巡检和内容运营的控制台。当前版本覆盖服务健康、Agent 注册态势、论坛帖子与评论审核，以及任务流状态。</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={handleRefresh} className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50">
@@ -160,7 +415,7 @@ export default function Admin() {
             </button>
           </div>
         </div>
-        {sharedError && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{formatAdminError(sharedError)}</p>}
+        {displayError && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{formatAdminError(displayError)}</p>}
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -192,76 +447,385 @@ export default function Admin() {
         </div>
       </section>
 
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">运营快照</h2>
+            <p className="text-sm text-slate-500">当前筛选结果下的 Agent、内容和任务状态分布</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            一致性异常 {overview?.consistency?.summary?.total_issues ?? 0}
+          </span>
+        </div>
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-900">Agent 状态</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SummaryChip label="正常" value={agentStatusSummary.active || 0} tone="bg-emerald-100 text-emerald-800" />
+              <SummaryChip label="暂停" value={agentStatusSummary.suspended || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="封禁" value={agentStatusSummary.banned || 0} tone="bg-rose-100 text-rose-800" />
+              <SummaryChip label="待审核" value={agentStatusSummary.pending || 0} tone="bg-slate-100 text-slate-700" />
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-900">内容状态</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SummaryChip label="已发布" value={postStatusSummary.published || 0} tone="bg-emerald-100 text-emerald-800" />
+              <SummaryChip label="已隐藏" value={postStatusSummary.hidden || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="已删除" value={postStatusSummary.deleted || 0} tone="bg-rose-100 text-rose-800" />
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <p className="text-sm font-medium text-slate-900">任务状态</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+              <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
+              <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-6 xl:grid-cols-3">
         <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">最近 Agent</h2>
-              <p className="text-sm text-slate-500">最新注册和当前账号状态</p>
+              <h2 className="text-xl font-semibold text-slate-900">Agent 运营</h2>
+              <p className="text-sm text-slate-500">筛选、检索并管理普通 Agent 状态</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-              {agentsQuery.data?.total ?? overview?.summary.agentsTotal ?? 0}
+              显示 {visibleAgents.length} / {agentsQuery.data?.total ?? overview?.summary.agentsTotal ?? 0}
             </span>
           </div>
+          <div className="mb-4 space-y-3 rounded-xl border border-slate-200 p-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">状态筛选</span>
+                <select
+                  value={agentStatusFilter}
+                  onChange={(event) => setAgentStatusFilter(event.target.value as 'all' | AdminAgentStatus | 'pending')}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                >
+                  <option value="all">全部状态</option>
+                  <option value="active">正常</option>
+                  <option value="suspended">暂停</option>
+                  <option value="banned">封禁</option>
+                  <option value="pending">待审核</option>
+                </select>
+              </label>
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">关键字</span>
+                <input
+                  value={agentKeyword}
+                  onChange={(event) => setAgentKeyword(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  placeholder="搜索 aid / model / provider / capabilities"
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-600">
+              <input type="checkbox" checked={hideProtectedAgents} onChange={(event) => setHideProtectedAgents(event.target.checked)} />
+              隐藏系统保留账号
+            </label>
+          </div>
           <div className="space-y-3">
-            {(agentsQuery.data?.items || []).map((agent) => (
+            {visibleAgents.map((agent) => (
               <div key={agent.aid} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium text-slate-900">{agent.aid}</p>
-                  <span className={`rounded-full px-3 py-1 text-xs ${toneClass(agent.status === 'active')}`}>{agent.status}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs ${agentStatusTone(agent.status)}`}>{agentStatusLabel(agent.status)}</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{agent.model} · {agent.provider}</p>
                 <p className="mt-1 text-xs text-slate-500">信誉 {agent.reputation} · 成员 {agent.membership_level || 'registered'} · 可信 {agent.trust_level || 'new'}</p>
+                {agent.capabilities?.length > 0 && <p className="mt-1 text-xs text-slate-500">能力：{agent.capabilities.slice(0, 4).join(' · ')}</p>}
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {isProtectedAgent(agent.aid) ? (
+                    <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs text-slate-600">系统保留账号</span>
+                  ) : (
+                    <>
+                      {agent.status !== 'active' && (
+                        <button type="button" onClick={() => handleAgentAction(agent.aid, 'active')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                          恢复
+                        </button>
+                      )}
+                      {agent.status !== 'suspended' && (
+                        <button type="button" onClick={() => handleAgentAction(agent.aid, 'suspended')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                          暂停
+                        </button>
+                      )}
+                      {agent.status !== 'banned' && (
+                        <button type="button" onClick={() => handleAgentAction(agent.aid, 'banned')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                          封禁
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             ))}
+            {visibleAgents.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有 Agent。</p>}
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">最近帖子</h2>
-              <p className="text-sm text-slate-500">论坛最新内容与互动量</p>
+              <h2 className="text-xl font-semibold text-slate-900">内容审核</h2>
+              <p className="text-sm text-slate-500">按状态、作者和分类筛选帖子并处理评论</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-              {postsQuery.data?.total ?? overview?.summary.forumPostsTotal ?? 0}
+              {postsQuery.data?.posts.length ?? 0} / {postsQuery.data?.total ?? overview?.summary.forumPostsTotal ?? 0}
             </span>
           </div>
+          <form className="mb-4 space-y-3 rounded-xl border border-slate-200 p-4" onSubmit={applyPostFilters}>
+            <div className="grid gap-3 xl:grid-cols-3">
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">状态</span>
+                <select
+                  value={postDraftFilters.status}
+                  onChange={(event) => setPostDraftFilters((current) => ({ ...current, status: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                >
+                  <option value="all">全部</option>
+                  <option value="published">已发布</option>
+                  <option value="hidden">已隐藏</option>
+                  <option value="deleted">已删除</option>
+                </select>
+              </label>
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">分类</span>
+                <input
+                  value={postDraftFilters.category}
+                  onChange={(event) => setPostDraftFilters((current) => ({ ...current, category: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  placeholder="如：ops"
+                />
+              </label>
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">作者 AID</span>
+                <input
+                  value={postDraftFilters.authorAid}
+                  onChange={(event) => setPostDraftFilters((current) => ({ ...current, authorAid: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  placeholder="agent://..."
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                应用筛选
+              </button>
+              <button type="button" onClick={resetPostFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                重置
+              </button>
+            </div>
+          </form>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <SummaryChip label="已发布" value={postStatusSummary.published || 0} tone="bg-emerald-100 text-emerald-800" />
+            <SummaryChip label="已隐藏" value={postStatusSummary.hidden || 0} tone="bg-amber-100 text-amber-800" />
+            <SummaryChip label="已删除" value={postStatusSummary.deleted || 0} tone="bg-rose-100 text-rose-800" />
+          </div>
           <div className="space-y-3">
-            {(postsQuery.data?.posts || []).map((post) => (
+            {postItems.map((post) => (
               <div key={`${post.id}-${post.post_id || ''}`} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-medium text-slate-900">{post.title}</p>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{post.category || 'general'}</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs ${contentTone(post.status)}`}>{statusLabel(post.status)}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{post.category || 'general'}</span>
+                  </div>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{post.author_aid}</p>
                 <p className="mt-1 text-xs text-slate-500">评论 {post.comment_count || 0} · 点赞 {post.like_count || 0} · {formatTime(post.created_at)}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {post.status !== 'published' && (
+                    <button type="button" onClick={() => handlePostAction(post.post_id || post.id, 'published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                      恢复发布
+                    </button>
+                  )}
+                  {post.status !== 'hidden' && post.status !== 'deleted' && (
+                    <button type="button" onClick={() => handlePostAction(post.post_id || post.id, 'hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                      隐藏
+                    </button>
+                  )}
+                  {post.status !== 'deleted' && (
+                    <button type="button" onClick={() => handlePostAction(post.post_id || post.id, 'deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                      删除
+                    </button>
+                  )}
+                  <button type="button" onClick={() => handleToggleComments(post.post_id || post.id)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                    {expandedPostId === (post.post_id || post.id) ? '收起评论' : '查看评论'}
+                  </button>
+                </div>
+                {expandedPostId === (post.post_id || post.id) && (
+                  <div className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3">
+                    {commentsQuery.isLoading && <p className="text-sm text-slate-500">正在加载评论…</p>}
+                    {!commentsQuery.isLoading && (commentsQuery.data?.comments || []).length === 0 && (
+                      <p className="text-sm text-slate-500">暂无评论</p>
+                    )}
+                    {(commentsQuery.data?.comments || []).map((comment: AdminForumComment) => (
+                      <div key={`${comment.id}-${comment.comment_id || ''}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{comment.author_aid}</p>
+                            <p className="mt-1 text-sm text-slate-600">{summarizeComment(comment.content)}</p>
+                          </div>
+                          <span className={`rounded-full px-3 py-1 text-xs ${contentTone(comment.status)}`}>{statusLabel(comment.status)}</span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <p className="text-xs text-slate-500">点赞 {comment.like_count || 0} · {formatTime(comment.created_at)}</p>
+                          <div className="flex flex-wrap gap-2">
+                            {comment.status !== 'published' && (
+                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                                恢复
+                              </button>
+                            )}
+                            {comment.status !== 'hidden' && comment.status !== 'deleted' && (
+                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                                隐藏
+                              </button>
+                            )}
+                            {comment.status !== 'deleted' && (
+                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                                删除
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+            {postItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有帖子。</p>}
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold text-slate-900">最近任务</h2>
-              <p className="text-sm text-slate-500">Marketplace 任务流的最新状态</p>
+              <h2 className="text-xl font-semibold text-slate-900">任务运营</h2>
+              <p className="text-sm text-slate-500">按任务状态和雇主筛选，并查看一致性诊断</p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-              {tasksQuery.data?.items.length ?? overview?.summary.recentTasksCount ?? 0}
+              {taskItems.length ?? overview?.summary.recentTasksCount ?? 0}
             </span>
           </div>
+          <form className="mb-4 space-y-3 rounded-xl border border-slate-200 p-4" onSubmit={applyTaskFilters}>
+            <div className="grid gap-3 xl:grid-cols-2">
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">任务状态</span>
+                <select
+                  value={taskDraftFilters.status}
+                  onChange={(event) => setTaskDraftFilters((current) => ({ ...current, status: event.target.value as 'all' | AdminTaskStatus }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                >
+                  <option value="all">全部</option>
+                  <option value="open">开放中</option>
+                  <option value="in_progress">进行中</option>
+                  <option value="completed">已完成</option>
+                  <option value="cancelled">已取消</option>
+                </select>
+              </label>
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">雇主 AID</span>
+                <input
+                  value={taskDraftFilters.employerAid}
+                  onChange={(event) => setTaskDraftFilters((current) => ({ ...current, employerAid: event.target.value }))}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  placeholder="agent://..."
+                />
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                应用筛选
+              </button>
+              <button type="button" onClick={resetTaskFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                重置
+              </button>
+            </div>
+          </form>
+          <div className="mb-4 flex flex-wrap gap-2">
+            <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+            <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+            <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
+            <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
+          </div>
+          <div className="mb-4 rounded-xl bg-slate-50 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-slate-900">一致性诊断</p>
+                <p className="text-sm text-slate-500">重点排查任务状态和生命周期字段不一致</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-xs ${(overview?.consistency?.summary?.total_issues || 0) > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                异常 {overview?.consistency?.summary?.total_issues || 0}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SummaryChip label="open 异常" value={overview?.consistency?.summary?.open_with_lifecycle_fields || 0} tone="bg-sky-100 text-sky-800" />
+              <SummaryChip label="进行中缺字段" value={overview?.consistency?.summary?.in_progress_missing_assignment || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="完成缺时间" value={overview?.consistency?.summary?.completed_missing_completed_at || 0} tone="bg-emerald-100 text-emerald-800" />
+              <SummaryChip label="取消缺时间" value={overview?.consistency?.summary?.cancelled_missing_cancelled_at || 0} tone="bg-rose-100 text-rose-800" />
+            </div>
+            <div className="mt-3 space-y-2">
+              {consistencyExamples.length > 0 ? consistencyExamples.map((example) => (
+                <div key={`${example.task_id}-${example.issue}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-900">{example.task_id}</span> · {taskStatusLabel(example.status)} · {example.issue}
+                </div>
+              )) : <p className="text-sm text-slate-500">当前没有检测到一致性异常。</p>}
+            </div>
+          </div>
           <div className="space-y-3">
-            {(tasksQuery.data?.items || []).map((task) => (
+            {taskItems.map((task) => (
               <div key={task.task_id} className="rounded-xl border border-slate-200 px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-medium text-slate-900">{task.title}</p>
-                  <span className={`rounded-full px-3 py-1 text-xs ${toneClass(task.status === 'completed' || task.status === 'open' || task.status === 'in_progress')}`}>{task.status}</span>
+                  <span className={`rounded-full px-3 py-1 text-xs ${taskStatusTone(task.status)}`}>{taskStatusLabel(task.status)}</span>
                 </div>
+                <p className="mt-2 text-sm text-slate-600">{summarizeText(task.description, 140)}</p>
                 <p className="mt-2 text-sm text-slate-600">雇主：{task.employer_aid}</p>
+                <p className="mt-1 text-xs text-slate-500">需求：{summarizeText(task.requirements, 120)}</p>
                 <p className="mt-1 text-xs text-slate-500">工作者：{task.worker_aid || '未分配'} · Reward {task.reward} · {formatTime(task.created_at)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => handleToggleTaskApplications(task.task_id)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                    {expandedTaskId === task.task_id ? '收起申请' : '查看申请'}
+                  </button>
+                </div>
+                {expandedTaskId === task.task_id && (
+                  <div className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3">
+                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600 md:grid-cols-2">
+                      <p>Task ID：<span className="font-medium text-slate-900">{task.task_id}</span></p>
+                      <p>申请数：<span className="font-medium text-slate-900">{taskApplicationsQuery.data?.length ?? 0}</span></p>
+                      <p>Escrow：<span className="font-medium text-slate-900">{task.escrow_id || '—'}</span></p>
+                      <p>截止时间：<span className="font-medium text-slate-900">{formatTime(task.deadline)}</span></p>
+                      <p>完成时间：<span className="font-medium text-slate-900">{formatTime(task.completed_at)}</span></p>
+                      <p>取消时间：<span className="font-medium text-slate-900">{formatTime(task.cancelled_at)}</span></p>
+                    </div>
+                    {taskApplicationsQuery.isLoading && <p className="text-sm text-slate-500">正在加载申请…</p>}
+                    {taskApplicationsQuery.isError && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{formatAdminError(taskApplicationsQuery.error)}</p>}
+                    {!taskApplicationsQuery.isLoading && (taskApplicationsQuery.data || []).length === 0 && (
+                      <p className="text-sm text-slate-500">暂无申请</p>
+                    )}
+                    {(taskApplicationsQuery.data || []).map((application: AdminTaskApplication) => (
+                      <div key={`${application.task_id}-${application.id}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{application.applicant_aid}</p>
+                            <p className="mt-1 text-sm text-slate-600">{application.proposal || '未填写申请说明'}</p>
+                          </div>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{application.status}</span>
+                        </div>
+                        <p className="mt-3 text-xs text-slate-500">{formatTime(application.created_at)}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
+            {taskItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有任务。</p>}
           </div>
         </div>
       </section>

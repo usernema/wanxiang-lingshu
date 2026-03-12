@@ -27,6 +27,7 @@ type AgentService interface {
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
 	ListAgents(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
+	UpdateAgentStatus(ctx context.Context, aid, status string) (*models.Agent, error)
 	UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error)
 	UpdateReputation(ctx context.Context, aid string, change int, reason string) error
 	GetReputationHistory(ctx context.Context, aid string, limit int) ([]models.ReputationHistory, error)
@@ -168,6 +169,12 @@ type UpdateProfileRequest struct {
 	Bio                string   `json:"bio"`
 	AvailabilityStatus string   `json:"availability_status"`
 	Capabilities       []string `json:"capabilities"`
+}
+
+var allowedAdminAgentStatuses = map[string]struct{}{
+	"active":    {},
+	"suspended": {},
+	"banned":    {},
 }
 
 type DevBootstrapSession struct {
@@ -488,6 +495,33 @@ func (s *agentService) ListAgents(ctx context.Context, limit, offset int, status
 		sanitized = append(sanitized, s.sanitizeAgent(item))
 	}
 	return sanitized, total, nil
+}
+
+func (s *agentService) UpdateAgentStatus(ctx context.Context, aid, status string) (*models.Agent, error) {
+	if _, ok := allowedAdminAgentStatuses[status]; !ok {
+		return nil, fmt.Errorf("invalid agent status")
+	}
+
+	if aid == "agent://a2ahub/system" {
+		return nil, fmt.Errorf("system agent is protected")
+	}
+
+	agent, err := s.repo.GetByAID(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	agent.Status = status
+	if err := s.repo.Update(ctx, agent); err != nil {
+		return nil, err
+	}
+
+	updatedAgent, err := s.repo.GetByAID(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.sanitizeAgent(updatedAgent), nil
 }
 
 func (s *agentService) UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error) {

@@ -247,6 +247,51 @@ func TestGetAgent(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+func TestUpdateAgentStatus(t *testing.T) {
+	mockRepo := new(MockAgentRepository)
+	cfg := &config.Config{}
+
+	svc := &agentService{
+		repo:   mockRepo,
+		config: cfg,
+	}
+
+	aid := "agent://a2ahub/test-agent"
+	existingAgent := &models.Agent{
+		AID:        aid,
+		Model:      "gpt-5",
+		Provider:   "openai",
+		Reputation: 100,
+		Status:     "active",
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
+	}
+
+	updatedAgent := *existingAgent
+	updatedAgent.Status = "suspended"
+
+	mockRepo.On("GetByAID", mock.Anything, aid).Return(existingAgent, nil).Once()
+	mockRepo.On("Update", mock.Anything, mock.MatchedBy(func(agent *models.Agent) bool {
+		return agent.AID == aid && agent.Status == "suspended"
+	})).Return(nil).Once()
+	mockRepo.On("GetByAID", mock.Anything, aid).Return(&updatedAgent, nil).Once()
+
+	agent, err := svc.UpdateAgentStatus(context.Background(), aid, "suspended")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "suspended", agent.Status)
+	mockRepo.AssertExpectations(t)
+}
+
+func TestUpdateAgentStatusRejectsProtectedSystemAgent(t *testing.T) {
+	svc := &agentService{config: &config.Config{}}
+
+	agent, err := svc.UpdateAgentStatus(context.Background(), "agent://a2ahub/system", "suspended")
+
+	assert.Nil(t, agent)
+	assert.EqualError(t, err, "system agent is protected")
+}
+
 func TestVerifyAuth(t *testing.T) {
 	publicKey, privateKey, err := utils.GenerateKeyPair()
 	require.NoError(t, err)

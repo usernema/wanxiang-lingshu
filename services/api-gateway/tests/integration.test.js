@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 
 jest.mock('axios', () => ({
+  request: jest.fn(),
   get: jest.fn(),
   post: jest.fn(),
 }));
@@ -59,6 +60,7 @@ jest.mock('jsonwebtoken', () => ({
 }));
 
 const axios = require('axios');
+const config = require('../src/config');
 const { router, setupRoutes } = require('../src/routes');
 const requestId = require('../src/middleware/requestId');
 const { authenticate } = require('../src/middleware/auth');
@@ -143,6 +145,8 @@ function createTestApp() {
 
 describe('API Gateway Integration Tests', () => {
   let app;
+  const originalAdminEnabled = config.admin.enabled;
+  const originalAdminToken = config.admin.consoleToken;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -155,6 +159,14 @@ describe('API Gateway Integration Tests', () => {
       quit: jest.fn().mockResolvedValue('OK'),
     });
     axios.get.mockImplementation((url) => Promise.resolve({ status: 200, data: { success: true, url } }));
+    axios.request.mockResolvedValue({ data: { success: true, data: {} } });
+    config.admin.enabled = originalAdminEnabled;
+    config.admin.consoleToken = originalAdminToken;
+  });
+
+  afterAll(() => {
+    config.admin.enabled = originalAdminEnabled;
+    config.admin.consoleToken = originalAdminToken;
   });
 
   it('returns healthy dependency status from health endpoint', async () => {
@@ -229,6 +241,143 @@ describe('API Gateway Integration Tests', () => {
   it('applies auth limiter to auth routes', async () => {
     const response = await request(app).post('/api/v1/agents/login').expect(502);
     expect(response.headers['x-limiter-auth']).toBe('true');
+  });
+
+  it('rejects admin routes without a token', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+
+    const response = await request(app).get('/api/v1/admin/forum/posts').expect(401);
+
+    expect(response.body.code).toBe('ADMIN_TOKEN_REQUIRED');
+  });
+
+  it('returns admin overview with a valid token', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request
+      .mockResolvedValueOnce({ data: { items: [{ aid: 'agent://a2ahub/system' }], total: 1 } })
+      .mockResolvedValueOnce({ data: { success: true, data: { posts: [{ id: '1', title: '审核帖' }], total: 1 } } })
+      .mockResolvedValueOnce({ data: [{ task_id: 'task-1', title: '任务' }] })
+      .mockResolvedValueOnce({ data: { summary: { total_issues: 0 } } });
+
+    const response = await request(app)
+      .get('/api/v1/admin/overview')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    expect(response.body.data.summary.agentsTotal).toBe(1);
+    expect(response.body.data.summary.forumPostsTotal).toBe(1);
+    expect(response.body.data.summary.recentTasksCount).toBe(1);
+  });
+
+  it('returns admin forum posts and comments with a valid token', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            posts: [{ id: '1', post_id: 'post-1', title: '审核帖', status: 'published' }],
+            total: 1,
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            comments: [{ id: 'c1', comment_id: 'comment-1', content: '评论', status: 'published', post_id: 'post-1', author_aid: 'agent://a2ahub/user-1' }],
+            total: 1,
+          },
+        },
+      });
+
+    const postsResponse = await request(app)
+      .get('/api/v1/admin/forum/posts')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    const commentsResponse = await request(app)
+      .get('/api/v1/admin/forum/posts/post-1/comments')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    expect(postsResponse.body.data.posts).toHaveLength(1);
+    expect(commentsResponse.body.data.comments).toHaveLength(1);
+  });
+
+  it('updates agent status through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request.mockResolvedValueOnce({
+      data: {
+        aid: 'agent://a2ahub/worker-1',
+        status: 'suspended',
+      },
+    });
+
+    const response = await request(app)
+      .patch('/api/v1/admin/agents/status')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .send({ aid: 'agent://a2ahub/worker-1', status: 'suspended' })
+      .expect(200);
+
+    expect(response.body.data.status).toBe('suspended');
+    expect(axios.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'patch',
+      url: expect.stringContaining('/api/v1/admin/agents/status'),
+      data: { aid: 'agent://a2ahub/worker-1', status: 'suspended' },
+    }));
+  });
+
+  it('updates forum moderation status through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request
+      .mockResolvedValueOnce({ data: { success: true, data: { id: '1', status: 'hidden' } } })
+      .mockResolvedValueOnce({ data: { success: true, data: { id: 'c1', status: 'deleted' } } });
+
+    const postResponse = await request(app)
+      .patch('/api/v1/admin/forum/posts/post-1/status')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .send({ status: 'hidden' })
+      .expect(200);
+
+    const commentResponse = await request(app)
+      .patch('/api/v1/admin/forum/comments/comment-1/status')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .send({ status: 'deleted' })
+      .expect(200);
+
+    expect(postResponse.body.data.status).toBe('hidden');
+    expect(commentResponse.body.data.status).toBe('deleted');
+  });
+
+  it('returns marketplace task applications through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request.mockResolvedValueOnce({
+      data: [
+        {
+          id: 1,
+          task_id: 'task-1',
+          applicant_aid: 'agent://a2ahub/worker-1',
+          proposal: '我可以处理这个任务',
+          status: 'pending',
+          created_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+    });
+
+    const response = await request(app)
+      .get('/api/v1/admin/marketplace/tasks/task-1/applications')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    expect(response.body.data).toHaveLength(1);
+    expect(response.body.data[0].applicant_aid).toBe('agent://a2ahub/worker-1');
   });
 
   it('applies public-read limiter to public get routes', async () => {

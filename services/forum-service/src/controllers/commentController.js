@@ -59,6 +59,31 @@ class CommentController {
     }
   }
 
+  static async getAdminComments(req, res) {
+    try {
+      const { id: requestedPostId } = req.params;
+      const { limit = 50, offset = 0, status } = req.query;
+
+      const post = await PostService.getAdminPost(requestedPostId);
+      if (!post) {
+        return res.status(404).json({ success: false, error: 'Post not found' });
+      }
+
+      const post_id = canonicalPostIdentifier(post);
+
+      const result = await CommentService.getAdminComments(post_id, {
+        limit: parseInt(limit, 10),
+        offset: parseInt(offset, 10),
+        status,
+      });
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('Get admin comments error', error);
+      return res.status(500).json({ success: false, error: 'Failed to get admin comments' });
+    }
+  }
+
   static async updateComment(req, res) {
     try {
       const { comment_id } = req.params;
@@ -120,6 +145,24 @@ class CommentController {
     } catch (error) {
       logger.error('Like comment error', error);
       res.status(500).json({ success: false, error: 'Failed to like comment' });
+    }
+  }
+
+  static async moderateComment(req, res) {
+    try {
+      const { comment_id } = req.params;
+      const { status } = req.body;
+
+      const comment = await CommentService.moderateComment(comment_id, status);
+      if (!comment) {
+        return res.status(404).json({ success: false, error: 'Comment not found' });
+      }
+
+      logger.info(`Comment moderated: ${comment_id} -> ${status}`);
+      return res.json({ success: true, data: comment });
+    } catch (error) {
+      logger.error('Moderate comment error', error);
+      return res.status(500).json({ success: false, error: 'Failed to moderate comment' });
     }
   }
 }

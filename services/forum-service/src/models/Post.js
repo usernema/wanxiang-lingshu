@@ -18,8 +18,14 @@ class Post {
   }
 
   static async findById(post_id) {
-    const query = `SELECT * FROM posts WHERE ${identifierClause(1)} AND status != $2`;
-    const result = await pool.query(query, [post_id, 'deleted']);
+    const query = `SELECT * FROM posts WHERE ${identifierClause(1)} AND status = $2`;
+    const result = await pool.query(query, [post_id, 'published']);
+    return result.rows[0];
+  }
+
+  static async findByIdForAdmin(post_id) {
+    const query = `SELECT * FROM posts WHERE ${identifierClause(1)}`;
+    const result = await pool.query(query, [post_id]);
     return result.rows[0];
   }
 
@@ -27,6 +33,42 @@ class Post {
     let query = 'SELECT * FROM posts WHERE status = $1';
     const params = ['published'];
     let paramIndex = 2;
+
+    if (category) {
+      query += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+
+    if (tags && tags.length > 0) {
+      query += ` AND tags && $${paramIndex}`;
+      params.push(tags);
+      paramIndex++;
+    }
+
+    if (author_aid) {
+      query += ` AND author_aid = $${paramIndex}`;
+      params.push(author_aid);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+
+  static async findAllForAdmin({ limit = 20, offset = 0, category, tags, author_aid, status }) {
+    let query = 'SELECT * FROM posts WHERE 1 = 1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
 
     if (category) {
       query += ` AND category = $${paramIndex}`;
@@ -102,6 +144,12 @@ class Post {
     return result.rows[0];
   }
 
+  static async setStatus(post_id, status) {
+    const query = `UPDATE posts SET status = $1, updated_at = NOW() WHERE ${identifierClause(2)} RETURNING *`;
+    const result = await pool.query(query, [status, post_id]);
+    return result.rows[0];
+  }
+
   static async incrementViewCount(post_id) {
     const query = `UPDATE posts SET view_count = view_count + 1 WHERE ${identifierClause(1)}`;
     await pool.query(query, [post_id]);
@@ -117,10 +165,48 @@ class Post {
     await pool.query(query, [post_id]);
   }
 
+  static async setCommentCount(post_id, commentCount) {
+    const query = `UPDATE posts SET comment_count = $1, updated_at = NOW() WHERE ${identifierClause(2)}`;
+    await pool.query(query, [commentCount, post_id]);
+  }
+
   static async getCount({ category, tags, author_aid }) {
     let query = 'SELECT COUNT(*) FROM posts WHERE status = $1';
     const params = ['published'];
     let paramIndex = 2;
+
+    if (category) {
+      query += ` AND category = $${paramIndex}`;
+      params.push(category);
+      paramIndex++;
+    }
+
+    if (tags && tags.length > 0) {
+      query += ` AND tags && $${paramIndex}`;
+      params.push(tags);
+      paramIndex++;
+    }
+
+    if (author_aid) {
+      query += ` AND author_aid = $${paramIndex}`;
+      params.push(author_aid);
+      paramIndex++;
+    }
+
+    const result = await pool.query(query, params);
+    return parseInt(result.rows[0].count);
+  }
+
+  static async getCountForAdmin({ category, tags, author_aid, status }) {
+    let query = 'SELECT COUNT(*) FROM posts WHERE 1 = 1';
+    const params = [];
+    let paramIndex = 1;
+
+    if (status) {
+      query += ` AND status = $${paramIndex}`;
+      params.push(status);
+      paramIndex++;
+    }
 
     if (category) {
       query += ` AND category = $${paramIndex}`;

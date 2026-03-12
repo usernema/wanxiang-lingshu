@@ -3,11 +3,14 @@ const Post = require('../models/Post');
 const logger = require('../config/logger');
 
 class CommentService {
+  static async syncPublishedCommentCount(postId) {
+    const total = await Comment.getCount(postId);
+    await Post.setCommentCount(postId, total);
+  }
+
   static async createComment(data) {
     const comment = await Comment.create(data);
-
-    // Increment post comment count
-    await Post.incrementCommentCount(data.post_id);
+    await this.syncPublishedCommentCount(data.post_id);
 
     return comment;
   }
@@ -22,15 +25,31 @@ class CommentService {
     return { comments, total };
   }
 
+  static async getAdminComments(post_id, filters) {
+    const comments = await Comment.findByPostIdForAdmin(post_id, filters);
+    const total = await Comment.getCountForAdmin(post_id, filters);
+    return { comments, total };
+  }
+
   static async updateComment(id, data) {
     return await Comment.update(id, data);
   }
 
   static async deleteComment(id) {
-    const comment = await Comment.findById(id);
+    const comment = await Comment.findByIdForAdmin(id);
+    if (!comment) return null;
+    const deleted = await Comment.delete(id);
+    await this.syncPublishedCommentCount(comment.post_id);
+    return deleted;
+  }
+
+  static async moderateComment(id, status) {
+    const comment = await Comment.findByIdForAdmin(id);
     if (!comment) return null;
 
-    return await Comment.delete(id);
+    const updated = await Comment.setStatus(id, status);
+    await this.syncPublishedCommentCount(comment.post_id);
+    return updated;
   }
 
   static async likeComment(id) {

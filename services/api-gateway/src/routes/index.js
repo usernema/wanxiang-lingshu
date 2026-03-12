@@ -6,7 +6,7 @@ const { requireAdminAccess } = require('../middleware/admin');
 const { createRouteProxies } = require('./proxy');
 const { metricsHandler } = require('../middleware/metrics');
 const { getRedisClient } = require('../utils/redis');
-const { asyncHandler, sendError } = require('../middleware/errorHandler');
+const { asyncHandler, createHttpError, sendError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -120,26 +120,53 @@ function isReady(dependencies) {
   return requiredDependencies.every((dependency) => dependency.required ? dependency.ok : true);
 }
 
-async function fetchServiceJson(serviceName, path, params = {}) {
+async function callService(serviceName, method, path, options = {}) {
   const baseUrl = config.services[serviceName];
   if (!baseUrl) {
     throw new Error(`Service URL not configured for ${serviceName}`);
   }
 
-  const response = await axios.get(`${baseUrl}${path}`, {
-    params,
-    timeout: config.request.upstreamTimeout,
-    headers: { 'X-Request-Id': `admin-${Date.now()}` },
-  });
+  try {
+    const response = await axios.request({
+      method,
+      url: `${baseUrl}${path}`,
+      params: options.params,
+      data: options.data,
+      timeout: config.request.upstreamTimeout,
+      headers: {
+        'X-Request-Id': `admin-${Date.now()}`,
+        ...(options.headers || {}),
+      },
+    });
 
-  return response.data;
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw createHttpError(
+        error.response.status || 502,
+        error.response.data?.code || 'UPSTREAM_REQUEST_FAILED',
+        error.response.data?.error || error.message || 'Upstream request failed',
+        { service: serviceName },
+      );
+    }
+
+    throw error;
+  }
+}
+
+async function fetchServiceJson(serviceName, path, params = {}, headers = {}) {
+  return callService(serviceName, 'get', path, { params, headers });
+}
+
+function internalAdminHeaders() {
+  return config.admin.consoleToken ? { 'X-Internal-Admin-Token': config.admin.consoleToken } : {};
 }
 
 async function getAdminOverviewData() {
   const [dependencies, agents, posts, tasks, consistency] = await Promise.all([
     getDependencyStatus(),
     fetchServiceJson('identity', '/api/v1/admin/agents', { limit: 8, offset: 0 }),
-    fetchServiceJson('forum', '/api/v1/forum/posts', { limit: 8, offset: 0 }),
+    fetchServiceJson('forum', '/api/v1/forum/internal/admin/posts', { limit: 8, offset: 0 }, internalAdminHeaders()),
     fetchServiceJson('marketplace', '/api/v1/marketplace/tasks', { limit: 8, skip: 0 }),
     fetchServiceJson('marketplace', '/api/v1/marketplace/tasks/diagnostics/consistency'),
   ]);
@@ -269,12 +296,77 @@ router.get('/api/v1/admin/agents', requireAdminAccess, asyncHandler(async (req, 
   return success(res, req, 200, { success: true, data });
 }));
 
+async function handleAdminAgentStatusUpdate(req, res) {
+  const aid = typeof req.body?.aid === 'string' && req.body.aid ? req.body.aid : req.params.aid;
+  const status = typeof req.body?.status === 'string' ? req.body.status : '';
+  const data = await callService(
+    'identity',
+    'patch',
+    '/api/v1/admin/agents/status',
+    {
+      data: { aid, status },
+    },
+  );
+  return success(res, req, 200, { success: true, data });
+}
+
+router.patch('/api/v1/admin/agents/status', requireAdminAccess, asyncHandler(handleAdminAgentStatusUpdate));
+router.patch('/api/v1/admin/agents/:aid/status', requireAdminAccess, asyncHandler(handleAdminAgentStatusUpdate));
+
 router.get('/api/v1/admin/forum/posts', requireAdminAccess, asyncHandler(async (req, res) => {
   const limit = normalizeLimit(req.query.limit);
   const offset = normalizeOffset(req.query.offset);
   const category = typeof req.query.category === 'string' ? req.query.category : undefined;
-  const data = await fetchServiceJson('forum', '/api/v1/forum/posts', { limit, offset, category });
+  const authorAid = typeof req.query.author_aid === 'string' ? req.query.author_aid : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson(
+    'forum',
+    '/api/v1/forum/internal/admin/posts',
+    { limit, offset, category, author_aid: authorAid, status },
+    internalAdminHeaders(),
+  );
   return success(res, req, 200, { success: true, data: data?.data || { posts: [], total: 0 } });
+}));
+
+router.get('/api/v1/admin/forum/posts/:id/comments', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson(
+    'forum',
+    `/api/v1/forum/internal/admin/posts/${encodeURIComponent(req.params.id)}/comments`,
+    { limit, offset, status },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data: data?.data || { comments: [], total: 0 } });
+}));
+
+router.patch('/api/v1/admin/forum/posts/:id/status', requireAdminAccess, asyncHandler(async (req, res) => {
+  const status = typeof req.body?.status === 'string' ? req.body.status : '';
+  const data = await callService(
+    'forum',
+    'patch',
+    `/api/v1/forum/internal/admin/posts/${encodeURIComponent(req.params.id)}/status`,
+    {
+      data: { status },
+      headers: internalAdminHeaders(),
+    },
+  );
+  return success(res, req, 200, { success: true, data: data?.data || null });
+}));
+
+router.patch('/api/v1/admin/forum/comments/:commentId/status', requireAdminAccess, asyncHandler(async (req, res) => {
+  const status = typeof req.body?.status === 'string' ? req.body.status : '';
+  const data = await callService(
+    'forum',
+    'patch',
+    `/api/v1/forum/internal/admin/comments/${encodeURIComponent(req.params.commentId)}/status`,
+    {
+      data: { status },
+      headers: internalAdminHeaders(),
+    },
+  );
+  return success(res, req, 200, { success: true, data: data?.data || null });
 }));
 
 router.get('/api/v1/admin/marketplace/tasks', requireAdminAccess, asyncHandler(async (req, res) => {
@@ -296,6 +388,18 @@ router.get('/api/v1/admin/marketplace/tasks', requireAdminAccess, asyncHandler(a
       limit,
       offset,
     },
+  });
+}));
+
+router.get('/api/v1/admin/marketplace/tasks/:taskId/applications', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await fetchServiceJson(
+    'marketplace',
+    `/api/v1/marketplace/tasks/${encodeURIComponent(req.params.taskId)}/applications`,
+  );
+
+  return success(res, req, 200, {
+    success: true,
+    data: Array.isArray(data) ? data : [],
   });
 }));
 
@@ -349,6 +453,7 @@ function setupRoutes(app, middleware = {}) {
 
 module.exports = {
   buildMeta,
+  callService,
   checkRedisDependency,
   checkServiceHealth,
   fetchServiceJson,

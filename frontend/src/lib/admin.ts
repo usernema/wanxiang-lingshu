@@ -31,7 +31,16 @@ export type AdminOverview = {
   consistency?: {
     summary?: {
       total_issues?: number
+      open_with_lifecycle_fields?: number
+      in_progress_missing_assignment?: number
+      completed_missing_completed_at?: number
+      cancelled_missing_cancelled_at?: number
     }
+    examples?: Array<{
+      task_id: string
+      status: string
+      issue: string
+    }>
   }
 }
 
@@ -39,6 +48,7 @@ export type AdminForumPost = {
   id: string | number
   post_id?: string
   title: string
+  content?: string
   author_aid: string
   category?: string
   status?: string
@@ -47,16 +57,42 @@ export type AdminForumPost = {
   created_at?: string
 }
 
+export type AdminForumComment = {
+  id: string | number
+  comment_id?: string
+  post_id: string
+  author_aid: string
+  content: string
+  status?: string
+  like_count?: number
+  created_at?: string
+}
+
 export type AdminTask = {
   id: number
   task_id: string
   title: string
+  description?: string
+  requirements?: string | null
   employer_aid: string
   worker_aid?: string | null
+  escrow_id?: string | null
   status: string
   reward: number | string
+  deadline?: string | null
   created_at?: string
   updated_at?: string | null
+  completed_at?: string | null
+  cancelled_at?: string | null
+}
+
+export type AdminTaskApplication = {
+  id: number
+  task_id: string
+  applicant_aid: string
+  proposal?: string | null
+  status: string
+  created_at?: string
 }
 
 export type AdminAgentsResponse = {
@@ -66,8 +102,16 @@ export type AdminAgentsResponse = {
   offset: number
 }
 
+export type AdminAgentStatus = 'active' | 'suspended' | 'banned'
+export type AdminTaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
+
 export type AdminForumPostsResponse = {
   posts: AdminForumPost[]
+  total: number
+}
+
+export type AdminForumCommentsResponse = {
+  comments: AdminForumComment[]
   total: number
 }
 
@@ -75,6 +119,27 @@ export type AdminTasksResponse = {
   items: AdminTask[]
   limit: number
   offset: number
+}
+
+export type AdminAgentFilters = {
+  limit?: number
+  offset?: number
+  status?: string
+}
+
+export type AdminForumPostFilters = {
+  limit?: number
+  offset?: number
+  status?: string
+  category?: string
+  authorAid?: string
+}
+
+export type AdminTaskFilters = {
+  limit?: number
+  offset?: number
+  status?: string
+  employerAid?: string
 }
 
 function readAdminStorage() {
@@ -137,17 +202,63 @@ export async function fetchAdminOverview() {
   return unwrapData(response.data) as AdminOverview
 }
 
-export async function fetchAdminAgents(limit = 20, offset = 0) {
-  const response = await adminApi.get('/v1/admin/agents', { params: { limit, offset } })
+export async function fetchAdminAgents(filters: AdminAgentFilters = {}) {
+  const response = await adminApi.get('/v1/admin/agents', {
+    params: {
+      limit: filters.limit ?? 20,
+      offset: filters.offset ?? 0,
+      status: filters.status,
+    },
+  })
   return unwrapData(response.data) as AdminAgentsResponse
 }
 
-export async function fetchAdminForumPosts(limit = 20, offset = 0) {
-  const response = await adminApi.get('/v1/admin/forum/posts', { params: { limit, offset } })
+export async function updateAdminAgentStatus(aid: string, status: AdminAgentStatus) {
+  const response = await adminApi.patch('/v1/admin/agents/status', { aid, status })
+  return unwrapData(response.data) as AgentProfile
+}
+
+export async function fetchAdminForumPosts(filters: AdminForumPostFilters = {}) {
+  const response = await adminApi.get('/v1/admin/forum/posts', {
+    params: {
+      limit: filters.limit ?? 20,
+      offset: filters.offset ?? 0,
+      status: filters.status,
+      category: filters.category,
+      author_aid: filters.authorAid,
+    },
+  })
   return unwrapData(response.data) as AdminForumPostsResponse
 }
 
-export async function fetchAdminTasks(limit = 20, offset = 0) {
-  const response = await adminApi.get('/v1/admin/marketplace/tasks', { params: { limit, offset } })
+export async function fetchAdminTasks(filters: AdminTaskFilters = {}) {
+  const response = await adminApi.get('/v1/admin/marketplace/tasks', {
+    params: {
+      limit: filters.limit ?? 20,
+      offset: filters.offset ?? 0,
+      status: filters.status,
+      employer_aid: filters.employerAid,
+    },
+  })
   return unwrapData(response.data) as AdminTasksResponse
+}
+
+export async function fetchAdminTaskApplications(taskId: string) {
+  const response = await adminApi.get(`/v1/admin/marketplace/tasks/${encodeURIComponent(taskId)}/applications`)
+  return unwrapData(response.data) as AdminTaskApplication[]
+}
+
+export async function fetchAdminPostComments(postId: string | number, limit = 50, offset = 0) {
+  const response = await adminApi.get(`/v1/admin/forum/posts/${encodeURIComponent(String(postId))}/comments`, { params: { limit, offset } })
+  return unwrapData(response.data) as AdminForumCommentsResponse
+}
+
+export async function updateAdminPostStatus(postId: string | number, status: 'published' | 'hidden' | 'deleted') {
+  const response = await adminApi.patch(`/v1/admin/forum/posts/${encodeURIComponent(String(postId))}/status`, { status })
+  return unwrapData(response.data) as AdminForumPost
+}
+
+export async function updateAdminCommentStatus(commentId: string | number, status: 'published' | 'hidden' | 'deleted') {
+  const response = await adminApi.patch(`/v1/admin/forum/comments/${encodeURIComponent(String(commentId))}/status`, { status })
+  return unwrapData(response.data) as AdminForumComment
 }

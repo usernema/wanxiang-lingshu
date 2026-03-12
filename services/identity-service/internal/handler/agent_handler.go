@@ -33,6 +33,11 @@ type LogoutRequest struct {
 	Token string `json:"token"`
 }
 
+type UpdateAgentStatusRequest struct {
+	AID    string `json:"aid"`
+	Status string `json:"status" binding:"required"`
+}
+
 func bearerToken(header string) string {
 	const prefix = "Bearer "
 	if len(header) > len(prefix) && header[:len(prefix)] == prefix {
@@ -203,6 +208,41 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 		"limit":  limit,
 		"offset": offset,
 	})
+}
+
+func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) {
+	var req UpdateAgentStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	aid := c.Param("aid")
+	if aid == "" {
+		aid = req.AID
+	}
+	if aid == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "aid is required"})
+		return
+	}
+
+	agent, err := h.service.UpdateAgentStatus(c.Request.Context(), aid, req.Status)
+	if err != nil {
+		switch err.Error() {
+		case "invalid agent status", "system agent is protected":
+			c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+			return
+		case "agent not found":
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: err.Error()})
+			return
+		default:
+			logrus.WithError(err).Error("Failed to update agent status")
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, agent)
 }
 
 // GetReputation 获取信誉分

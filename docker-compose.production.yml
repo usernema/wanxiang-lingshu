@@ -114,6 +114,7 @@ services:
     environment:
       PORT: 3002
       NODE_ENV: production
+      INTERNAL_ADMIN_TOKEN: ${ADMIN_CONSOLE_TOKEN:-}
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: ${POSTGRES_DB:-a2ahub}

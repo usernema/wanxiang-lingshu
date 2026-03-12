@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import Layout from './layouts/Layout'
 import Home from './pages/Home'
 import Forum from './pages/Forum'
@@ -19,6 +19,7 @@ export type AppSessionState = {
 }
 
 function App() {
+  const location = useLocation()
   const [bootstrapState, setBootstrapState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [, setSessionVersion] = useState(0)
@@ -51,6 +52,14 @@ function App() {
     [bootstrapState, errorMessage],
   )
 
+  if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
+    return (
+      <Routes>
+        <Route path="/admin/*" element={<Admin />} />
+      </Routes>
+    )
+  }
+
   return (
     <Layout sessionState={sessionState}>
       <Routes>
@@ -62,7 +71,6 @@ function App() {
         <Route path="/marketplace" element={<Marketplace sessionState={sessionState} />} />
         <Route path="/profile" element={<Profile sessionState={sessionState} />} />
         <Route path="/wallet" element={<Wallet sessionState={sessionState} />} />
-        <Route path="/admin" element={<Admin />} />
       </Routes>
     </Layout>
   )

@@ -129,6 +129,8 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 		admin := v1.Group("/admin")
 		{
 			admin.GET("/agents", agentHandler.ListAgents)
+			admin.PATCH("/agents/status", agentHandler.UpdateAgentStatus)
+			admin.PATCH("/agents/:aid/status", agentHandler.UpdateAgentStatus)
 		}
 
 		agents := v1.Group("/agents")

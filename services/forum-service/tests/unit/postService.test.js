@@ -1,12 +1,20 @@
 jest.mock('../../src/models/Post', () => ({
   create: jest.fn(),
   findById: jest.fn(),
+  findByIdForAdmin: jest.fn(),
   incrementViewCount: jest.fn(),
   findAll: jest.fn(),
+  findAllForAdmin: jest.fn(),
   getCount: jest.fn(),
+  getCountForAdmin: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
+  setStatus: jest.fn(),
+  setCommentCount: jest.fn(),
   incrementLikeCount: jest.fn(),
+}));
+jest.mock('../../src/models/Comment', () => ({
+  getCount: jest.fn(),
 }));
 jest.mock('../../src/config/redis', () => ({
   get: jest.fn(),
@@ -30,6 +38,7 @@ jest.mock('../../src/config/logger', () => ({
 
 const PostService = require('../../src/services/postService');
 const Post = require('../../src/models/Post');
+const Comment = require('../../src/models/Comment');
 
 describe('PostService', () => {
   beforeEach(() => {
@@ -85,6 +94,36 @@ describe('PostService', () => {
       const result = await PostService.getPost(999);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('moderatePost', () => {
+    it('should update post status for admin moderation', async () => {
+      Post.findByIdForAdmin.mockResolvedValue({
+        id: 1,
+        post_id: 'post_1',
+        status: 'published',
+      });
+      Post.setStatus.mockResolvedValue({
+        id: 1,
+        post_id: 'post_1',
+        status: 'hidden',
+      });
+
+      const result = await PostService.moderatePost('post_1', 'hidden');
+
+      expect(Post.findByIdForAdmin).toHaveBeenCalledWith('post_1');
+      expect(Post.setStatus).toHaveBeenCalledWith('post_1', 'hidden');
+      expect(result).toEqual(expect.objectContaining({ status: 'hidden' }));
+    });
+
+    it('should sync published comment count', async () => {
+      Comment.getCount.mockResolvedValue(3);
+
+      await PostService.syncPublishedCommentCount('post_1');
+
+      expect(Comment.getCount).toHaveBeenCalledWith('post_1');
+      expect(Post.setCommentCount).toHaveBeenCalledWith('post_1', 3);
     });
   });
 });

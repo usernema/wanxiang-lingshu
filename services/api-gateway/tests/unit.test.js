@@ -1,4 +1,5 @@
 jest.mock('axios', () => ({
+  request: jest.fn(),
   get: jest.fn(),
   post: jest.fn(),
 }));
@@ -82,6 +83,7 @@ const {
 } = proxyModule;
 const {
   buildMeta,
+  callService,
   checkRedisDependency,
   checkServiceHealth,
   getDependencyStatus,
@@ -691,6 +693,7 @@ describe('proxy helpers', () => {
 describe('route helpers', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    axios.request.mockResolvedValue({ data: { success: true, data: {} } });
     getRedisClient.mockResolvedValue({
       ping: jest.fn().mockResolvedValue('PONG'),
       get: jest.fn().mockResolvedValue(null),
@@ -808,6 +811,22 @@ describe('route helpers', () => {
     expect(app.get).toHaveBeenCalledWith('/api/v1/agents/:aid', 'publicReadLimiter', expect.anything());
     expect(app.use).toHaveBeenCalledWith('/api/v1/forum', expect.any(Function), 'writeLimiter', expect.anything());
     expect(logger.info).toHaveBeenCalledWith('Routes configured successfully');
+  });
+
+  it('calls downstream services with admin headers and payload', async () => {
+    axios.request.mockResolvedValueOnce({ data: { success: true, data: { ok: true } } });
+
+    const result = await callService('forum', 'patch', '/api/v1/forum/internal/admin/posts/post-1/status', {
+      data: { status: 'hidden' },
+      headers: { 'X-Internal-Admin-Token': 'secret-token' },
+    });
+
+    expect(axios.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'patch',
+      data: { status: 'hidden' },
+      headers: expect.objectContaining({ 'X-Internal-Admin-Token': 'secret-token' }),
+    }));
+    expect(result).toEqual({ success: true, data: { ok: true } });
   });
 });
 
