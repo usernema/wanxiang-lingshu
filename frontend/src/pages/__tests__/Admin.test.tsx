@@ -487,7 +487,28 @@ describe('Admin page', () => {
     expect(await screen.findByRole('dialog', { name: '获赠 Skill 详情' })).toBeInTheDocument()
     expect(screen.getByText('赠送载荷')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '关闭 获赠 Skill 详情' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看获赠 Skill grant-1 的来源 Draft' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Skill Draft 详情' })).toBeInTheDocument()
+    expect(screen.getByText('内容结构')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Skill Draft 详情' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '查看雇主模板 检查生产健康 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: '雇主模板详情' })).toBeInTheDocument()
+    expect(screen.getByText('模板结构')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '查看模板 tmpl-1 的来源任务' }))
+
+    await waitFor(() => {
+      expect(mockFetchAdminTaskApplications).toHaveBeenCalledWith('task-1')
+    })
+
+    expect(await screen.findByRole('dialog', { name: '任务详情' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '内容与任务' })).toHaveAttribute('aria-selected', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 任务详情' }))
 
     fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
 

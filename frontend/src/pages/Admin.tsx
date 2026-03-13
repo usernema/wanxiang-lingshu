@@ -287,6 +287,8 @@ function DependencyRow({ dependency }: { dependency: AdminDependency }) {
 }
 
 type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'audit'
+type AdminDetailParamKey = 'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit'
+type AdminDetailParams = Partial<Record<AdminDetailParamKey, string>>
 
 const ADMIN_TAB_SEGMENTS: Record<AdminTabKey, string> = {
   overview: 'overview',
@@ -317,6 +319,20 @@ function getAdminTabHref(pathname: string, tab: AdminTabKey) {
   const basePath = getAdminBasePath(pathname)
   const segment = ADMIN_TAB_SEGMENTS[tab]
   return basePath ? `${basePath}/${segment}` : `/${segment}`
+}
+
+function buildAdminHref(pathname: string, tab: AdminTabKey, params: AdminDetailParams = {}) {
+  const href = getAdminTabHref(pathname, tab)
+  const searchParams = new URLSearchParams()
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value)
+    }
+  })
+
+  const search = searchParams.toString()
+  return search ? `${href}?${search}` : href
 }
 
 function AdminTabButton({
@@ -446,6 +462,15 @@ export default function Admin() {
   const [growthKeyword, setGrowthKeyword] = useState('')
   const [growthDraftStatusFilter, setGrowthDraftStatusFilter] = useState<'all' | AdminAgentGrowthSkillDraftStatus>('all')
   const [growthDraftKeyword, setGrowthDraftKeyword] = useState('')
+  const detailSearchParams = new URLSearchParams(location.search)
+  const deepLinkAgentAid = detailSearchParams.get('agent')
+  const deepLinkGrowthAid = detailSearchParams.get('growth')
+  const deepLinkDraftId = detailSearchParams.get('draft')
+  const deepLinkTemplateId = detailSearchParams.get('template')
+  const deepLinkGrantId = detailSearchParams.get('grant')
+  const deepLinkPostId = detailSearchParams.get('post')
+  const deepLinkTaskId = detailSearchParams.get('task')
+  const deepLinkAuditId = detailSearchParams.get('audit')
 
   const enabled = activeToken.trim().length > 0
 
@@ -666,6 +691,7 @@ export default function Admin() {
 
   const closeAgentDetail = () => {
     setSelectedAgent(null)
+    clearAdminDetailParams(['agent'])
   }
 
   const openPostDetail = (post: AdminForumPost) => {
@@ -676,6 +702,7 @@ export default function Admin() {
   const closePostDetail = () => {
     setSelectedPost(null)
     setExpandedPostId(null)
+    clearAdminDetailParams(['post'])
   }
 
   const openTaskDetail = (task: AdminTask) => {
@@ -686,6 +713,7 @@ export default function Admin() {
   const closeTaskDetail = () => {
     setSelectedTask(null)
     setExpandedTaskId(null)
+    clearAdminDetailParams(['task'])
   }
 
   const openGrowthProfileDetail = (profile: AdminAgentGrowthProfile) => {
@@ -694,6 +722,7 @@ export default function Admin() {
 
   const closeGrowthProfileDetail = () => {
     setSelectedGrowthProfile(null)
+    clearAdminDetailParams(['growth'])
   }
 
   const openGrowthDraftDetail = (draft: AdminAgentGrowthSkillDraft) => {
@@ -702,6 +731,7 @@ export default function Admin() {
 
   const closeGrowthDraftDetail = () => {
     setSelectedGrowthDraft(null)
+    clearAdminDetailParams(['draft'])
   }
 
   const openEmployerTemplateDetail = (template: AdminEmployerTemplate) => {
@@ -710,6 +740,7 @@ export default function Admin() {
 
   const closeEmployerTemplateDetail = () => {
     setSelectedEmployerTemplate(null)
+    clearAdminDetailParams(['template'])
   }
 
   const openEmployerSkillGrantDetail = (grant: AdminEmployerSkillGrant) => {
@@ -718,6 +749,7 @@ export default function Admin() {
 
   const closeEmployerSkillGrantDetail = () => {
     setSelectedEmployerSkillGrant(null)
+    clearAdminDetailParams(['grant'])
   }
 
   const openAuditLogDetail = (log: AdminAuditLog) => {
@@ -726,6 +758,7 @@ export default function Admin() {
 
   const closeAuditLogDetail = () => {
     setSelectedAuditLog(null)
+    clearAdminDetailParams(['audit'])
   }
 
   const handleToggleAgentSelection = (aid: string) => {
@@ -803,6 +836,73 @@ export default function Admin() {
     await batchPostStatusMutation.mutateAsync({ ids: selectedPostIds, status: nextStatus })
   }
 
+  const closeAllDetails = () => {
+    setSelectedAgent(null)
+    setSelectedGrowthProfile(null)
+    setSelectedGrowthDraft(null)
+    setSelectedEmployerTemplate(null)
+    setSelectedEmployerSkillGrant(null)
+    setSelectedPost(null)
+    setSelectedTask(null)
+    setSelectedAuditLog(null)
+    setExpandedPostId(null)
+    setExpandedTaskId(null)
+  }
+
+  const clearAdminDetailParams = (keys: AdminDetailParamKey[]) => {
+    const nextSearchParams = new URLSearchParams(location.search)
+    let changed = false
+
+    keys.forEach((key) => {
+      if (nextSearchParams.has(key)) {
+        nextSearchParams.delete(key)
+        changed = true
+      }
+    })
+
+    if (!changed) return
+
+    const nextSearch = nextSearchParams.toString()
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true },
+    )
+  }
+
+  const navigateToAdminView = (tab: AdminTabKey, params: AdminDetailParams = {}) => {
+    if (tab === 'agents') {
+      setAgentStatusFilter('all')
+      setAgentKeyword('')
+      setHideProtectedAgents(false)
+    }
+
+    if (tab === 'growth') {
+      setGrowthPoolFilter('all')
+      setGrowthDomainFilter('all')
+      setGrowthKeyword('')
+      setGrowthDraftStatusFilter('all')
+      setGrowthDraftKeyword('')
+    }
+
+    if (tab === 'content') {
+      setPostDraftFilters(defaultPostFilters)
+      setPostFilters(defaultPostFilters)
+      setTaskDraftFilters(defaultTaskFilters)
+      setTaskFilters(defaultTaskFilters)
+    }
+
+    if (tab === 'audit') {
+      setAuditDraftFilters(defaultAuditFilters)
+      setAuditFilters(defaultAuditFilters)
+    }
+
+    closeAllDetails()
+    navigate(buildAdminHref(location.pathname, tab, params))
+  }
+
   useEffect(() => {
     setSelectedAgent(null)
     setSelectedGrowthProfile(null)
@@ -815,35 +915,6 @@ export default function Admin() {
     setExpandedPostId(null)
     setExpandedTaskId(null)
   }, [location.pathname])
-
-  if (!enabled) {
-    return (
-      <div className="space-y-6">
-        <section className="rounded-2xl bg-white p-8 shadow-sm">
-          <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
-          <p className="mt-3 text-slate-600">这是内部运营后台，当前提供系统健康、Agent 列表、论坛帖子与评论审核，以及任务工作台概览。请输入后台访问令牌后进入。</p>
-        </section>
-
-        <section className="rounded-2xl bg-white p-8 shadow-sm">
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <label className="block">
-              <span className="mb-2 block text-sm font-medium text-slate-700">后台访问令牌</span>
-              <input
-                type="password"
-                value={draftToken}
-                onChange={(event) => setDraftTokenValue(event.target.value)}
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-0 transition focus:border-primary-500"
-                placeholder="请输入 ADMIN_CONSOLE_TOKEN"
-              />
-            </label>
-            <button type="submit" className="rounded-xl bg-primary-600 px-5 py-3 font-medium text-white hover:bg-primary-700">
-              进入后台
-            </button>
-          </form>
-        </section>
-      </div>
-    )
-  }
 
   const overview = overviewQuery.data
   const agentItems = agentsQuery.data?.items || []
@@ -941,6 +1012,101 @@ export default function Admin() {
     },
   ]
   const activeTabMeta = tabItems.find((tab) => tab.key === activeTab) || tabItems[0]
+
+  useEffect(() => {
+    if (activeTab !== 'agents' || !deepLinkAgentAid) return
+    const target = agentItems.find((agent) => agent.aid === deepLinkAgentAid)
+    if (target && selectedAgent?.aid !== target.aid) {
+      setSelectedAgent(target)
+    }
+  }, [activeTab, deepLinkAgentAid, agentItems, selectedAgent?.aid])
+
+  useEffect(() => {
+    if (activeTab !== 'growth' || !deepLinkGrowthAid) return
+    const target = growthProfileItems.find((profile) => profile.aid === deepLinkGrowthAid)
+    if (target && selectedGrowthProfile?.aid !== target.aid) {
+      setSelectedGrowthProfile(target)
+    }
+  }, [activeTab, deepLinkGrowthAid, growthProfileItems, selectedGrowthProfile?.aid])
+
+  useEffect(() => {
+    if (activeTab !== 'growth' || !deepLinkDraftId) return
+    const target = growthDraftItems.find((draft) => draft.draft_id === deepLinkDraftId)
+    if (target && selectedGrowthDraft?.draft_id !== target.draft_id) {
+      setSelectedGrowthDraft(target)
+    }
+  }, [activeTab, deepLinkDraftId, growthDraftItems, selectedGrowthDraft?.draft_id])
+
+  useEffect(() => {
+    if (activeTab !== 'growth' || !deepLinkTemplateId) return
+    const target = employerTemplateItems.find((template) => template.template_id === deepLinkTemplateId)
+    if (target && selectedEmployerTemplate?.template_id !== target.template_id) {
+      setSelectedEmployerTemplate(target)
+    }
+  }, [activeTab, deepLinkTemplateId, employerTemplateItems, selectedEmployerTemplate?.template_id])
+
+  useEffect(() => {
+    if (activeTab !== 'growth' || !deepLinkGrantId) return
+    const target = employerSkillGrantItems.find((grant) => grant.grant_id === deepLinkGrantId)
+    if (target && selectedEmployerSkillGrant?.grant_id !== target.grant_id) {
+      setSelectedEmployerSkillGrant(target)
+    }
+  }, [activeTab, deepLinkGrantId, employerSkillGrantItems, selectedEmployerSkillGrant?.grant_id])
+
+  useEffect(() => {
+    if (activeTab !== 'content' || !deepLinkPostId) return
+    const target = postItems.find((post) => String(post.post_id || post.id) === deepLinkPostId)
+    if (target && selectedPost?.id !== target.id) {
+      setSelectedPost(target)
+      setExpandedPostId(target.post_id || target.id)
+    }
+  }, [activeTab, deepLinkPostId, postItems, selectedPost?.id])
+
+  useEffect(() => {
+    if (activeTab !== 'content' || !deepLinkTaskId) return
+    const target = taskItems.find((task) => task.task_id === deepLinkTaskId)
+    if (target && selectedTask?.task_id !== target.task_id) {
+      setSelectedTask(target)
+      setExpandedTaskId(target.task_id)
+    }
+  }, [activeTab, deepLinkTaskId, taskItems, selectedTask?.task_id])
+
+  useEffect(() => {
+    if (activeTab !== 'audit' || !deepLinkAuditId) return
+    const target = (auditLogsQuery.data?.items || []).find((log) => log.log_id === deepLinkAuditId)
+    if (target && selectedAuditLog?.log_id !== target.log_id) {
+      setSelectedAuditLog(target)
+    }
+  }, [activeTab, deepLinkAuditId, auditLogsQuery.data?.items, selectedAuditLog?.log_id])
+
+  if (!enabled) {
+    return (
+      <div className="space-y-6">
+        <section className="rounded-2xl bg-white p-8 shadow-sm">
+          <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
+          <p className="mt-3 text-slate-600">这是内部运营后台，当前提供系统健康、Agent 列表、论坛帖子与评论审核，以及任务工作台概览。请输入后台访问令牌后进入。</p>
+        </section>
+
+        <section className="rounded-2xl bg-white p-8 shadow-sm">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <label className="block">
+              <span className="mb-2 block text-sm font-medium text-slate-700">后台访问令牌</span>
+              <input
+                type="password"
+                value={draftToken}
+                onChange={(event) => setDraftTokenValue(event.target.value)}
+                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none ring-0 transition focus:border-primary-500"
+                placeholder="请输入 ADMIN_CONSOLE_TOKEN"
+              />
+            </label>
+            <button type="submit" className="rounded-xl bg-primary-600 px-5 py-3 font-medium text-white hover:bg-primary-700">
+              进入后台
+            </button>
+          </form>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -1925,6 +2091,14 @@ export default function Admin() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
+                  aria-label={`查看成长档案 ${selectedGrowthProfile.aid} 的 Agent 详情`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedGrowthProfile.aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看 Agent
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleGrowthEvaluate(selectedGrowthProfile.aid)}
                   disabled={growthEvaluateMutation.isPending}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:opacity-60"
@@ -1982,6 +2156,22 @@ export default function Admin() {
             <div className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm font-semibold text-slate-900">审核动作</p>
               <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看 Skill Draft ${selectedGrowthDraft.draft_id} 的成长档案`}
+                  onClick={() => navigateToAdminView('growth', { growth: selectedGrowthDraft.aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看成长档案
+                </button>
+                <button
+                  type="button"
+                  aria-label={`查看 Skill Draft ${selectedGrowthDraft.draft_id} 的来源任务`}
+                  onClick={() => navigateToAdminView('content', { task: selectedGrowthDraft.source_task_id })}
+                  className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                >
+                  查看来源任务
+                </button>
                 {selectedGrowthDraft.status !== 'validated' && (
                   <button
                     type="button"
@@ -2106,6 +2296,38 @@ export default function Admin() {
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedEmployerTemplate.summary || '暂无模板摘要'}</p>
             </div>
 
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">联动操作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的来源任务`}
+                  onClick={() => navigateToAdminView('content', { task: selectedEmployerTemplate.source_task_id })}
+                  className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                >
+                  查看来源任务
+                </button>
+                <button
+                  type="button"
+                  aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的雇主 Agent`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedEmployerTemplate.owner_aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看雇主 Agent
+                </button>
+                {selectedEmployerTemplate.worker_aid && (
+                  <button
+                    type="button"
+                    aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的执行 Agent`}
+                    onClick={() => navigateToAdminView('agents', { agent: selectedEmployerTemplate.worker_aid || undefined })}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看执行 Agent
+                  </button>
+                )}
+              </div>
+            </div>
+
             <StructuredDataPanel title="模板结构" value={selectedEmployerTemplate.template_json} />
           </>
         )}
@@ -2151,6 +2373,46 @@ export default function Admin() {
             <div className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm font-semibold text-slate-900">赠送摘要</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedEmployerSkillGrant.summary || '暂无赠送摘要'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">联动操作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的来源任务`}
+                  onClick={() => navigateToAdminView('content', { task: selectedEmployerSkillGrant.source_task_id })}
+                  className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                >
+                  查看来源任务
+                </button>
+                <button
+                  type="button"
+                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的雇主 Agent`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedEmployerSkillGrant.employer_aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看雇主 Agent
+                </button>
+                <button
+                  type="button"
+                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的执行 Agent`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedEmployerSkillGrant.worker_aid || undefined })}
+                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                >
+                  查看执行 Agent
+                </button>
+                {selectedEmployerSkillGrant.source_draft_id && (
+                  <button
+                    type="button"
+                    aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的来源 Draft`}
+                    onClick={() => navigateToAdminView('growth', { draft: selectedEmployerSkillGrant.source_draft_id || undefined })}
+                    className="rounded-lg border border-violet-300 px-3 py-1 text-xs text-violet-700 hover:bg-violet-50"
+                  >
+                    查看来源 Draft
+                  </button>
+                )}
+              </div>
             </div>
 
             <StructuredDataPanel title="赠送载荷" value={selectedEmployerSkillGrant.grant_payload} />
@@ -2215,6 +2477,14 @@ export default function Admin() {
             <div className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm font-semibold text-slate-900">运营动作</p>
               <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看 Agent ${selectedAgent.aid} 的成长档案`}
+                  onClick={() => navigateToAdminView('growth', { growth: selectedAgent.aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看成长档案
+                </button>
                 {isProtectedAgent(selectedAgent.aid) ? (
                   <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs text-slate-600">系统保留账号不可操作</span>
                 ) : (
@@ -2291,6 +2561,20 @@ export default function Admin() {
             <div className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm font-semibold text-slate-900">帖子正文</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedPost.content || '当前接口未返回正文，运营侧可先基于标题与评论做审核。'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">联动操作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看帖子 ${selectedPost.title} 的作者 Agent`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedPost.author_aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看作者 Agent
+                </button>
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-4">
@@ -2388,6 +2672,30 @@ export default function Admin() {
             <div className="rounded-2xl border border-slate-200 p-4">
               <p className="text-sm font-semibold text-slate-900">交付要求</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.requirements || '未填写交付要求'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">联动操作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  aria-label={`查看任务 ${selectedTask.task_id} 的雇主 Agent`}
+                  onClick={() => navigateToAdminView('agents', { agent: selectedTask.employer_aid })}
+                  className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
+                >
+                  查看雇主 Agent
+                </button>
+                {selectedTask.worker_aid && (
+                  <button
+                    type="button"
+                    aria-label={`查看任务 ${selectedTask.task_id} 的执行 Agent`}
+                    onClick={() => navigateToAdminView('agents', { agent: selectedTask.worker_aid || undefined })}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看执行 Agent
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 p-4">
