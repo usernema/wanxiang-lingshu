@@ -12,12 +12,21 @@ import {
 } from '@/test/apiMock'
 import type { Session, SessionRole } from '@/lib/api'
 
+const mockFetchCurrentAgentGrowth = vi.fn()
+const mockFetchMySkillDrafts = vi.fn()
+const mockFetchMyEmployerTemplates = vi.fn()
+const mockFetchMyEmployerSkillGrants = vi.fn()
+
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return {
     ...actual,
     getActiveRole: () => mockGetActiveRole(),
     getActiveSession: () => mockGetActiveSession(),
+    fetchCurrentAgentGrowth: () => mockFetchCurrentAgentGrowth(),
+    fetchMySkillDrafts: (...args: unknown[]) => mockFetchMySkillDrafts(...args),
+    fetchMyEmployerTemplates: (...args: unknown[]) => mockFetchMyEmployerTemplates(...args),
+    fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
     },
@@ -46,6 +55,44 @@ function renderProfile(options?: {
   initialEntries?: string[]
 }) {
   applyProfileApiMocks('worker' as SessionRole, options && 'session' in options ? options.session ?? null : activeSession)
+  mockFetchCurrentAgentGrowth.mockResolvedValue({
+    profile: {
+      aid: 'worker-agent',
+      model: 'Claude Worker',
+      provider: 'anthropic',
+      capabilities: ['reasoning', 'coding'],
+      reputation: 88,
+      status: 'active',
+      created_at: '2026-03-09T00:00:00.000Z',
+      primary_domain: 'development',
+      domain_scores: { development: 8 },
+      current_maturity_pool: 'standard',
+      recommended_task_scope: 'standard_access',
+      auto_growth_eligible: false,
+      completed_task_count: 2,
+      active_skill_count: 1,
+      total_task_count: 2,
+      incubating_draft_count: 1,
+      validated_draft_count: 1,
+      published_draft_count: 0,
+      employer_template_count: 1,
+      template_reuse_count: 0,
+      promotion_readiness_score: 68,
+      recommended_next_pool: 'preferred',
+      promotion_candidate: true,
+      suggested_actions: ['发布至少 1 个从真实任务总结出来的 Skill，形成可展示的作品沉淀。'],
+      risk_flags: [],
+      evaluation_summary: '标准池成长档案',
+      last_evaluated_at: '2026-03-10T00:00:00.000Z',
+      updated_at: '2026-03-10T00:00:00.000Z',
+    },
+    pools: [
+      { id: 1, aid: 'worker-agent', pool_type: 'maturity', pool_key: 'standard', pool_score: 100, status: 'active', effective_at: '2026-03-10T00:00:00.000Z', created_at: '2026-03-10T00:00:00.000Z' },
+    ],
+  })
+  mockFetchMySkillDrafts.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
+  mockFetchMyEmployerTemplates.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
+  mockFetchMyEmployerSkillGrants.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
   mockApiGet.mockImplementation(
     options?.apiGetImpl ??
       (async (endpoint: string) => {
@@ -179,6 +226,9 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('总支出')).toBeInTheDocument()
     expect(screen.getByText('200')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('Provider: anthropic'))).toBeInTheDocument()
+    expect(await screen.findByText('晋级候选')).toBeInTheDocument()
+    expect(screen.getByText('晋级准备度')).toBeInTheDocument()
+    expect(screen.getByText('下一目标池')).toBeInTheDocument()
   })
 
   it('shows aggregated profile load failure copy when any dependency query fails', async () => {

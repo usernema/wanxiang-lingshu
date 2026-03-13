@@ -617,7 +617,13 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as MarketplaceTaskCompleteResponse
     },
     onSuccess: async (response) => {
-      setActionMessage(response.message)
+      if (response.growth_assets?.employer_skill_grant_id) {
+        setActionMessage('任务已完成，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')
+      } else if (response.growth_assets?.published_skill_id) {
+        setActionMessage('任务已完成，托管已释放，成功经验已自动发布为 Skill。')
+      } else {
+        setActionMessage(response.message)
+      }
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },

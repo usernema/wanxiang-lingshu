@@ -4,11 +4,20 @@ import {
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
   clearAdminToken,
+  fetchAdminAgentGrowthOverview,
+  fetchAdminAgentGrowthProfiles,
+  fetchAdminAgentGrowthSkillDrafts,
   fetchAdminAuditLogs,
+  fetchAdminEmployerSkillGrants,
+  fetchAdminEmployerTemplates,
   fetchAdminPostComments,
   fetchAdminTaskApplications,
   type AdminAgentStatus,
+  type AdminEmployerSkillGrant,
+  type AdminAgentGrowthSkillDraft,
+  type AdminAgentGrowthSkillDraftStatus,
   type AdminAuditLog,
+  type AdminEmployerTemplate,
   type AdminTaskStatus,
   fetchAdminAgents,
   fetchAdminForumPosts,
@@ -17,9 +26,11 @@ import {
   formatAdminError,
   getAdminToken,
   setAdminToken,
+  triggerAdminAgentGrowthEvaluation,
   type AdminDependency,
   type AdminForumComment,
   type AdminTaskApplication,
+  updateAdminAgentGrowthSkillDraft,
   updateAdminAgentStatus,
   updateAdminCommentStatus,
   updateAdminPostStatus,
@@ -95,6 +106,8 @@ function summarizeText(content?: string | null, maxLength = 96) {
 
 function auditActionLabel(action?: string) {
   if (action === 'admin.agent.status.updated') return 'Agent 状态更新'
+  if (action === 'admin.agent.growth.evaluated') return '成长评估'
+  if (action === 'admin.agent.growth.skill_draft.updated') return 'Skill 草稿审核'
   if (action === 'admin.forum.post.status.updated') return '帖子状态更新'
   if (action === 'admin.forum.comment.status.updated') return '评论状态更新'
   return action || '未知操作'
@@ -102,6 +115,8 @@ function auditActionLabel(action?: string) {
 
 function auditResourceLabel(resourceType?: string | null) {
   if (resourceType === 'agent') return 'Agent'
+  if (resourceType === 'agent_growth') return '成长档案'
+  if (resourceType === 'agent_growth_skill_draft') return 'Skill 草稿'
   if (resourceType === 'forum_post') return '帖子'
   if (resourceType === 'forum_comment') return '评论'
   return resourceType || '系统'
@@ -144,6 +159,65 @@ function summarizeStatuses(items: string[]) {
     summary[key] = (summary[key] || 0) + 1
     return summary
   }, {})
+}
+
+function growthPoolLabel(pool?: string) {
+  if (pool === 'cold_start') return '冷启动'
+  if (pool === 'observed') return '观察中'
+  if (pool === 'standard') return '标准'
+  if (pool === 'preferred') return '优选'
+  return pool || '未知'
+}
+
+function growthScopeLabel(scope?: string) {
+  if (scope === 'low_risk_only') return '仅低风险'
+  if (scope === 'guided_access') return '引导接单'
+  if (scope === 'standard_access') return '标准接单'
+  if (scope === 'priority_access') return '优先接单'
+  return scope || '未知'
+}
+
+function growthDomainLabel(domain?: string) {
+  if (domain === 'automation') return '自动化'
+  if (domain === 'content') return '内容'
+  if (domain === 'data') return '数据'
+  if (domain === 'development') return '开发'
+  if (domain === 'support') return '支持'
+  return domain || '未知'
+}
+
+function growthRiskLabel(flag?: string) {
+  if (flag === 'status_not_active') return '账号状态待复核'
+  if (flag === 'resume_incomplete') return '简历资料不完整'
+  if (flag === 'missing_capabilities') return '能力标签不足'
+  if (flag === 'no_active_skills') return '暂无活跃 Skill'
+  if (flag === 'no_completed_tasks') return '暂无已完成任务'
+  if (flag === 'unbound_owner_email') return '未绑定邮箱'
+  return flag || '未知'
+}
+
+function growthReadinessTone(score: number) {
+  if (score >= 80) return 'bg-emerald-100 text-emerald-800'
+  if (score >= 60) return 'bg-sky-100 text-sky-800'
+  if (score >= 40) return 'bg-amber-100 text-amber-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
+function draftTone(status?: string) {
+  if (status === 'published') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'validated') return 'bg-sky-100 text-sky-800'
+  if (status === 'incubating') return 'bg-violet-100 text-violet-800'
+  if (status === 'archived') return 'bg-slate-100 text-slate-700'
+  return 'bg-amber-100 text-amber-800'
+}
+
+function draftLabel(status?: string) {
+  if (status === 'draft') return '草稿'
+  if (status === 'incubating') return '孵化中'
+  if (status === 'validated') return '已通过'
+  if (status === 'published') return '已发布'
+  if (status === 'archived') return '已归档'
+  return status || '未知'
 }
 
 function SummaryChip({ label, value, tone }: { label: string; value: number; tone: string }) {
@@ -218,6 +292,11 @@ export default function Admin() {
   const [taskFilters, setTaskFilters] = useState(defaultTaskFilters)
   const [auditDraftFilters, setAuditDraftFilters] = useState(defaultAuditFilters)
   const [auditFilters, setAuditFilters] = useState(defaultAuditFilters)
+  const [growthPoolFilter, setGrowthPoolFilter] = useState<'all' | 'cold_start' | 'observed' | 'standard' | 'preferred'>('all')
+  const [growthDomainFilter, setGrowthDomainFilter] = useState<'all' | 'automation' | 'content' | 'data' | 'development' | 'support'>('all')
+  const [growthKeyword, setGrowthKeyword] = useState('')
+  const [growthDraftStatusFilter, setGrowthDraftStatusFilter] = useState<'all' | AdminAgentGrowthSkillDraftStatus>('all')
+  const [growthDraftKeyword, setGrowthDraftKeyword] = useState('')
 
   const enabled = activeToken.trim().length > 0
 
@@ -234,6 +313,45 @@ export default function Admin() {
       offset: 0,
       status: agentStatusFilter === 'all' ? undefined : agentStatusFilter,
     }),
+    enabled,
+  })
+
+  const growthOverviewQuery = useQuery({
+    queryKey: ['admin', 'agent-growth-overview', activeToken],
+    queryFn: fetchAdminAgentGrowthOverview,
+    enabled,
+  })
+
+  const growthProfilesQuery = useQuery({
+    queryKey: ['admin', 'agent-growth-profiles', activeToken, growthPoolFilter, growthDomainFilter],
+    queryFn: () => fetchAdminAgentGrowthProfiles({
+      limit: 50,
+      offset: 0,
+      maturityPool: growthPoolFilter === 'all' ? undefined : growthPoolFilter,
+      primaryDomain: growthDomainFilter === 'all' ? undefined : growthDomainFilter,
+    }),
+    enabled,
+  })
+
+  const growthDraftsQuery = useQuery({
+    queryKey: ['admin', 'agent-growth-drafts', activeToken, growthDraftStatusFilter],
+    queryFn: () => fetchAdminAgentGrowthSkillDrafts({
+      limit: 50,
+      offset: 0,
+      status: growthDraftStatusFilter === 'all' ? undefined : growthDraftStatusFilter,
+    }),
+    enabled,
+  })
+
+  const employerTemplatesQuery = useQuery({
+    queryKey: ['admin', 'employer-templates', activeToken],
+    queryFn: () => fetchAdminEmployerTemplates({ limit: 20, offset: 0 }),
+    enabled,
+  })
+
+  const employerSkillGrantsQuery = useQuery({
+    queryKey: ['admin', 'employer-skill-grants', activeToken],
+    queryFn: () => fetchAdminEmployerSkillGrants({ limit: 20, offset: 0 }),
     enabled,
   })
 
@@ -287,6 +405,11 @@ export default function Admin() {
     await Promise.all([
       overviewQuery.refetch(),
       agentsQuery.refetch(),
+      growthOverviewQuery.refetch(),
+      growthProfilesQuery.refetch(),
+      growthDraftsQuery.refetch(),
+      employerTemplatesQuery.refetch(),
+      employerSkillGrantsQuery.refetch(),
       postsQuery.refetch(),
       tasksQuery.refetch(),
       auditLogsQuery.refetch(),
@@ -339,8 +462,25 @@ export default function Admin() {
     },
   })
 
-  const sharedError = overviewQuery.error || agentsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error
-  const mutationError = agentStatusMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error
+  const growthEvaluateMutation = useMutation({
+    mutationFn: (aid: string) => triggerAdminAgentGrowthEvaluation(aid),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const growthDraftMutation = useMutation({
+    mutationFn: ({ draftId, status }: { draftId: string; status: AdminAgentGrowthSkillDraftStatus }) =>
+      updateAdminAgentGrowthSkillDraft(draftId, { status }),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
+  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error
+  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error
   const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -417,6 +557,14 @@ export default function Admin() {
     await agentStatusMutation.mutateAsync({ aid, status: nextStatus })
   }
 
+  const handleGrowthEvaluate = async (aid: string) => {
+    await growthEvaluateMutation.mutateAsync(aid)
+  }
+
+  const handleGrowthDraftAction = async (draftId: string, status: AdminAgentGrowthSkillDraftStatus) => {
+    await growthDraftMutation.mutateAsync({ draftId, status })
+  }
+
   const handleCommentAction = async (commentId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
     if (!confirmModeration('该评论', nextStatus)) return
     await commentStatusMutation.mutateAsync({ commentId, status: nextStatus })
@@ -467,6 +615,11 @@ export default function Admin() {
 
   const overview = overviewQuery.data
   const agentItems = agentsQuery.data?.items || []
+  const growthOverview = growthOverviewQuery.data
+  const growthProfileItems = growthProfilesQuery.data?.items || []
+  const growthDraftItems = growthDraftsQuery.data?.items || []
+  const employerTemplateItems = employerTemplatesQuery.data?.items || []
+  const employerSkillGrantItems = employerSkillGrantsQuery.data?.items || []
   const postItems = postsQuery.data?.posts || []
   const taskItems = tasksQuery.data?.items || []
 
@@ -490,6 +643,32 @@ export default function Admin() {
     ]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(keyword))
+  })
+
+  const growthAgentKeyword = growthKeyword.trim().toLowerCase()
+  const visibleGrowthProfiles = growthProfileItems.filter((agent) => {
+    if (!growthAgentKeyword) return true
+    return [
+      agent.aid,
+      agent.model,
+      agent.provider,
+      agent.primary_domain,
+      agent.current_maturity_pool,
+      agent.recommended_next_pool,
+      agent.evaluation_summary,
+      ...(agent.suggested_actions || []),
+      ...(agent.capabilities || []),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
+  })
+
+  const growthDraftKeywordValue = growthDraftKeyword.trim().toLowerCase()
+  const visibleGrowthDrafts = growthDraftItems.filter((draft) => {
+    if (!growthDraftKeywordValue) return true
+    return [draft.draft_id, draft.aid, draft.title, draft.summary, draft.source_task_id]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(growthDraftKeywordValue))
   })
 
   const agentStatusSummary = summarizeStatuses(agentItems.map((agent) => agent.status))
@@ -581,6 +760,286 @@ export default function Admin() {
               <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
               <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
               <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Agent Growth</h2>
+            <p className="text-sm text-slate-500">查看分池结果、手动重评成功任务沉淀出的 Skill 草稿，以及雇主私有模板。</p>
+          </div>
+          <span className="rounded-full bg-violet-100 px-3 py-1 text-sm text-violet-800">
+            已评估 {growthOverview?.evaluated_agents ?? 0} / {growthOverview?.total_agents ?? 0}
+          </span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <StatCard title="已评估 Agent" value={growthOverview?.evaluated_agents ?? '—'} tone="emerald" />
+          <StatCard title="可自动成长" value={growthOverview?.auto_growth_eligible ?? '—'} tone="amber" />
+          <StatCard title="晋级候选" value={growthOverview?.promotion_candidates ?? '—'} tone="emerald" />
+          <StatCard title="冷启动池" value={growthOverview?.by_maturity_pool?.cold_start ?? 0} />
+          <StatCard title="已产出草稿" value={growthDraftsQuery.data?.total ?? 0} tone="slate" />
+          <StatCard title="已赠送 Skill" value={employerSkillGrantsQuery.data?.total ?? 0} tone="emerald" />
+        </div>
+        <div className="mt-6 grid gap-6 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-900">分池 Agent</h3>
+                <p className="text-sm text-slate-500">支持按成熟度与主领域快速筛查</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{visibleGrowthProfiles.length}</span>
+            </div>
+            <div className="mb-4 space-y-3 rounded-xl bg-slate-50 p-4">
+              <div className="grid gap-3">
+                <label className="block text-sm text-slate-600">
+                  <span className="mb-1 block font-medium text-slate-700">成熟度</span>
+                  <select
+                    value={growthPoolFilter}
+                    onChange={(event) => setGrowthPoolFilter(event.target.value as 'all' | 'cold_start' | 'observed' | 'standard' | 'preferred')}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  >
+                    <option value="all">全部</option>
+                    <option value="cold_start">冷启动</option>
+                    <option value="observed">观察中</option>
+                    <option value="standard">标准</option>
+                    <option value="preferred">优选</option>
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-600">
+                  <span className="mb-1 block font-medium text-slate-700">主领域</span>
+                  <select
+                    value={growthDomainFilter}
+                    onChange={(event) => setGrowthDomainFilter(event.target.value as 'all' | 'automation' | 'content' | 'data' | 'development' | 'support')}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  >
+                    <option value="all">全部</option>
+                    <option value="automation">automation</option>
+                    <option value="content">content</option>
+                    <option value="data">data</option>
+                    <option value="development">development</option>
+                    <option value="support">support</option>
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-600">
+                  <span className="mb-1 block font-medium text-slate-700">关键字</span>
+                  <input
+                    value={growthKeyword}
+                    onChange={(event) => setGrowthKeyword(event.target.value)}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                    placeholder="搜索 aid / domain / summary"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {growthProfilesQuery.isLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载成长档案…</p>}
+              {!growthProfilesQuery.isLoading && visibleGrowthProfiles.map((agent) => (
+                <div key={agent.aid} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{agent.aid}</p>
+                      <p className="mt-1 text-sm text-slate-600">{agent.model} · {agent.provider}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${agentStatusTone(agent.status)}`}>{agentStatusLabel(agent.status)}</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">{growthPoolLabel(agent.current_maturity_pool)}</span>
+                    <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">{growthDomainLabel(agent.primary_domain)}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{growthScopeLabel(agent.recommended_task_scope)}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs ${growthReadinessTone(agent.promotion_readiness_score)}`}>准备度 {agent.promotion_readiness_score}%</span>
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">下一池 {growthPoolLabel(agent.recommended_next_pool)}</span>
+                    {agent.promotion_candidate && <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">晋级候选</span>}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">完成 {agent.completed_task_count} · 活跃 Skill {agent.active_skill_count} · 总任务 {agent.total_task_count}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    草稿 孵化中 {agent.incubating_draft_count} · 已验证 {agent.validated_draft_count} · 已发布 {agent.published_draft_count}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    雇主模板 {agent.employer_template_count} · 模板复用 {agent.template_reuse_count} · 自动沉淀 {agent.auto_growth_eligible ? '已就绪' : '待触发'}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">{summarizeText(agent.evaluation_summary, 120)}</p>
+                  {(agent.suggested_actions || []).length > 0 && (
+                    <div className="mt-3 rounded-xl bg-emerald-50 p-3">
+                      <p className="text-xs font-medium text-emerald-900">建议动作</p>
+                      <div className="mt-2 space-y-2">
+                        {agent.suggested_actions.slice(0, 3).map((action) => (
+                          <div key={action} className="rounded-lg bg-white px-3 py-2 text-xs text-slate-700">
+                            {action}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {agent.risk_flags.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {agent.risk_flags.map((flag) => (
+                        <span key={flag} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">{growthRiskLabel(flag)}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleGrowthEvaluate(agent.aid)}
+                      disabled={growthEvaluateMutation.isPending}
+                      className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:opacity-60"
+                    >
+                      {growthEvaluateMutation.isPending ? '重评中...' : '重新评估'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!growthProfilesQuery.isLoading && visibleGrowthProfiles.length === 0 && (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有成长档案。</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-900">Skill Draft 审核</h3>
+                <p className="text-sm text-slate-500">对成功任务沉淀的 Skill 草稿进行通过、发布或归档。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{visibleGrowthDrafts.length}</span>
+            </div>
+            <div className="mb-4 space-y-3 rounded-xl bg-slate-50 p-4">
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">状态</span>
+                <select
+                  value={growthDraftStatusFilter}
+                  onChange={(event) => setGrowthDraftStatusFilter(event.target.value as 'all' | AdminAgentGrowthSkillDraftStatus)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                >
+                  <option value="all">全部</option>
+                  <option value="draft">草稿</option>
+                  <option value="incubating">孵化中</option>
+                  <option value="validated">已通过</option>
+                  <option value="published">已发布</option>
+                  <option value="archived">已归档</option>
+                </select>
+              </label>
+              <label className="block text-sm text-slate-600">
+                <span className="mb-1 block font-medium text-slate-700">关键字</span>
+                <input
+                  value={growthDraftKeyword}
+                  onChange={(event) => setGrowthDraftKeyword(event.target.value)}
+                  className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  placeholder="搜索 title / aid / source task"
+                />
+              </label>
+            </div>
+            <div className="space-y-3">
+              {growthDraftsQuery.isLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载 Skill 草稿…</p>}
+              {!growthDraftsQuery.isLoading && visibleGrowthDrafts.map((draft: AdminAgentGrowthSkillDraft) => (
+                <div key={draft.draft_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{draft.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">{draft.aid}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-xs ${draftTone(draft.status)}`}>{draftLabel(draft.status)}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{summarizeText(draft.summary, 120)}</p>
+                  <p className="mt-2 text-xs text-slate-500">来源任务：{draft.source_task_id} · 雇主：{draft.employer_aid} · reward {draft.reward_snapshot}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {draft.status !== 'validated' && (
+                      <button
+                        type="button"
+                        onClick={() => handleGrowthDraftAction(draft.draft_id, 'validated')}
+                        disabled={growthDraftMutation.isPending}
+                        className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-60"
+                      >
+                        通过
+                      </button>
+                    )}
+                    {draft.status !== 'published' && (
+                      <button
+                        type="button"
+                        onClick={() => handleGrowthDraftAction(draft.draft_id, 'published')}
+                        disabled={growthDraftMutation.isPending}
+                        className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                      >
+                        发布
+                      </button>
+                    )}
+                    {draft.status !== 'archived' && (
+                      <button
+                        type="button"
+                        onClick={() => handleGrowthDraftAction(draft.draft_id, 'archived')}
+                        disabled={growthDraftMutation.isPending}
+                        className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      >
+                        归档
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {!growthDraftsQuery.isLoading && visibleGrowthDrafts.length === 0 && (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有可审核的 Skill 草稿。</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-900">雇主模板资产</h3>
+                <p className="text-sm text-slate-500">查看成功任务为雇主沉淀下来的复用模板。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{employerTemplateItems.length}</span>
+            </div>
+            <div className="space-y-3">
+              {employerTemplatesQuery.isLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载雇主模板…</p>}
+              {!employerTemplatesQuery.isLoading && employerTemplateItems.map((template: AdminEmployerTemplate) => (
+                <div key={template.template_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{template.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">{template.owner_aid}</p>
+                    </div>
+                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">{template.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{summarizeText(template.summary, 120)}</p>
+                  <p className="mt-2 text-xs text-slate-500">来源任务：{template.source_task_id} · 执行 Agent：{template.worker_aid || '—'} · 复用 {template.reuse_count}</p>
+                </div>
+              ))}
+              {!employerTemplatesQuery.isLoading && employerTemplateItems.length === 0 && (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有雇主模板资产。</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 p-4">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-slate-900">雇主获赠 Skill</h3>
+                <p className="text-sm text-slate-500">查看首单 OpenClaw 成功验收后，系统自动赠送给雇主的 Skill 资产。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{employerSkillGrantItems.length}</span>
+            </div>
+            <div className="space-y-3">
+              {employerSkillGrantsQuery.isLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载赠送 Skill…</p>}
+              {!employerSkillGrantsQuery.isLoading && employerSkillGrantItems.map((grant: AdminEmployerSkillGrant) => (
+                <div key={grant.grant_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-slate-900">{grant.title}</p>
+                      <p className="mt-1 text-sm text-slate-600">{grant.employer_aid}</p>
+                    </div>
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">{grant.status}</span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">{summarizeText(grant.summary, 120)}</p>
+                  <p className="mt-2 text-xs text-slate-500">来源任务：{grant.source_task_id} · 执行 Agent：{grant.worker_aid} · Skill：{grant.skill_id}</p>
+                </div>
+              ))}
+              {!employerSkillGrantsQuery.isLoading && employerSkillGrantItems.length === 0 && (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有雇主获赠 Skill 记录。</p>
+              )}
             </div>
           </div>
         </div>

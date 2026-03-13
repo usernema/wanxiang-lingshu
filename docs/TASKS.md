@@ -47,6 +47,23 @@
   - 兼容层不再成为默认开发入口
   - 页面交互细节继续稳定
 
+### D5. 推进 Agent Growth / Retention Phase 2 验收
+- **状态**: Doing
+- **关键文件**:
+  - `services/marketplace-service/app/services/growth_service.py`
+  - `services/marketplace-service/app/api/v1/growth.py`
+  - `services/api-gateway/src/routes/index.js`
+  - `frontend/src/pages/Admin.tsx`
+  - `frontend/src/pages/Profile.tsx`
+- **目标**:
+  - 让成功任务自动生成 Skill Draft 与雇主模板
+  - 让后台可重评 / 可审核 / 可查看模板资产
+  - 让用户侧能看到成长资产
+- **验收**:
+  - Task complete 后自动落表 Draft / Template
+  - Admin 可审核 Draft 并发布为 Skill
+  - Profile 可看到 growth profile / drafts / templates
+
 ## Next
 
 ### N1. 收紧兼容层边界
@@ -61,6 +78,34 @@
   - 继续把 Marketplace diagnostics / 状态机 / 错误映射从服务层回归扩展到前端/UI 层
   - 将 seeded 数据校验纳入标准回归流程
   - 增加更多 integration / UI 回归覆盖
+
+### N3. 启动 Agent Growth / Retention 实现
+- **优先级**: P1
+- **关键文件**:
+  - `docs/modules/agent-growth.md`
+  - `services/identity-service/internal/service/agent_service.go`
+  - `services/marketplace-service/app/api/v1/tasks.py`
+  - `frontend/src/pages/Admin.tsx`
+- **内容**:
+  - 建立 OpenClaw 能力档案与自动评估入口
+  - 增加领域池 / 成熟度池分配
+  - 为无 Skill Agent 增加冷启动任务约束
+  - 为成功任务增加 Growth Skill Draft 与雇主私有模板
+- **验收**:
+  - Agent 可查看当前分池
+  - 首单成功后能看到 Skill Draft
+  - 管理后台可查看 Draft 与评估记录
+
+### N4. 深化 Agent Growth Phase 3
+- **优先级**: P1
+- **内容**:
+  - 为 Skill Draft / 雇主模板增加复用计数与真实成功转化
+  - 让 Draft 达阈值后自动建议升池
+  - 将 growth score 接入任务匹配排序
+- **验收**:
+  - 可看到 Draft / Template 的复用成功次数
+  - 复用成功后能自动触发升池建议
+  - Marketplace 排序能感知成长状态
 
 ## Blocked
 
@@ -96,6 +141,11 @@
 - 已覆盖 diagnostics 聚合与 example sample limit
 - 已覆盖 assign / complete 的关键状态冲突语义
 - 已以独立内存 SQLite 方式运行 `tests/test_tasks.py`，降低本机 pytest 插件环境差异影响
+
+### C8. Agent Growth Phase 2 已进入可验收状态
+- 已在任务完成后自动生成 Growth Skill Draft、雇主私有模板与经验事件
+- 已补充后台 Skill Draft 审核与雇主模板资产读取能力
+- 已在 Profile 增加 growth profile / draft / template 展示
 
 ## 维护规则
 

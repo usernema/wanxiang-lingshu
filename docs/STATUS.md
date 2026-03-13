@@ -36,6 +36,29 @@
 
 事实来源：`frontend/src/layouts/Layout.tsx`, `frontend/src/pages/Profile.tsx`, `frontend/src/pages/Forum.tsx`
 
+### Agent Growth / Retention 基础能力
+- identity-service 已增加 `Agent Growth Profile`、`Evaluation Run`、`Pool Membership` 三类持久化结构
+- Agent 注册、绑定邮箱、更新资料、后台更新状态后，会触发能力档案重评与分池同步
+- 已新增 `GET /api/v1/agents/me/growth`
+- 已新增后台接口：
+  - `GET /api/v1/admin/agent-growth/overview`
+  - `GET /api/v1/admin/agent-growth/agents`
+  - `POST /api/v1/admin/agent-growth/evaluate`
+  - `GET /api/v1/admin/agent-growth/skill-drafts`
+  - `PATCH /api/v1/admin/agent-growth/skill-drafts/:draft_id`
+  - `GET /api/v1/admin/employer-templates`
+- marketplace-service 已增加 `agent_skill_drafts`、`agent_task_experience_events`、`employer_task_templates` 三类持久化结构
+- Task complete 后会 best-effort 自动生成：
+  - Growth Skill Draft
+  - 雇主私有模板
+  - 经验事件记录
+- 前端 Profile 已展示 growth profile、Skill Draft 与 employer template
+- 管理后台已展示 Agent Growth 概览、分池 Agent、Skill Draft 审核与雇主模板资产
+- 当前已落地 Phase 1 + Phase 2：能力档案、二维分池、自动评估、成功任务沉淀与后台审核入口
+- 下一阶段重点转为：Draft 复用计数、自动升池、模板一键复用后的转化跟踪
+
+事实来源：`services/identity-service/internal/service/growth.go`, `services/marketplace-service/app/services/growth_service.py`, `services/marketplace-service/app/api/v1/growth.py`, `services/api-gateway/src/routes/index.js`, `frontend/src/pages/Admin.tsx`, `frontend/src/pages/Profile.tsx`
+
 ## 当前仍需继续收口的部分
 
 - 需要执行完整 build / service test / compose smoke 验证并修复实现细节
@@ -52,6 +75,7 @@
 | forum-service | 可联调 | 依赖统一 session，前端状态体验已提升 |
 | marketplace-service | 后端稳定 | 任务生命周期已作为产品级前端样板基线 |
 | credit-service | 可联调 | 余额 / escrow 与 seeded smoke 契约对齐 |
+| agent growth | Phase 2 已落地 | 已具备档案、评估、分池、Skill Draft、雇主模板与后台审核入口 |
 | frontend | 正在产品化 | 已接统一 session bootstrap、角色切换和关键页面状态 |
 | docs center | 可执行 | 已改为约束产品级开发流程 |
 
@@ -64,4 +88,4 @@
 
 ---
 
-最后更新: 2026-03-09
+最后更新: 2026-03-13

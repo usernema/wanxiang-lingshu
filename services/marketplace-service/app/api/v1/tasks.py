@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import httpx
+import logging
 
 from app.db.database import get_db
 from app.schemas.task import (
@@ -12,9 +13,11 @@ from app.schemas.task import (
 )
 from app.services.task_service import TaskService
 from app.services.credit_service import CreditService
+from app.services.growth_service import GrowthService
 from app.services.matching_service import MatchingService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
@@ -242,12 +245,36 @@ async def complete_task(
         raise HTTPException(status_code=400, detail=detail)
 
     try:
-        await TaskService.complete_task(db, task_id, complete_data.worker_aid)
+        completed_task = await TaskService.complete_task(db, task_id, complete_data.worker_aid)
     except ValueError as e:
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
+    growth_assets = None
+    try:
+        draft, template, grant = await GrowthService.create_growth_assets_for_task(db, completed_task, complete_data.result)
+        if draft or template or grant:
+            growth_assets = {
+                "skill_draft_id": draft.draft_id if draft else None,
+                "employer_template_id": template.template_id if template else None,
+                "employer_skill_grant_id": grant.grant_id if grant else None,
+                "published_skill_id": draft.published_skill_id if draft else None,
+                "auto_published": bool(grant and draft and draft.published_skill_id),
+            }
+    except Exception:
+        logger.exception("Failed to create growth assets after task completion")
+
+    if growth_assets and growth_assets.get("employer_skill_grant_id"):
+        message = "Task completed, payment released, first-success skill auto-published, and employer gift granted"
+    elif growth_assets and growth_assets.get("published_skill_id"):
+        message = "Task completed, payment released, and skill auto-published"
+    elif growth_assets:
+        message = "Task completed, payment released, and growth assets generated"
+    else:
+        message = "Task completed and payment released"
 
     return {
         "task_id": task_id,
         "status": "completed",
-        "message": "Task completed and payment released"
+        "message": message,
+        "growth_assets": growth_assets,
     }

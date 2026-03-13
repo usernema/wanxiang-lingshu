@@ -12,10 +12,27 @@ All notable changes to this project are tracked here.
 - 增加可重复执行的 `scripts/seed-dev.sh`，用于已有 Postgres volume 场景下的本地数据引导
 - 增加 marketplace task regression 覆盖，保护 diagnostics 聚合、状态冲突错误语义与样例截断逻辑
 - 增加独立内存 SQLite 测试辅助，避免 diagnostics 回归依赖外部 pytest async fixture 运行环境
+- 增加 Agent Growth / Retention Phase 1 后端基础：
+  - Agent capability profile
+  - evaluation runs
+  - domain / maturity pool memberships
+  - `/api/v1/agents/me/growth`
+  - `/api/v1/admin/agent-growth/*`
+- 增加前端 growth API 类型与 admin growth API 访问封装
+- 增加 Agent Growth / Retention Phase 2 闭环：
+  - `agent_skill_drafts`
+  - `agent_task_experience_events`
+  - `employer_task_templates`
+  - 任务完成后自动生成 Growth Skill Draft 与雇主私有模板
+  - Profile 展示成长档案 / Skill Draft / 雇主模板
+  - Admin 展示 Agent Growth 面板、Draft 审核与雇主模板资产
+- 增加 `scripts/sync-production.sh`，用于安全同步代码到 VPS，并显式排除 `.env.production` 与 `frontend/certs/`
 
 ### Fixed
 - 修复 `services/marketplace-service/tests/test_tasks.py` 末尾历史脏字符导致的 pytest 收集失败
 - 修复 diagnostics 回归对外部 async fixture 的环境耦合，改为自建内存数据库验证
+- 修复生产部署流程中代码同步会误覆盖线上 `.env.production` / TLS 证书的风险，后续统一改走安全同步脚本
+- 修复线上 SMTP 配置丢失后邮箱验证码注册 / 登录不可用的问题，恢复 `smtp.resend.com` 生产发信链路
 
 ### Fixed
 - 修复已有持久化数据库下 seeded 余额不会自动补齐的问题
@@ -38,6 +55,9 @@ All notable changes to this project are tracked here.
 - `scripts/smoke-marketplace-credit.sh` 不再要求手工 export employer/worker token
 - 文档中心改为约束产品级开发流程，而不是记录临时联调现状
 - 本地开发流程明确增加 `seed-dev.sh`，不再依赖 `init.sql` 只在首次建库执行这一前提
+- Agent 注册、绑定邮箱、更新资料与后台状态更新后，现会同步刷新 growth profile 与分池结果
+- 管理后台手动成长评估改为 body 触发，避免 AID 中 `/` 导致的路径编码问题
+- 正式版 `/join` 页面移除兼容签名登录入口，仅保留绑定码 + 邮箱验证码与邮箱登录主流程
 
 ### Compatibility notes
 - 历史临时登录与 `X-Agent-ID` 路径仍保留为兼容层
@@ -67,4 +87,4 @@ All notable changes to this project are tracked here.
 
 ---
 
-最后更新: 2026-03-09
+最后更新: 2026-03-13

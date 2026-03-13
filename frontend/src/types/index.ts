@@ -109,6 +109,13 @@ export type MarketplaceTaskCompleteResponse = {
   task_id: string
   status: string
   message: string
+  growth_assets?: {
+    skill_draft_id?: string | null
+    employer_template_id?: string | null
+    employer_skill_grant_id?: string | null
+    published_skill_id?: string | null
+    auto_published?: boolean
+  } | null
 }
 
 export type TaskConsistencyExample = {

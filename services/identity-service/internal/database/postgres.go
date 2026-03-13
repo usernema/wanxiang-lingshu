@@ -92,6 +92,82 @@ func (p *PostgresDB) InitSchema() error {
 
 	CREATE INDEX IF NOT EXISTS idx_reputation_history_aid ON reputation_history(aid);
 	CREATE INDEX IF NOT EXISTS idx_reputation_history_created_at ON reputation_history(created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS agent_capability_profiles (
+		aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
+		owner_email VARCHAR(320) NOT NULL DEFAULT '',
+		primary_domain VARCHAR(64) NOT NULL DEFAULT 'automation',
+		domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+		current_maturity_pool VARCHAR(32) NOT NULL DEFAULT 'cold_start',
+		recommended_task_scope VARCHAR(64) NOT NULL DEFAULT 'low_risk_only',
+		auto_growth_eligible BOOLEAN NOT NULL DEFAULT FALSE,
+		completed_task_count INT NOT NULL DEFAULT 0,
+		active_skill_count INT NOT NULL DEFAULT 0,
+		total_task_count INT NOT NULL DEFAULT 0,
+		incubating_draft_count INT NOT NULL DEFAULT 0,
+		validated_draft_count INT NOT NULL DEFAULT 0,
+		published_draft_count INT NOT NULL DEFAULT 0,
+		employer_template_count INT NOT NULL DEFAULT 0,
+		template_reuse_count INT NOT NULL DEFAULT 0,
+		promotion_readiness_score INT NOT NULL DEFAULT 0,
+		recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed',
+		promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE,
+		suggested_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+		risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+		evaluation_summary TEXT NOT NULL DEFAULT '',
+		last_evaluated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS incubating_draft_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS validated_draft_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS published_draft_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS employer_template_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS template_reuse_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_readiness_score INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed';
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS suggested_actions JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+	CREATE INDEX IF NOT EXISTS idx_agent_capability_profiles_maturity_pool ON agent_capability_profiles(current_maturity_pool);
+	CREATE INDEX IF NOT EXISTS idx_agent_capability_profiles_primary_domain ON agent_capability_profiles(primary_domain);
+	CREATE INDEX IF NOT EXISTS idx_agent_capability_profiles_last_evaluated_at ON agent_capability_profiles(last_evaluated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_agent_capability_profiles_promotion_candidate ON agent_capability_profiles(promotion_candidate);
+
+	CREATE TABLE IF NOT EXISTS agent_pool_memberships (
+		id BIGSERIAL PRIMARY KEY,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		pool_type VARCHAR(32) NOT NULL,
+		pool_key VARCHAR(64) NOT NULL,
+		pool_score INT NOT NULL DEFAULT 0,
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		effective_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		expires_at TIMESTAMP NULL,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_pool_memberships_aid ON agent_pool_memberships(aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_pool_memberships_pool_type ON agent_pool_memberships(pool_type);
+	CREATE INDEX IF NOT EXISTS idx_agent_pool_memberships_pool_key ON agent_pool_memberships(pool_key);
+
+	CREATE TABLE IF NOT EXISTS agent_evaluation_runs (
+		id BIGSERIAL PRIMARY KEY,
+		evaluation_id VARCHAR(64) NOT NULL UNIQUE,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		trigger_type VARCHAR(64) NOT NULL DEFAULT 'manual',
+		primary_domain VARCHAR(64) NOT NULL,
+		maturity_pool VARCHAR(32) NOT NULL,
+		domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+		risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+		decision_summary TEXT NOT NULL DEFAULT '',
+		profile_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_aid ON agent_evaluation_runs(aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_trigger_type ON agent_evaluation_runs(trigger_type);
+	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_created_at ON agent_evaluation_runs(created_at DESC);
 	`
 
 	_, err := p.DB.Exec(schema)

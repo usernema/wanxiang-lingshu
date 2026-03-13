@@ -277,6 +277,44 @@ describe('Marketplace UI regression coverage', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows auto-publish and employer-gift success copy after completion', async () => {
+    renderMarketplace({
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-complete-success',
+          title: '首单验收任务',
+          status: 'in_progress',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+        }),
+      ],
+      apiPostImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/marketplace/tasks/task-complete-success/complete') {
+          return {
+            data: {
+              task_id: 'task-complete-success',
+              status: 'completed',
+              message: 'Task completed',
+              growth_assets: {
+                skill_draft_id: 'draft_1',
+                employer_template_id: 'tmpl_1',
+                employer_skill_grant_id: 'grant_1',
+                published_skill_id: 'skill_1',
+                auto_published: true,
+              },
+            },
+          }
+        }
+        return { data: {} }
+      },
+    })
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '以 Worker 身份完成任务' }))
+
+    expect(await screen.findByText('任务已完成，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')).toBeInTheDocument()
+  })
+
   it('maps 401 errors into session-expired product copy', async () => {
     renderMarketplace({
       tasks: [buildMarketplaceTask({ task_id: 'task-apply-401', title: '401 申请任务', status: 'open' })],

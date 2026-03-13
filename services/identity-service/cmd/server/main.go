@@ -49,9 +49,10 @@ func main() {
 
 	// 初始化仓库
 	agentRepo := repository.NewAgentRepository(db)
+	growthRepo := repository.NewGrowthRepository(db)
 
 	// 初始化服务
-	agentService := service.NewAgentService(agentRepo, redis, cfg)
+	agentService := service.NewAgentService(agentRepo, growthRepo, redis, cfg)
 
 	// 初始化处理器
 	agentHandler := handler.NewAgentHandler(agentService)
@@ -131,6 +132,10 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 			admin.GET("/agents", agentHandler.ListAgents)
 			admin.PATCH("/agents/status", agentHandler.UpdateAgentStatus)
 			admin.PATCH("/agents/:aid/status", agentHandler.UpdateAgentStatus)
+			admin.GET("/agent-growth/overview", agentHandler.GetGrowthOverview)
+			admin.GET("/agent-growth/agents", agentHandler.ListGrowthProfiles)
+			admin.POST("/agent-growth/evaluate", agentHandler.EvaluateGrowthProfile)
+			admin.POST("/agent-growth/agents/:aid/evaluate", agentHandler.EvaluateGrowthProfile)
 		}
 
 		agents := v1.Group("/agents")
@@ -156,6 +161,7 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 			authenticated.Use(middleware.AuthMiddleware(cfg))
 			{
 				authenticated.GET("/me", agentHandler.GetCurrentAgent)
+				authenticated.GET("/me/growth", agentHandler.GetCurrentGrowthProfile)
 				authenticated.POST("/refresh", agentHandler.Refresh)
 				authenticated.POST("/logout", agentHandler.Logout)
 				authenticated.PUT("/me/profile", agentHandler.UpdateProfile)

@@ -504,6 +504,120 @@ router.get('/api/v1/admin/agents', requireAdminAccess, asyncHandler(async (req, 
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/agent-growth/overview', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await fetchServiceJson('identity', '/api/v1/admin/agent-growth/overview');
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/agent-growth/agents', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const maturityPool = typeof req.query.maturity_pool === 'string' ? req.query.maturity_pool : undefined;
+  const primaryDomain = typeof req.query.primary_domain === 'string' ? req.query.primary_domain : undefined;
+  const data = await fetchServiceJson('identity', '/api/v1/admin/agent-growth/agents', {
+    limit,
+    offset,
+    maturity_pool: maturityPool,
+    primary_domain: primaryDomain,
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/admin/agent-growth/agents/:aid/evaluate', requireAdminAccess, asyncHandler(async (req, res) => {
+  const aid = req.params.aid;
+  const data = await callService('identity', 'post', '/api/v1/admin/agent-growth/evaluate', {
+    data: { aid },
+  });
+  await recordAdminAudit(req, {
+    action: 'admin.agent.growth.evaluated',
+    resourceType: 'agent_growth',
+    resourceId: String(aid),
+    details: { trigger: 'manual' },
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/admin/agent-growth/evaluate', requireAdminAccess, asyncHandler(async (req, res) => {
+  const aid = normalizeQueryText(req.body?.aid) || '';
+  if (!aid) {
+    throw createHttpError(400, 'INVALID_REQUEST', 'aid is required');
+  }
+
+  const data = await callService('identity', 'post', '/api/v1/admin/agent-growth/evaluate', {
+    data: { aid },
+  });
+  await recordAdminAudit(req, {
+    action: 'admin.agent.growth.evaluated',
+    resourceType: 'agent_growth',
+    resourceId: aid,
+    details: { trigger: 'manual' },
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/agent-growth/skill-drafts', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const aid = typeof req.query.aid === 'string' ? req.query.aid : undefined;
+  const data = await fetchServiceJson(
+    'marketplace',
+    '/api/v1/marketplace/internal/admin/agent-growth/skill-drafts',
+    { limit, offset, status, aid },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.patch('/api/v1/admin/agent-growth/skill-drafts/:draftId', requireAdminAccess, asyncHandler(async (req, res) => {
+  const status = normalizeQueryText(req.body?.status) || '';
+  const reviewNotes = typeof req.body?.review_notes === 'string' ? req.body.review_notes : undefined;
+  const data = await callService(
+    'marketplace',
+    'patch',
+    `/api/v1/marketplace/internal/admin/agent-growth/skill-drafts/${encodeURIComponent(req.params.draftId)}`,
+    {
+      data: { status, review_notes: reviewNotes },
+      headers: internalAdminHeaders(),
+    },
+  );
+  await recordAdminAudit(req, {
+    action: 'admin.agent.growth.skill_draft.updated',
+    resourceType: 'agent_growth_skill_draft',
+    resourceId: String(req.params.draftId),
+    details: { status },
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/employer-templates', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const ownerAid = typeof req.query.owner_aid === 'string' ? req.query.owner_aid : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson(
+    'marketplace',
+    '/api/v1/marketplace/internal/admin/employer-templates',
+    { limit, offset, owner_aid: ownerAid, status },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/employer-skill-grants', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const ownerAid = typeof req.query.owner_aid === 'string' ? req.query.owner_aid : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson(
+    'marketplace',
+    '/api/v1/marketplace/internal/admin/employer-skill-grants',
+    { limit, offset, owner_aid: ownerAid, status },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data });
+}));
+
 async function handleAdminAgentStatusUpdate(req, res) {
   const aid = typeof req.body?.aid === 'string' && req.body.aid ? req.body.aid : req.params.aid;
   const status = typeof req.body?.status === 'string' ? req.body.status : '';

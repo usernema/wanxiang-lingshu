@@ -9,12 +9,19 @@ const mockBatchUpdateAdminPostStatus = vi.fn()
 const mockGetAdminToken = vi.fn<() => string>()
 const mockSetAdminToken = vi.fn<(token: string) => void>()
 const mockClearAdminToken = vi.fn<() => void>()
+const mockFetchAdminAgentGrowthOverview = vi.fn()
+const mockFetchAdminAgentGrowthProfiles = vi.fn()
+const mockFetchAdminAgentGrowthSkillDrafts = vi.fn()
+const mockFetchAdminEmployerSkillGrants = vi.fn()
 const mockFetchAdminOverview = vi.fn()
 const mockFetchAdminAgents = vi.fn()
+const mockFetchAdminEmployerTemplates = vi.fn()
 const mockFetchAdminForumPosts = vi.fn()
 const mockFetchAdminTasks = vi.fn()
 const mockFetchAdminPostComments = vi.fn()
 const mockFetchAdminTaskApplications = vi.fn()
+const mockTriggerAdminAgentGrowthEvaluation = vi.fn()
+const mockUpdateAdminAgentGrowthSkillDraft = vi.fn()
 const mockUpdateAdminAgentStatus = vi.fn()
 const mockUpdateAdminPostStatus = vi.fn()
 const mockUpdateAdminCommentStatus = vi.fn()
@@ -24,13 +31,20 @@ vi.mock('@/lib/admin', () => ({
   getAdminToken: () => mockGetAdminToken(),
   setAdminToken: (token: string) => mockSetAdminToken(token),
   clearAdminToken: () => mockClearAdminToken(),
+  fetchAdminAgentGrowthOverview: () => mockFetchAdminAgentGrowthOverview(),
+  fetchAdminAgentGrowthProfiles: (...args: unknown[]) => mockFetchAdminAgentGrowthProfiles(...args),
+  fetchAdminAgentGrowthSkillDrafts: (...args: unknown[]) => mockFetchAdminAgentGrowthSkillDrafts(...args),
+  fetchAdminEmployerSkillGrants: (...args: unknown[]) => mockFetchAdminEmployerSkillGrants(...args),
   fetchAdminOverview: () => mockFetchAdminOverview(),
   fetchAdminAgents: (...args: unknown[]) => mockFetchAdminAgents(...args),
+  fetchAdminEmployerTemplates: (...args: unknown[]) => mockFetchAdminEmployerTemplates(...args),
   fetchAdminForumPosts: (...args: unknown[]) => mockFetchAdminForumPosts(...args),
   fetchAdminTasks: (...args: unknown[]) => mockFetchAdminTasks(...args),
   fetchAdminAuditLogs: (...args: unknown[]) => mockFetchAdminAuditLogs(...args),
   fetchAdminPostComments: (...args: unknown[]) => mockFetchAdminPostComments(...args),
   fetchAdminTaskApplications: (...args: unknown[]) => mockFetchAdminTaskApplications(...args),
+  triggerAdminAgentGrowthEvaluation: (...args: unknown[]) => mockTriggerAdminAgentGrowthEvaluation(...args),
+  updateAdminAgentGrowthSkillDraft: (...args: unknown[]) => mockUpdateAdminAgentGrowthSkillDraft(...args),
   batchUpdateAdminAgentStatus: (...args: unknown[]) => mockBatchUpdateAdminAgentStatus(...args),
   batchUpdateAdminPostStatus: (...args: unknown[]) => mockBatchUpdateAdminPostStatus(...args),
   updateAdminAgentStatus: (...args: unknown[]) => mockUpdateAdminAgentStatus(...args),
@@ -103,6 +117,119 @@ describe('Admin page', () => {
         },
       ],
       total: 12,
+      limit: 20,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthOverview.mockResolvedValue({
+      total_agents: 12,
+      evaluated_agents: 10,
+      auto_growth_eligible: 4,
+      promotion_candidates: 2,
+      by_maturity_pool: { cold_start: 6, observed: 2, standard: 2 },
+      by_primary_domain: { automation: 4, development: 3 },
+    })
+    mockFetchAdminAgentGrowthProfiles.mockResolvedValue({
+      items: [
+        {
+          aid: 'agent://a2ahub/admin-1',
+          model: 'GPT-5',
+          provider: 'openai',
+          capabilities: ['ops'],
+          reputation: 120,
+          status: 'active',
+          membership_level: 'member',
+          trust_level: 'active',
+          created_at: '2026-03-12T00:00:00.000Z',
+          primary_domain: 'automation',
+          domain_scores: { automation: 5 },
+          current_maturity_pool: 'cold_start',
+          recommended_task_scope: 'low_risk_only',
+          auto_growth_eligible: true,
+          completed_task_count: 0,
+          active_skill_count: 0,
+          total_task_count: 0,
+          incubating_draft_count: 1,
+          validated_draft_count: 0,
+          published_draft_count: 0,
+          employer_template_count: 1,
+          template_reuse_count: 0,
+          promotion_readiness_score: 64,
+          recommended_next_pool: 'standard',
+          promotion_candidate: true,
+          suggested_actions: ['把首个成功任务沉淀成已审核 Skill 草稿，准备进入标准池。'],
+          risk_flags: ['no_active_skills'],
+          evaluation_summary: 'cold_start profile',
+          last_evaluated_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthSkillDrafts.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          draft_id: 'draft-1',
+          aid: 'agent://a2ahub/admin-1',
+          employer_aid: 'agent://a2ahub/employer-1',
+          source_task_id: 'task-1',
+          title: '检查生产健康 · Growth Skill',
+          summary: '成功任务沉淀出的经验',
+          content_json: {},
+          status: 'incubating',
+          reuse_success_count: 0,
+          review_required: true,
+          reward_snapshot: 10,
+          created_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminEmployerTemplates.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          template_id: 'tmpl-1',
+          owner_aid: 'agent://a2ahub/admin-1',
+          worker_aid: 'agent://a2ahub/worker-1',
+          source_task_id: 'task-1',
+          title: '检查生产健康',
+          summary: '沉淀给雇主的模板',
+          template_json: {},
+          status: 'active',
+          reuse_count: 0,
+          created_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    })
+    mockFetchAdminEmployerSkillGrants.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          grant_id: 'grant-1',
+          employer_aid: 'agent://a2ahub/admin-1',
+          worker_aid: 'agent://a2ahub/worker-1',
+          source_task_id: 'task-1',
+          source_draft_id: 'draft-1',
+          skill_id: 'skill-1',
+          title: '检查生产健康 · Growth Skill',
+          summary: '首单成功经验自动赠送给雇主。',
+          grant_payload: {},
+          status: 'granted',
+          created_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
       limit: 20,
       offset: 0,
     })
@@ -198,6 +325,8 @@ describe('Admin page', () => {
       comment_id: 'comment-1',
       status: 'hidden',
     })
+    mockTriggerAdminAgentGrowthEvaluation.mockResolvedValue({ ok: true })
+    mockUpdateAdminAgentGrowthSkillDraft.mockResolvedValue({ draft_id: 'draft-1', status: 'published' })
     mockBatchUpdateAdminAgentStatus.mockResolvedValue({
       items: [{ item: 'agent://a2ahub/admin-1', success: true }],
       summary: { total: 1, succeeded: 1, failed: 0 },
@@ -220,6 +349,20 @@ describe('Admin page', () => {
     })
 
     expect(mockFetchAdminAgents).toHaveBeenCalledWith({ limit: 100, offset: 0, status: undefined })
+    expect(mockFetchAdminAgentGrowthOverview).toHaveBeenCalled()
+    expect(mockFetchAdminAgentGrowthProfiles).toHaveBeenCalledWith({
+      limit: 50,
+      offset: 0,
+      maturityPool: undefined,
+      primaryDomain: undefined,
+    })
+    expect(mockFetchAdminAgentGrowthSkillDrafts).toHaveBeenCalledWith({
+      limit: 50,
+      offset: 0,
+      status: undefined,
+    })
+    expect(mockFetchAdminEmployerTemplates).toHaveBeenCalledWith({ limit: 20, offset: 0 })
+    expect(mockFetchAdminEmployerSkillGrants).toHaveBeenCalledWith({ limit: 20, offset: 0 })
     expect(mockFetchAdminForumPosts).toHaveBeenCalledWith({
       limit: 100,
       offset: 0,
@@ -241,12 +384,16 @@ describe('Admin page', () => {
     })
 
     expect(await screen.findByText('Agent 总数')).toBeInTheDocument()
+    expect(screen.getByText('Agent Growth')).toBeInTheDocument()
     expect(screen.getByText('Agent 运营')).toBeInTheDocument()
+    expect(screen.getAllByText('晋级候选').length).toBeGreaterThan(0)
+    expect(screen.getByText('准备度 64%')).toBeInTheDocument()
     expect(screen.getByText('后台巡检')).toBeInTheDocument()
-    expect(screen.getByText('检查生产健康')).toBeInTheDocument()
+    expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
     expect(screen.getByText('操作审计')).toBeInTheDocument()
     expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
+    expect(screen.getByText('雇主获赠 Skill')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '暂停' }))
 
@@ -261,7 +408,7 @@ describe('Admin page', () => {
       expect(mockBatchUpdateAdminAgentStatus).toHaveBeenCalledWith(['agent://a2ahub/admin-1'], 'suspended')
     })
 
-    fireEvent.change(screen.getByDisplayValue('全部状态'), {
+    fireEvent.change(screen.getByLabelText('状态筛选'), {
       target: { value: 'suspended' },
     })
 
@@ -272,7 +419,7 @@ describe('Admin page', () => {
     fireEvent.change(screen.getByPlaceholderText('如：ops'), {
       target: { value: 'ops' },
     })
-    fireEvent.change(screen.getAllByPlaceholderText('agent://...')[0], {
+    fireEvent.change(screen.getByLabelText('作者 AID'), {
       target: { value: 'agent://a2ahub/admin-1' },
     })
     fireEvent.click(screen.getAllByText('应用筛选')[0])
@@ -308,10 +455,10 @@ describe('Admin page', () => {
       expect(mockBatchUpdateAdminPostStatus).toHaveBeenCalledWith(['post-1'], 'hidden')
     })
 
-    fireEvent.change(screen.getAllByDisplayValue('全部')[1], {
+    fireEvent.change(screen.getByLabelText('任务状态'), {
       target: { value: 'in_progress' },
     })
-    fireEvent.change(screen.getAllByPlaceholderText('agent://...')[1], {
+    fireEvent.change(screen.getByLabelText('雇主 AID'), {
       target: { value: 'agent://a2ahub/admin-1' },
     })
     fireEvent.click(screen.getAllByText('应用筛选')[1])

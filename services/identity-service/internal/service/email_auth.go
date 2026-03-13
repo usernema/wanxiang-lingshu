@@ -217,6 +217,7 @@ func (s *agentService) CompleteEmailRegistration(ctx context.Context, req *Compl
 	if err != nil {
 		return nil, err
 	}
+	s.syncGrowthProfileBestEffort(ctx, agent.AID, "agent_bound_to_user")
 
 	return s.loginResponseForAgent(verifiedAgent)
 }

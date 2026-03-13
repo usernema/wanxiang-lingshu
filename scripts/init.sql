@@ -216,6 +216,166 @@ CREATE INDEX idx_audit_logs_actor_aid ON audit_logs(actor_aid);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 
+-- Agent Growth Profiles 表
+CREATE TABLE IF NOT EXISTS agent_capability_profiles (
+    aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
+    owner_email VARCHAR(320) NOT NULL DEFAULT '',
+    primary_domain VARCHAR(64) NOT NULL DEFAULT 'automation',
+    domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+    current_maturity_pool VARCHAR(32) NOT NULL DEFAULT 'cold_start',
+    recommended_task_scope VARCHAR(64) NOT NULL DEFAULT 'low_risk_only',
+    auto_growth_eligible BOOLEAN NOT NULL DEFAULT FALSE,
+    completed_task_count INT NOT NULL DEFAULT 0,
+    active_skill_count INT NOT NULL DEFAULT 0,
+    total_task_count INT NOT NULL DEFAULT 0,
+    incubating_draft_count INT NOT NULL DEFAULT 0,
+    validated_draft_count INT NOT NULL DEFAULT 0,
+    published_draft_count INT NOT NULL DEFAULT 0,
+    employer_template_count INT NOT NULL DEFAULT 0,
+    template_reuse_count INT NOT NULL DEFAULT 0,
+    promotion_readiness_score INT NOT NULL DEFAULT 0,
+    recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed',
+    promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE,
+    suggested_actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+    risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    evaluation_summary TEXT NOT NULL DEFAULT '',
+    last_evaluated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS incubating_draft_count INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS validated_draft_count INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS published_draft_count INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS employer_template_count INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS template_reuse_count INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_readiness_score INT NOT NULL DEFAULT 0;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed';
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS suggested_actions JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE INDEX idx_agent_capability_profiles_maturity_pool ON agent_capability_profiles(current_maturity_pool);
+CREATE INDEX idx_agent_capability_profiles_primary_domain ON agent_capability_profiles(primary_domain);
+CREATE INDEX idx_agent_capability_profiles_last_evaluated_at ON agent_capability_profiles(last_evaluated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_agent_capability_profiles_promotion_candidate ON agent_capability_profiles(promotion_candidate);
+
+-- Agent Pool Memberships 表
+CREATE TABLE IF NOT EXISTS agent_pool_memberships (
+    id BIGSERIAL PRIMARY KEY,
+    aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    pool_type VARCHAR(32) NOT NULL,
+    pool_key VARCHAR(64) NOT NULL,
+    pool_score INT NOT NULL DEFAULT 0,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    effective_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_pool_memberships_aid ON agent_pool_memberships(aid);
+CREATE INDEX idx_agent_pool_memberships_pool_type ON agent_pool_memberships(pool_type);
+CREATE INDEX idx_agent_pool_memberships_pool_key ON agent_pool_memberships(pool_key);
+
+-- Agent Evaluation Runs 表
+CREATE TABLE IF NOT EXISTS agent_evaluation_runs (
+    id BIGSERIAL PRIMARY KEY,
+    evaluation_id VARCHAR(64) UNIQUE NOT NULL,
+    aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    trigger_type VARCHAR(64) NOT NULL DEFAULT 'manual',
+    primary_domain VARCHAR(64) NOT NULL,
+    maturity_pool VARCHAR(32) NOT NULL,
+    domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+    risk_flags JSONB NOT NULL DEFAULT '[]'::jsonb,
+    decision_summary TEXT NOT NULL DEFAULT '',
+    profile_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_evaluation_runs_aid ON agent_evaluation_runs(aid);
+CREATE INDEX idx_agent_evaluation_runs_trigger_type ON agent_evaluation_runs(trigger_type);
+CREATE INDEX idx_agent_evaluation_runs_created_at ON agent_evaluation_runs(created_at DESC);
+
+-- Agent Skill Drafts 表
+CREATE TABLE IF NOT EXISTS agent_skill_drafts (
+    id BIGSERIAL PRIMARY KEY,
+    draft_id VARCHAR(64) UNIQUE NOT NULL,
+    aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    employer_aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    source_task_id VARCHAR(64) NOT NULL UNIQUE REFERENCES tasks(task_id) ON DELETE CASCADE,
+    title VARCHAR(256) NOT NULL,
+    summary TEXT NOT NULL,
+    category VARCHAR(64),
+    content_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(32) NOT NULL DEFAULT 'incubating',
+    reuse_success_count INT NOT NULL DEFAULT 0,
+    review_required BOOLEAN NOT NULL DEFAULT TRUE,
+    review_notes TEXT NULL,
+    published_skill_id VARCHAR(64) NULL REFERENCES skills(skill_id) ON DELETE SET NULL,
+    reward_snapshot DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_skill_drafts_aid ON agent_skill_drafts(aid);
+CREATE INDEX idx_agent_skill_drafts_status ON agent_skill_drafts(status);
+CREATE INDEX idx_agent_skill_drafts_created_at ON agent_skill_drafts(created_at DESC);
+
+-- Agent Task Experience Events 表
+CREATE TABLE IF NOT EXISTS agent_task_experience_events (
+    id BIGSERIAL PRIMARY KEY,
+    aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    task_id VARCHAR(64) NOT NULL REFERENCES tasks(task_id) ON DELETE CASCADE,
+    event_type VARCHAR(64) NOT NULL,
+    payload_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_agent_task_experience_events_aid ON agent_task_experience_events(aid);
+CREATE INDEX idx_agent_task_experience_events_task_id ON agent_task_experience_events(task_id);
+CREATE INDEX idx_agent_task_experience_events_event_type ON agent_task_experience_events(event_type);
+
+-- Employer Task Templates 表
+CREATE TABLE IF NOT EXISTS employer_task_templates (
+    id BIGSERIAL PRIMARY KEY,
+    template_id VARCHAR(64) UNIQUE NOT NULL,
+    owner_aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    worker_aid VARCHAR(128) NULL REFERENCES agents(aid) ON DELETE SET NULL,
+    source_task_id VARCHAR(64) NOT NULL UNIQUE REFERENCES tasks(task_id) ON DELETE CASCADE,
+    title VARCHAR(256) NOT NULL,
+    summary TEXT NOT NULL,
+    template_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(32) NOT NULL DEFAULT 'active',
+    reuse_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_employer_task_templates_owner_aid ON employer_task_templates(owner_aid);
+CREATE INDEX idx_employer_task_templates_status ON employer_task_templates(status);
+CREATE INDEX idx_employer_task_templates_created_at ON employer_task_templates(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS employer_skill_grants (
+    id BIGSERIAL PRIMARY KEY,
+    grant_id VARCHAR(64) UNIQUE NOT NULL,
+    employer_aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    worker_aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+    source_task_id VARCHAR(64) NOT NULL UNIQUE REFERENCES tasks(task_id) ON DELETE CASCADE,
+    source_draft_id VARCHAR(64) NULL REFERENCES agent_skill_drafts(draft_id) ON DELETE SET NULL,
+    skill_id VARCHAR(64) NOT NULL REFERENCES skills(skill_id) ON DELETE CASCADE,
+    title VARCHAR(256) NOT NULL,
+    summary TEXT NOT NULL,
+    category VARCHAR(64),
+    grant_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    status VARCHAR(32) NOT NULL DEFAULT 'granted',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_employer_skill_grants_employer_aid ON employer_skill_grants(employer_aid);
+CREATE INDEX IF NOT EXISTS idx_employer_skill_grants_worker_aid ON employer_skill_grants(worker_aid);
+CREATE INDEX IF NOT EXISTS idx_employer_skill_grants_status ON employer_skill_grants(status);
+CREATE INDEX IF NOT EXISTS idx_employer_skill_grants_created_at ON employer_skill_grants(created_at DESC);
+
 -- 创建更新时间触发器函数
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -248,6 +408,19 @@ CREATE TRIGGER update_tasks_updated_at BEFORE UPDATE ON tasks
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_escrows_updated_at BEFORE UPDATE ON escrows
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_agent_capability_profiles_updated_at BEFORE UPDATE ON agent_capability_profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_agent_skill_drafts_updated_at BEFORE UPDATE ON agent_skill_drafts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_employer_task_templates_updated_at BEFORE UPDATE ON employer_task_templates
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_employer_skill_grants_updated_at ON employer_skill_grants;
+CREATE TRIGGER update_employer_skill_grants_updated_at BEFORE UPDATE ON employer_skill_grants
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- 插入初始数据（可选）

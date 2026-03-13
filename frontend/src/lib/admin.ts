@@ -186,6 +186,123 @@ export type AdminBatchActionResponse<T> = {
   }
 }
 
+export type AdminAgentGrowthOverview = {
+  total_agents: number
+  evaluated_agents: number
+  auto_growth_eligible: number
+  promotion_candidates: number
+  by_maturity_pool: Record<string, number>
+  by_primary_domain: Record<string, number>
+  last_evaluated_at?: string | null
+}
+
+export type AdminAgentGrowthProfile = AgentProfile & {
+  owner_email?: string
+  primary_domain: string
+  domain_scores: Record<string, number>
+  current_maturity_pool: string
+  recommended_task_scope: string
+  auto_growth_eligible: boolean
+  completed_task_count: number
+  active_skill_count: number
+  total_task_count: number
+  incubating_draft_count: number
+  validated_draft_count: number
+  published_draft_count: number
+  employer_template_count: number
+  template_reuse_count: number
+  promotion_readiness_score: number
+  recommended_next_pool: string
+  promotion_candidate: boolean
+  suggested_actions: string[]
+  risk_flags: string[]
+  evaluation_summary: string
+  last_evaluated_at: string
+  updated_at: string
+}
+
+export type AdminAgentGrowthListResponse = {
+  items: AdminAgentGrowthProfile[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminAgentGrowthSkillDraftStatus = 'draft' | 'incubating' | 'validated' | 'published' | 'archived'
+
+export type AdminAgentGrowthSkillDraft = {
+  id: number
+  draft_id: string
+  aid: string
+  employer_aid: string
+  source_task_id: string
+  title: string
+  summary: string
+  category?: string
+  content_json: Record<string, unknown>
+  status: AdminAgentGrowthSkillDraftStatus
+  reuse_success_count: number
+  review_required: boolean
+  review_notes?: string | null
+  published_skill_id?: string | null
+  reward_snapshot: string | number
+  created_at?: string
+  updated_at?: string | null
+}
+
+export type AdminAgentGrowthSkillDraftListResponse = {
+  items: AdminAgentGrowthSkillDraft[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminEmployerTemplate = {
+  id: number
+  template_id: string
+  owner_aid: string
+  worker_aid?: string | null
+  source_task_id: string
+  title: string
+  summary: string
+  template_json: Record<string, unknown>
+  status: string
+  reuse_count: number
+  created_at?: string
+  updated_at?: string | null
+}
+
+export type AdminEmployerTemplateListResponse = {
+  items: AdminEmployerTemplate[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminEmployerSkillGrant = {
+  id: number
+  grant_id: string
+  employer_aid: string
+  worker_aid: string
+  source_task_id: string
+  source_draft_id?: string | null
+  skill_id: string
+  title: string
+  summary: string
+  category?: string | null
+  grant_payload: Record<string, unknown>
+  status: string
+  created_at?: string
+  updated_at?: string | null
+}
+
+export type AdminEmployerSkillGrantListResponse = {
+  items: AdminEmployerSkillGrant[]
+  total: number
+  limit: number
+  offset: number
+}
+
 function readAdminStorage() {
   if (typeof window === 'undefined') {
     return ''
@@ -244,6 +361,98 @@ export function formatAdminError(error: unknown) {
 export async function fetchAdminOverview() {
   const response = await adminApi.get('/v1/admin/overview')
   return unwrapData(response.data) as AdminOverview
+}
+
+export async function fetchAdminAgentGrowthOverview() {
+  const response = await adminApi.get('/v1/admin/agent-growth/overview')
+  return unwrapData(response.data) as AdminAgentGrowthOverview
+}
+
+export async function fetchAdminAgentGrowthProfiles(params: {
+  limit?: number
+  offset?: number
+  maturityPool?: string
+  primaryDomain?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/agent-growth/agents', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      maturity_pool: params.maturityPool,
+      primary_domain: params.primaryDomain,
+    },
+  })
+  return unwrapData(response.data) as AdminAgentGrowthListResponse
+}
+
+export async function triggerAdminAgentGrowthEvaluation(aid: string) {
+  const response = await adminApi.post('/v1/admin/agent-growth/evaluate', { aid })
+  return unwrapData(response.data)
+}
+
+export async function fetchAdminAgentGrowthSkillDrafts(params: {
+  limit?: number
+  offset?: number
+  status?: AdminAgentGrowthSkillDraftStatus
+  aid?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/agent-growth/skill-drafts', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      status: params.status,
+      aid: params.aid,
+    },
+  })
+  return unwrapData(response.data) as AdminAgentGrowthSkillDraftListResponse
+}
+
+export async function updateAdminAgentGrowthSkillDraft(
+  draftId: string,
+  payload: {
+    status: AdminAgentGrowthSkillDraftStatus
+    reviewNotes?: string
+  },
+) {
+  const response = await adminApi.patch(`/v1/admin/agent-growth/skill-drafts/${encodeURIComponent(draftId)}`, {
+    status: payload.status,
+    review_notes: payload.reviewNotes,
+  })
+  return unwrapData(response.data) as AdminAgentGrowthSkillDraft
+}
+
+export async function fetchAdminEmployerTemplates(params: {
+  limit?: number
+  offset?: number
+  ownerAid?: string
+  status?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/employer-templates', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      owner_aid: params.ownerAid,
+      status: params.status,
+    },
+  })
+  return unwrapData(response.data) as AdminEmployerTemplateListResponse
+}
+
+export async function fetchAdminEmployerSkillGrants(params: {
+  limit?: number
+  offset?: number
+  ownerAid?: string
+  status?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/employer-skill-grants', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      owner_aid: params.ownerAid,
+      status: params.status,
+    },
+  })
+  return unwrapData(response.data) as AdminEmployerSkillGrantListResponse
 }
 
 export async function fetchAdminAgents(filters: AdminAgentFilters = {}) {

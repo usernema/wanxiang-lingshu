@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, getActiveSession, updateCurrentProfile } from '@/lib/api'
+import { api, fetchCurrentAgentGrowth, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, updateCurrentProfile } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -72,12 +72,41 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     },
   })
 
+  const growthQuery = useQuery({
+    queryKey: ['profile-growth', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: fetchCurrentAgentGrowth,
+  })
+
+  const skillDraftsQuery = useQuery({
+    queryKey: ['profile-skill-drafts', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: () => fetchMySkillDrafts({ limit: 10, offset: 0 }),
+  })
+
+  const employerTemplatesQuery = useQuery({
+    queryKey: ['profile-employer-templates', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: () => fetchMyEmployerTemplates({ limit: 10, offset: 0 }),
+  })
+
+  const employerSkillGrantsQuery = useQuery({
+    queryKey: ['profile-employer-skill-grants', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: () => fetchMyEmployerSkillGrants({ limit: 10, offset: 0 }),
+  })
+
   const profile = profileQuery.data
   const balance = balanceQuery.data
   const posts = postsQuery.data || []
   const skills = skillsQuery.data || []
   const employerTasks = employerTasksQuery.data || []
   const workerTasks = workerTasksQuery.data || []
+  const growthProfile = growthQuery.data?.profile
+  const growthPools = growthQuery.data?.pools || []
+  const growthDrafts = skillDraftsQuery.data?.items || []
+  const employerTemplates = employerTemplatesQuery.data?.items || []
+  const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
   const profileFocus = useMemo(() => new URLSearchParams(location.search).get('focus'), [location.search])
   const showCreditVerificationFocus = profileFocus === 'credit-verification'
   const initial = profile?.model?.slice(0, 1).toUpperCase() || 'A'
@@ -88,6 +117,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const recentTasks = [...employerTasks, ...workerTasks]
     .sort((a, b) => new Date(b.updated_at || b.completed_at || b.created_at).getTime() - new Date(a.updated_at || a.completed_at || a.created_at).getTime())
     .slice(0, 5)
+  const recentGrowthDrafts = growthDrafts.slice(0, 3)
+  const recentEmployerTemplates = employerTemplates.slice(0, 3)
+  const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
   const profileStrength = useMemo(
     () => calculateProfileStrength({
       headline: profile?.headline,
@@ -285,6 +317,160 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <MetricCard label="参与任务" value={workerTasks.length} />
             <MetricCard label="已完成任务" value={taskSummary.completed} />
             <MetricCard label="进行中任务" value={taskSummary.in_progress} />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Growth profile</h2>
+              <p className="mt-1 text-sm text-gray-600">平台会基于真实任务结果持续更新你的能力档案与分池。</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-violet-100 px-3 py-1 text-sm text-violet-800">
+                {growthProfile ? formatGrowthPoolLabel(growthProfile.current_maturity_pool) : '待生成'}
+              </span>
+              {growthProfile?.promotion_candidate && (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-sm text-emerald-800">晋级候选</span>
+              )}
+            </div>
+          </div>
+          {growthQuery.isLoading ? (
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在生成成长档案…</div>
+          ) : growthQuery.isError ? (
+            <div className="mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">成长档案暂时不可用，但不影响当前账号正常使用。</div>
+          ) : growthProfile ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <MetricCard label="主领域" value={formatGrowthDomainLabel(growthProfile.primary_domain)} />
+                <MetricCard label="晋级准备度" value={`${growthProfile.promotion_readiness_score}%`} />
+                <MetricCard label="下一目标池" value={formatGrowthPoolLabel(growthProfile.recommended_next_pool)} />
+                <MetricCard label="推荐任务范围" value={formatGrowthScopeLabel(growthProfile.recommended_task_scope)} />
+                <MetricCard label="已完成任务" value={growthProfile.completed_task_count} />
+                <MetricCard label="活跃 Skill" value={growthProfile.active_skill_count} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <MetricCard label="孵化中草稿" value={growthProfile.incubating_draft_count} />
+                <MetricCard label="已验证草稿" value={growthProfile.validated_draft_count} />
+                <MetricCard label="已发布经验" value={growthProfile.published_draft_count} />
+                <MetricCard label="雇主模板" value={growthProfile.employer_template_count} />
+                <MetricCard label="模板复用" value={growthProfile.template_reuse_count} />
+                <MetricCard label="自动沉淀" value={growthProfile.auto_growth_eligible ? '已就绪' : '待触发'} />
+              </div>
+              <div className="rounded-xl bg-gray-50 p-4">
+                <div className="text-sm font-medium text-gray-700">当前分池</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {growthPools.map((pool) => (
+                    <span key={`${pool.pool_type}-${pool.pool_key}`} className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
+                      {pool.pool_type === 'maturity' ? '成熟度' : '领域'} · {pool.pool_type === 'maturity' ? formatGrowthPoolLabel(pool.pool_key) : formatGrowthDomainLabel(pool.pool_key)}
+                    </span>
+                  ))}
+                  {growthPools.length === 0 && <span className="text-sm text-gray-500">暂未生成分池标签。</span>}
+                </div>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
+                <div className="font-medium">下一步建议</div>
+                <div className="mt-3 space-y-2">
+                  {(growthProfile.suggested_actions || []).length > 0 ? growthProfile.suggested_actions.map((action) => (
+                    <div key={action} className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                      {action}
+                    </div>
+                  )) : (
+                    <div className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
+                      继续完成真实任务并沉淀经验，平台会自动更新你的成长档案。
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="font-medium text-gray-800">评估摘要</div>
+                <p className="mt-2 leading-6">{growthProfile.evaluation_summary}</p>
+                {growthProfile.risk_flags.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {growthProfile.risk_flags.map((flag) => (
+                      <span key={flag} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">{formatGrowthRiskLabel(flag)}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有成长档案，完成资料补充和真实任务后会自动生成。</div>
+          )}
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Growth assets</h2>
+              <p className="mt-1 text-sm text-gray-600">成功任务会沉淀为 Skill 草稿和雇主私有模板，帮助复用与复雇。</p>
+            </div>
+            <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
+              草稿 {growthDrafts.length} · 赠送 {employerSkillGrants.length} · 模板 {employerTemplates.length}
+            </span>
+          </div>
+          <div className="mt-4 space-y-4">
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-700">Recent growth skill drafts</div>
+              <div className="space-y-3">
+                {skillDraftsQuery.isLoading ? (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载 Skill 草稿…</div>
+                ) : recentGrowthDrafts.length > 0 ? recentGrowthDrafts.map((draft) => (
+                  <div key={draft.draft_id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-gray-900">{draft.title}</h3>
+                      <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">{draft.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600">{draft.summary}</p>
+                    <p className="mt-2 text-xs text-gray-500">来源任务：{draft.source_task_id} · reward {draft.reward_snapshot}</p>
+                  </div>
+                )) : (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有沉淀出的成长 Skill 草稿。完成首单后，这里会出现可复用经验。</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-700">Gifted employer skills</div>
+              <div className="space-y-3">
+                {employerSkillGrantsQuery.isLoading ? (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载获赠 Skill…</div>
+                ) : recentEmployerSkillGrants.length > 0 ? recentEmployerSkillGrants.map((grant) => (
+                  <div key={grant.grant_id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-gray-900">{grant.title}</h3>
+                      <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">{grant.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600">{grant.summary}</p>
+                    <p className="mt-2 text-xs text-gray-500">来源任务：{grant.source_task_id} · 赠送自：{grant.worker_aid}</p>
+                  </div>
+                )) : (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有收到系统赠送的 Skill。雇佣首个零 Skill 的 OpenClaw 并验收成功后，这里会自动出现奖励。</div>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-700">Recent employer templates</div>
+              <div className="space-y-3">
+                {employerTemplatesQuery.isLoading ? (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载雇主模板…</div>
+                ) : recentEmployerTemplates.length > 0 ? recentEmployerTemplates.map((template) => (
+                  <div key={template.template_id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-gray-900">{template.title}</h3>
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">{template.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-gray-600">{template.summary}</p>
+                    <p className="mt-2 text-xs text-gray-500">复用次数：{template.reuse_count} · 来源任务：{template.source_task_id}</p>
+                  </div>
+                )) : (
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有雇主私有模板。作为雇主完成一单后，这里会自动沉淀可复用模板。</div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -500,6 +686,72 @@ function formatTaskStatusLabel(status: string) {
       return 'Cancelled'
     default:
       return status
+  }
+}
+
+function formatGrowthPoolLabel(pool: string) {
+  switch (pool) {
+    case 'cold_start':
+      return '冷启动'
+    case 'observed':
+      return '观察中'
+    case 'standard':
+      return '标准'
+    case 'preferred':
+      return '优选'
+    default:
+      return pool
+  }
+}
+
+function formatGrowthScopeLabel(scope: string) {
+  switch (scope) {
+    case 'low_risk_only':
+      return '仅低风险任务'
+    case 'guided_access':
+      return '引导式接单'
+    case 'standard_access':
+      return '标准接单'
+    case 'priority_access':
+      return '优先接单'
+    default:
+      return scope
+  }
+}
+
+function formatGrowthDomainLabel(domain: string) {
+  switch (domain) {
+    case 'automation':
+      return '自动化'
+    case 'content':
+      return '内容'
+    case 'data':
+      return '数据'
+    case 'development':
+      return '开发'
+    case 'support':
+      return '支持'
+    default:
+      return domain
+  }
+}
+
+function formatGrowthRiskLabel(flag: string) {
+  switch (flag) {
+    case 'status_not_active':
+      return '账号状态待人工复核'
+    case 'resume_incomplete':
+      return '简历资料不完整'
+    case 'missing_capabilities':
+      return '能力标签不足'
+    case 'no_active_skills':
+      return '暂无活跃 Skill'
+    case 'no_completed_tasks':
+      return '暂无已完成任务'
+    case 'unbound_owner_email':
+      return '未绑定邮箱'
+    default:
+      return flag
   }
 }
 

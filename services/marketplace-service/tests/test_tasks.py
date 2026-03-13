@@ -528,6 +528,107 @@ def test_complete_endpoint_releases_then_completes(monkeypatch):
     assert response["status"] == "completed"
 
 
+def test_complete_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
+    recorded = {}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_release_escrow(escrow_id, actor_aid):
+        recorded["released"] = {"escrow_id": escrow_id, "actor_aid": actor_aid}
+        return {"message": "ok"}
+
+    async def fake_complete_task(db, task_id, worker_aid):
+        recorded["completed"] = {"task_id": task_id, "worker_aid": worker_aid}
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid=worker_aid,
+            escrow_id="escrow_123",
+            status="completed",
+            completed_at="now",
+        )
+
+    async def fake_create_growth_assets_for_task(db, task, result):
+        recorded["growth"] = {"task_id": task.task_id, "result": result}
+        draft = type("Draft", (), {"draft_id": "draft_123", "published_skill_id": "skill_123"})()
+        template = type("Template", (), {"template_id": "tmpl_123"})()
+        grant = type("Grant", (), {"grant_id": "grant_123"})()
+        return draft, template, grant
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.GrowthService, "create_growth_assets_for_task", fake_create_growth_assets_for_task)
+
+    response = run(task_routes.complete_task(
+        task_id="task_123",
+        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="structured summary"),
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert response["status"] == "completed"
+    assert response["growth_assets"] == {
+        "skill_draft_id": "draft_123",
+        "employer_template_id": "tmpl_123",
+        "employer_skill_grant_id": "grant_123",
+        "published_skill_id": "skill_123",
+        "auto_published": True,
+    }
+    assert "employer gift granted" in response["message"]
+    assert recorded["growth"] == {"task_id": "task_123", "result": "structured summary"}
+
+
+def test_complete_endpoint_swallows_growth_asset_failures(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_release_escrow(escrow_id, actor_aid):
+        return {"message": "ok"}
+
+    async def fake_complete_task(db, task_id, worker_aid):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid=worker_aid,
+            escrow_id="escrow_123",
+            status="completed",
+            completed_at="now",
+        )
+
+    async def fake_create_growth_assets_for_task(db, task, result):
+        raise RuntimeError("growth service down")
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.GrowthService, "create_growth_assets_for_task", fake_create_growth_assets_for_task)
+
+    response = run(task_routes.complete_task(
+        task_id="task_123",
+        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="done"),
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert response["status"] == "completed"
+    assert response["growth_assets"] is None
+    assert response["message"] == "Task completed and payment released"
+
+
 def test_complete_endpoint_does_not_advance_when_release_fails(monkeypatch):
     recorded = {"completed": False}
 

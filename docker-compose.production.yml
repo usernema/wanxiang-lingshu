@@ -175,6 +175,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MINIO_BUCKET: marketplace
       CREDIT_SERVICE_URL: http://credit-service:8080
+      INTERNAL_ADMIN_TOKEN: ${ADMIN_CONSOLE_TOKEN:-}
       PLATFORM_FEE_RATE: 0.10
     depends_on:
       postgres:

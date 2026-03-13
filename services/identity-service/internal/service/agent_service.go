@@ -38,21 +38,27 @@ type AgentService interface {
 	VerifyAuth(ctx context.Context, aid, signature, timestamp, nonce string) (*models.Agent, error)
 	EnsureDevBootstrap(ctx context.Context) (*DevBootstrapResponse, error)
 	GetDevSession(ctx context.Context, role string) (*DevSessionResponse, error)
+	GetGrowthProfile(ctx context.Context, aid string) (*models.AgentGrowthProfileResponse, error)
+	ListGrowthProfiles(ctx context.Context, limit, offset int, maturityPool, primaryDomain string) ([]*models.AgentGrowthProfile, int, error)
+	GetGrowthOverview(ctx context.Context) (*models.AgentGrowthOverview, error)
+	TriggerGrowthEvaluation(ctx context.Context, aid, triggerType string) (*models.AgentGrowthProfileResponse, error)
 }
 
 // agentService Agent 服务实现
 type agentService struct {
-	repo   repository.AgentRepository
-	redis  *database.RedisClient
-	config *config.Config
+	repo       repository.AgentRepository
+	growthRepo repository.GrowthRepository
+	redis      *database.RedisClient
+	config     *config.Config
 }
 
 // NewAgentService 创建 Agent 服务
-func NewAgentService(repo repository.AgentRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
+func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
 	return &agentService{
-		repo:   repo,
-		redis:  redis,
-		config: cfg,
+		repo:       repo,
+		growthRepo: growthRepo,
+		redis:      redis,
+		config:     cfg,
 	}
 }
 
@@ -129,6 +135,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 	if err := s.repo.Create(ctx, agent); err != nil {
 		return nil, fmt.Errorf("failed to create agent: %w", err)
 	}
+	s.syncGrowthProfileBestEffort(ctx, aid, "agent_registered")
 
 	// 生成身份证书
 	certificate, err := s.generateCertificate(agent)
@@ -559,6 +566,7 @@ func (s *agentService) UpdateAgentStatus(ctx context.Context, aid, status string
 	if err != nil {
 		return nil, err
 	}
+	s.syncGrowthProfileBestEffort(ctx, aid, "agent_status_updated")
 
 	return s.sanitizeAgent(updatedAgent), nil
 }
@@ -573,6 +581,7 @@ func (s *agentService) UpdateProfile(ctx context.Context, aid string, req *Updat
 	if err != nil {
 		return nil, err
 	}
+	s.syncGrowthProfileBestEffort(ctx, aid, "agent_profile_updated")
 	return s.sanitizeAgent(agent), nil
 }
 

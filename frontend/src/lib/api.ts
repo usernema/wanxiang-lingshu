@@ -37,6 +37,121 @@ export type AgentProfile = {
   created_at: string
 }
 
+export type AgentGrowthPool = {
+  id: number
+  aid: string
+  pool_type: string
+  pool_key: string
+  pool_score: number
+  status: string
+  effective_at: string
+  expires_at?: string | null
+  created_at: string
+}
+
+export type AgentGrowthProfile = AgentProfile & {
+  owner_email?: string
+  primary_domain: string
+  domain_scores: Record<string, number>
+  current_maturity_pool: string
+  recommended_task_scope: string
+  auto_growth_eligible: boolean
+  completed_task_count: number
+  active_skill_count: number
+  total_task_count: number
+  incubating_draft_count: number
+  validated_draft_count: number
+  published_draft_count: number
+  employer_template_count: number
+  template_reuse_count: number
+  promotion_readiness_score: number
+  recommended_next_pool: string
+  promotion_candidate: boolean
+  suggested_actions: string[]
+  risk_flags: string[]
+  evaluation_summary: string
+  last_evaluated_at: string
+  updated_at: string
+}
+
+export type AgentGrowthProfileResponse = {
+  profile: AgentGrowthProfile
+  pools: AgentGrowthPool[]
+}
+
+export type AgentSkillDraft = {
+  id: number
+  draft_id: string
+  aid: string
+  employer_aid: string
+  source_task_id: string
+  title: string
+  summary: string
+  category?: string
+  content_json: Record<string, unknown>
+  status: string
+  reuse_success_count: number
+  review_required: boolean
+  review_notes?: string | null
+  published_skill_id?: string | null
+  reward_snapshot: string | number
+  created_at: string
+  updated_at?: string | null
+}
+
+export type AgentSkillDraftListResponse = {
+  items: AgentSkillDraft[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type EmployerTaskTemplate = {
+  id: number
+  template_id: string
+  owner_aid: string
+  worker_aid?: string | null
+  source_task_id: string
+  title: string
+  summary: string
+  template_json: Record<string, unknown>
+  status: string
+  reuse_count: number
+  created_at: string
+  updated_at?: string | null
+}
+
+export type EmployerTaskTemplateListResponse = {
+  items: EmployerTaskTemplate[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type EmployerSkillGrant = {
+  id: number
+  grant_id: string
+  employer_aid: string
+  worker_aid: string
+  source_task_id: string
+  source_draft_id?: string | null
+  skill_id: string
+  title: string
+  summary: string
+  category?: string | null
+  grant_payload: Record<string, unknown>
+  status: string
+  created_at: string
+  updated_at?: string | null
+}
+
+export type EmployerSkillGrantListResponse = {
+  items: EmployerSkillGrant[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type RegisterPayload = {
   model: string
   provider: string
@@ -285,6 +400,61 @@ export async function completeEmailLogin(payload: CompleteEmailLoginPayload) {
 export async function fetchCurrentAgent() {
   const response = await api.get('/v1/agents/me')
   return response.data as AgentProfile
+}
+
+export async function fetchCurrentAgentGrowth() {
+  const response = await api.get('/v1/agents/me/growth')
+  return response.data as AgentGrowthProfileResponse
+}
+
+export async function fetchMySkillDrafts(params: {
+  limit?: number
+  offset?: number
+  status?: string
+} = {}) {
+  const response = await api.get('/v1/marketplace/agents/me/skill-drafts', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      status: params.status,
+    },
+  })
+  return response.data as AgentSkillDraftListResponse
+}
+
+export async function fetchMyEmployerTemplates(params: {
+  limit?: number
+  offset?: number
+  status?: string
+} = {}) {
+  const response = await api.get('/v1/marketplace/employers/me/templates', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      status: params.status,
+    },
+  })
+  return response.data as EmployerTaskTemplateListResponse
+}
+
+export async function fetchMyEmployerSkillGrants(params: {
+  limit?: number
+  offset?: number
+  status?: string
+} = {}) {
+  const response = await api.get('/v1/marketplace/employers/me/skill-grants', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      status: params.status,
+    },
+  })
+  return response.data as EmployerSkillGrantListResponse
+}
+
+export async function createTaskFromEmployerTemplate(templateId: string) {
+  const response = await api.post(`/v1/marketplace/employer-templates/${encodeURIComponent(templateId)}/create-task`)
+  return response.data
 }
 
 export async function updateCurrentProfile(payload: UpdateProfilePayload) {
