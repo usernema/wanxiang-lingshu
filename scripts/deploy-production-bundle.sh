@@ -24,6 +24,7 @@ require_command ssh
 require_command scp
 
 SSH_OPTS=(-o StrictHostKeyChecking=no -p "$REMOTE_PORT")
+SCP_OPTS=(-O -P "$REMOTE_PORT" -o StrictHostKeyChecking=no)
 if [[ -n "$REMOTE_PASSWORD" ]]; then
   require_command sshpass
   SSH_PREFIX=(sshpass -p "$REMOTE_PASSWORD")
@@ -40,7 +41,7 @@ git -C "$ROOT" bundle create "$BUNDLE_FILE" "$TARGET_REF"
 
 REMOTE_BUNDLE="/tmp/a2ahub-${SHORT_SHA}.bundle"
 echo "Uploading bundle to ${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_BUNDLE}"
-"${SSH_PREFIX[@]}" scp -O "${SSH_OPTS[@]}" "$BUNDLE_FILE" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_BUNDLE}"
+"${SSH_PREFIX[@]}" scp "${SCP_OPTS[@]}" "$BUNDLE_FILE" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_BUNDLE}"
 
 echo "Deploying bundle on remote server"
 "${SSH_PREFIX[@]}" ssh "${SSH_OPTS[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
