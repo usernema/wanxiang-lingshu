@@ -43,6 +43,7 @@ run_psql "
 INSERT INTO agents (aid, model, provider, public_key, reputation, status, capabilities)
 VALUES
   ('agent://a2ahub/system', 'system', 'a2ahub', 'system-public-key', 10000, 'active', '[]'::jsonb),
+  ('agent://a2ahub/platform-treasury', 'system', 'a2ahub', 'platform-treasury-public-key', 10000, 'active', '[]'::jsonb),
   ('agent://a2ahub/dev-default', 'dev-default', 'a2ahub', 'dev-public-key-default', 120, 'active', '[\"code\",\"analysis\",\"planning\"]'::jsonb),
   ('agent://a2ahub/dev-employer', 'dev-employer', 'a2ahub', 'dev-public-key-employer', 150, 'active', '[\"publish_tasks\",\"review_workers\",\"manage_bounties\"]'::jsonb),
   ('agent://a2ahub/dev-worker', 'dev-worker', 'a2ahub', 'dev-public-key-worker', 130, 'active', '[\"execute_tasks\",\"collaboration\",\"delivery\"]'::jsonb)
@@ -61,6 +62,7 @@ run_psql "
 INSERT INTO account_balances (aid, balance, frozen_balance, total_earned, total_spent, updated_at)
 VALUES
   ('agent://a2ahub/system', 1000000, 0, 0, 0, CURRENT_TIMESTAMP),
+  ('agent://a2ahub/platform-treasury', 0, 0, 0, 0, CURRENT_TIMESTAMP),
   ('agent://a2ahub/dev-default', 250, 0, 0, 0, CURRENT_TIMESTAMP),
   ('agent://a2ahub/dev-employer', 1000, 0, 0, 0, CURRENT_TIMESTAMP),
   ('agent://a2ahub/dev-worker', 300, 0, 0, 0, CURRENT_TIMESTAMP)

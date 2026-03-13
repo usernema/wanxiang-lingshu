@@ -437,10 +437,12 @@ CREATE TRIGGER update_employer_skill_grants_updated_at BEFORE UPDATE ON employer
 -- 仅保留系统 Agent，避免生产库默认写入开发样例数据
 INSERT INTO agents (aid, model, provider, public_key, reputation, status, capabilities)
 VALUES
-    ('agent://a2ahub/system', 'system', 'a2ahub', 'system-public-key', 10000, 'active', '[]'::jsonb)
+    ('agent://a2ahub/system', 'system', 'a2ahub', 'system-public-key', 10000, 'active', '[]'::jsonb),
+    ('agent://a2ahub/platform-treasury', 'system', 'a2ahub', 'platform-treasury-public-key', 10000, 'active', '[]'::jsonb)
 ON CONFLICT (aid) DO NOTHING;
 
 INSERT INTO account_balances (aid, balance)
 VALUES
-    ('agent://a2ahub/system', 1000000)
+    ('agent://a2ahub/system', 1000000),
+    ('agent://a2ahub/platform-treasury', 0)
 ON CONFLICT (aid) DO NOTHING;

@@ -220,6 +220,28 @@ func TestCreateAccount(t *testing.T) {
 	mockAccountRepo.AssertExpectations(t)
 }
 
+func TestCreateAccountUsesReservedInitialBalance(t *testing.T) {
+	mockAccountRepo := new(MockAccountRepository)
+	cfg := &config.Config{
+		Credit: config.CreditConfig{
+			DefaultCredits: 100.0,
+		},
+	}
+	service := &CreditService{
+		cfg:         cfg,
+		accountRepo: mockAccountRepo,
+	}
+
+	ctx := context.Background()
+	aid := "agent://a2ahub/platform-treasury"
+
+	mockAccountRepo.On("CreateWithInitialBalance", ctx, aid, decimal.Zero).Return(nil)
+
+	err := service.CreateAccount(ctx, aid)
+	assert.NoError(t, err)
+	mockAccountRepo.AssertExpectations(t)
+}
+
 func TestGetBalance(t *testing.T) {
 	mockAccountRepo := new(MockAccountRepository)
 	cfg := &config.Config{
@@ -244,6 +266,38 @@ func TestGetBalance(t *testing.T) {
 	}
 
 	mockAccountRepo.On("CreateWithInitialBalance", ctx, aid, decimal.NewFromFloat(cfg.Credit.DefaultCredits)).Return(nil)
+	mockAccountRepo.On("GetBalance", ctx, aid).Return(expectedAccount, nil)
+
+	account, err := service.GetBalance(ctx, aid)
+	assert.NoError(t, err)
+	assert.Equal(t, expectedAccount, account)
+	mockAccountRepo.AssertExpectations(t)
+}
+
+func TestGetBalanceUsesReservedInitialBalance(t *testing.T) {
+	mockAccountRepo := new(MockAccountRepository)
+	cfg := &config.Config{
+		Credit: config.CreditConfig{
+			DefaultCredits: 100.0,
+		},
+	}
+	service := &CreditService{
+		cfg:         cfg,
+		accountRepo: mockAccountRepo,
+	}
+
+	ctx := context.Background()
+	aid := "agent://a2ahub/platform-treasury"
+
+	expectedAccount := &models.Account{
+		AID:           aid,
+		Balance:       decimal.Zero,
+		FrozenBalance: decimal.Zero,
+		TotalEarned:   decimal.Zero,
+		TotalSpent:    decimal.Zero,
+	}
+
+	mockAccountRepo.On("CreateWithInitialBalance", ctx, aid, decimal.Zero).Return(nil)
 	mockAccountRepo.On("GetBalance", ctx, aid).Return(expectedAccount, nil)
 
 	account, err := service.GetBalance(ctx, aid)

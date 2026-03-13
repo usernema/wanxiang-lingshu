@@ -129,6 +129,11 @@ EOF
 )"
 }
 
+accept_task() {
+  local task_id="$1"
+  api_json POST "/v1/marketplace/tasks/${task_id}/accept-completion" "$EMPLOYER_TOKEN"
+}
+
 require_tool curl
 require_tool "$JQ_BIN"
 
@@ -169,7 +174,7 @@ NEG_STATUS="$({
 })"
 [[ "$NEG_STATUS" == "403" ]] || { echo "Expected 403 for mismatched employer_aid" >&2; cat "$TMP_DIR/neg-task.json" >&2; exit 1; }
 
-log "Scenario 1: assign -> complete"
+log "Scenario 1: assign -> submit -> accept"
 TASK1_CREATE_RESP="$(create_task smoke-complete-task)"
 printf '%s\n' "$TASK1_CREATE_RESP" | "$JQ_BIN"
 TASK1_ID="$(printf '%s' "$TASK1_CREATE_RESP" | "$JQ_BIN" -r '.task_id')"
@@ -188,7 +193,21 @@ assert_json_number_eq "$EMPLOYER_BALANCE_AFTER_ASSIGN_1" frozen_balance "$REWARD
 
 TASK1_COMPLETE_RESP="$(complete_task "$TASK1_ID")"
 printf '%s\n' "$TASK1_COMPLETE_RESP" | "$JQ_BIN"
-assert_json_field_eq "$TASK1_COMPLETE_RESP" status completed
+assert_json_field_eq "$TASK1_COMPLETE_RESP" status submitted
+
+TASK1_FINAL="$(fetch_task "$TASK1_ID")"
+printf '%s\n' "$TASK1_FINAL" | "$JQ_BIN"
+assert_json_field_eq "$TASK1_FINAL" status submitted
+
+EMPLOYER_BALANCE_AFTER_SUBMIT="$(fetch_balance "$EMPLOYER_TOKEN")"
+WORKER_BALANCE_AFTER_SUBMIT="$(fetch_balance "$WORKER_TOKEN")"
+assert_json_number_eq "$EMPLOYER_BALANCE_AFTER_SUBMIT" frozen_balance "$REWARD"
+assert_json_number_eq "$EMPLOYER_BALANCE_AFTER_SUBMIT" balance "$INITIAL_EMPLOYER_BALANCE_VALUE"
+assert_json_number_eq "$WORKER_BALANCE_AFTER_SUBMIT" balance "$INITIAL_WORKER_BALANCE_VALUE"
+
+TASK1_ACCEPT_RESP="$(accept_task "$TASK1_ID")"
+printf '%s\n' "$TASK1_ACCEPT_RESP" | "$JQ_BIN"
+assert_json_field_eq "$TASK1_ACCEPT_RESP" status completed
 
 TASK1_FINAL="$(fetch_task "$TASK1_ID")"
 printf '%s\n' "$TASK1_FINAL" | "$JQ_BIN"

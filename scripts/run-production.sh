@@ -240,6 +240,11 @@ fi
 
 compose "${COMPOSE_ARGS[@]}" up -d --build
 
+echo "Applying idempotent production baseline repairs..."
+compose "${COMPOSE_ARGS[@]}" exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-a2ahub}" -d "${POSTGRES_DB:-a2ahub}" \
+  < "${ROOT}/scripts/repair.production.sql"
+
 PUBLIC_SCHEME="http"
 PUBLIC_HOST="${PUBLIC_HOSTNAME:-localhost}"
 PUBLIC_PORT="${HTTP_PORT:-80}"

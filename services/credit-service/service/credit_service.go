@@ -14,7 +14,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
- type AccountRepository interface {
+type AccountRepository interface {
 	Create(ctx context.Context, aid string) error
 	CreateWithInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error
 	UpsertInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error
@@ -23,7 +23,7 @@ import (
 	FreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
 	UnfreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
 	ReleaseFrozenBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
- }
+}
 
 var devSeededCredits = map[string]decimal.Decimal{
 	"agent://a2ahub/dev-default":  decimal.NewFromInt(250),
@@ -31,7 +31,15 @@ var devSeededCredits = map[string]decimal.Decimal{
 	"agent://a2ahub/dev-worker":   decimal.NewFromInt(300),
 }
 
+var reservedAccountCredits = map[string]decimal.Decimal{
+	"agent://a2ahub/system":            decimal.NewFromInt(1000000),
+	"agent://a2ahub/platform-treasury": decimal.Zero,
+}
+
 func (s *CreditService) initialCreditsForAID(aid string) decimal.Decimal {
+	if amount, ok := reservedAccountCredits[aid]; ok {
+		return amount
+	}
 	if amount, ok := devSeededCredits[aid]; ok {
 		return amount
 	}
@@ -156,49 +164,48 @@ func (s *CreditService) ensureAccountsBeforeCreateAccount(ctx context.Context, a
 	return s.ensureAccountsBeforeCreate(ctx, aid)
 }
 
- type TransactionRepository interface {
+type TransactionRepository interface {
 	Create(ctx context.Context, tx *sql.Tx, transaction *models.Transaction) error
 	UpdateStatus(ctx context.Context, tx *sql.Tx, transactionID string, status string) error
 	GetByID(ctx context.Context, transactionID string) (*models.Transaction, error)
 	List(ctx context.Context, aid string, limit, offset int) ([]*models.Transaction, error)
 	GetDailyTotal(ctx context.Context, aid string) (decimal.Decimal, error)
- }
+}
 
- type EscrowRepository interface {
+type EscrowRepository interface {
 	Create(ctx context.Context, tx *sql.Tx, escrow *models.Escrow) error
 	UpdateStatus(ctx context.Context, tx *sql.Tx, escrowID string, status string) error
 	GetByID(ctx context.Context, escrowID string) (*models.Escrow, error)
 	GetExpired(ctx context.Context) ([]*models.Escrow, error)
- }
+}
 
- type AuditRepository interface {
+type AuditRepository interface {
 	Create(ctx context.Context, auditLog *models.AuditLog) error
- }
+}
 
- type LockManager interface {
+type LockManager interface {
 	Lock(ctx context.Context, key string, ttl time.Duration) error
 	Unlock(ctx context.Context, key string) error
- }
+}
 
- type RiskChecker interface {
+type RiskChecker interface {
 	CheckTransaction(ctx context.Context, aid string, amount decimal.Decimal) error
- }
+}
 
- type NotificationPublisher interface {
+type NotificationPublisher interface {
 	SendTransactionNotification(transaction *models.Transaction)
 	SendEscrowNotification(escrow *models.Escrow, action string)
- }
+}
 
 var (
-	_ AccountRepository = (*repository.AccountRepository)(nil)
+	_ AccountRepository     = (*repository.AccountRepository)(nil)
 	_ TransactionRepository = (*repository.TransactionRepository)(nil)
-	_ EscrowRepository = (*repository.EscrowRepository)(nil)
-	_ AuditRepository = (*repository.AuditRepository)(nil)
-	_ LockManager = (*LockService)(nil)
-	_ RiskChecker = (*RiskService)(nil)
+	_ EscrowRepository      = (*repository.EscrowRepository)(nil)
+	_ AuditRepository       = (*repository.AuditRepository)(nil)
+	_ LockManager           = (*LockService)(nil)
+	_ RiskChecker           = (*RiskService)(nil)
 	_ NotificationPublisher = (*NotificationQueue)(nil)
 )
-
 
 type CreditService struct {
 	db                *sql.DB

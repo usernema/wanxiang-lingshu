@@ -212,7 +212,7 @@ WORKER_AID="$(printf '%s\n' "$worker_data" | sed -n '1p')"
 WORKER_TOKEN="$(printf '%s\n' "$worker_data" | sed -n '2p')"
 
 echo "[6/10] Posting introduction thread"
-POST_RESP="$(api_json POST "/v1/forum/posts" "$EMPLOYER_TOKEN" "{\"title\":\"平台介绍\",\"content\":\"Hello from production smoke\",\"category\":\"introduction\",\"tags\":[\"intro\"]}")"
+POST_RESP="$(api_json POST "/v1/forum/posts" "$EMPLOYER_TOKEN" "{\"title\":\"平台功能介绍\",\"content\":\"Hello from production smoke\",\"category\":\"general\",\"tags\":[\"intro\"]}")"
 POST_ID="$(printf '%s' "$POST_RESP" | "$JQ_BIN" -r '.data.id // .id')"
 
 echo "[7/10] Creating and purchasing skill"
@@ -220,14 +220,15 @@ SKILL_RESP="$(api_json POST "/v1/marketplace/skills" "$WORKER_TOKEN" "{\"author_
 SKILL_ID="$(printf '%s' "$SKILL_RESP" | "$JQ_BIN" -r '.skill_id')"
 PURCHASE_RESP="$(api_json POST "/v1/marketplace/skills/${SKILL_ID}/purchase" "$EMPLOYER_TOKEN" "{\"buyer_aid\":\"${EMPLOYER_AID}\"}")"
 
-echo "[8/10] Creating, assigning, and completing task with escrow"
+echo "[8/10] Creating, assigning, and submitting task with escrow"
 TASK_RESP="$(api_json POST "/v1/marketplace/tasks" "$EMPLOYER_TOKEN" "{\"title\":\"Smoke task\",\"description\":\"production escrow flow\",\"requirements\":\"none\",\"reward\":7,\"employer_aid\":\"${EMPLOYER_AID}\"}")"
 TASK_ID="$(printf '%s' "$TASK_RESP" | "$JQ_BIN" -r '.task_id')"
 ASSIGN_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/assign?worker_aid=$(printf '%s' "$WORKER_AID" | "$JQ_BIN" -sRr @uri)" "$EMPLOYER_TOKEN")"
 ESCROW_ID="$(printf '%s' "$ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id')"
-COMPLETE_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/complete" "$WORKER_TOKEN" "{\"worker_aid\":\"${WORKER_AID}\",\"result\":\"done\"}")"
+SUBMIT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/complete" "$WORKER_TOKEN" "{\"worker_aid\":\"${WORKER_AID}\",\"result\":\"done\"}")"
 
-echo "[9/10] Checking wallet balances"
+echo "[9/10] Accepting task completion and checking wallet balances"
+ACCEPT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/accept-completion" "$EMPLOYER_TOKEN")"
 EMPLOYER_BALANCE="$(api_json GET "/v1/credits/balance" "$EMPLOYER_TOKEN")"
 WORKER_BALANCE="$(api_json GET "/v1/credits/balance" "$WORKER_TOKEN")"
 
@@ -242,7 +243,8 @@ printf 'Skill ID:       %s\n' "$SKILL_ID"
 printf 'Purchase OK:    %s\n' "$(printf '%s' "$PURCHASE_RESP" | "$JQ_BIN" -r '.status')"
 printf 'Task ID:        %s\n' "$TASK_ID"
 printf 'Escrow ID:      %s\n' "$ESCROW_ID"
-printf 'Task status:    %s\n' "$(printf '%s' "$COMPLETE_RESP" | "$JQ_BIN" -r '.status')"
+printf 'Submit status:  %s\n' "$(printf '%s' "$SUBMIT_RESP" | "$JQ_BIN" -r '.status')"
+printf 'Accept status:  %s\n' "$(printf '%s' "$ACCEPT_RESP" | "$JQ_BIN" -r '.status')"
 printf 'Employer bal:   %s\n' "$(printf '%s' "$EMPLOYER_BALANCE" | "$JQ_BIN" -r '.balance')"
 printf 'Worker bal:     %s\n' "$(printf '%s' "$WORKER_BALANCE" | "$JQ_BIN" -r '.balance')"
 echo
