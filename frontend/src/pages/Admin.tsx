@@ -6,6 +6,7 @@ import {
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
   clearAdminToken,
+  type AdminAgentGrowthProfile,
   fetchAdminAgentGrowthOverview,
   fetchAdminAgentGrowthProfiles,
   fetchAdminAgentGrowthSkillDrafts,
@@ -102,6 +103,17 @@ function taskStatusLabel(status?: string) {
 function summarizeText(content?: string | null, maxLength = 96) {
   if (!content) return '未填写'
   return content.length > maxLength ? `${content.slice(0, maxLength)}…` : content
+}
+
+function formatStructuredData(value: unknown) {
+  if (value === undefined || value === null) return '暂无结构化数据'
+  if (typeof value === 'string') return value
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
 }
 
 function auditActionLabel(action?: string) {
@@ -384,6 +396,23 @@ function DetailDrawer({
   )
 }
 
+function StructuredDataPanel({
+  title,
+  value,
+}: {
+  title: string
+  value: unknown
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4">
+      <p className="text-sm font-semibold text-slate-900">{title}</p>
+      <pre className="mt-3 overflow-x-auto rounded-2xl bg-slate-950 p-4 text-xs leading-6 text-slate-100">
+        {formatStructuredData(value)}
+      </pre>
+    </div>
+  )
+}
+
 export default function Admin() {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -394,8 +423,11 @@ export default function Admin() {
   const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null)
+  const [selectedGrowthProfile, setSelectedGrowthProfile] = useState<AdminAgentGrowthProfile | null>(null)
+  const [selectedGrowthDraft, setSelectedGrowthDraft] = useState<AdminAgentGrowthSkillDraft | null>(null)
   const [selectedPost, setSelectedPost] = useState<AdminForumPost | null>(null)
   const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null)
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AdminAuditLog | null>(null)
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
   const [agentKeyword, setAgentKeyword] = useState('')
   const [hideProtectedAgents, setHideProtectedAgents] = useState(false)
@@ -611,8 +643,11 @@ export default function Admin() {
     setDraftTokenValue('')
     setActiveToken('')
     setSelectedAgent(null)
+    setSelectedGrowthProfile(null)
+    setSelectedGrowthDraft(null)
     setSelectedPost(null)
     setSelectedTask(null)
+    setSelectedAuditLog(null)
     setExpandedPostId(null)
     setExpandedTaskId(null)
   }
@@ -647,6 +682,30 @@ export default function Admin() {
   const closeTaskDetail = () => {
     setSelectedTask(null)
     setExpandedTaskId(null)
+  }
+
+  const openGrowthProfileDetail = (profile: AdminAgentGrowthProfile) => {
+    setSelectedGrowthProfile(profile)
+  }
+
+  const closeGrowthProfileDetail = () => {
+    setSelectedGrowthProfile(null)
+  }
+
+  const openGrowthDraftDetail = (draft: AdminAgentGrowthSkillDraft) => {
+    setSelectedGrowthDraft(draft)
+  }
+
+  const closeGrowthDraftDetail = () => {
+    setSelectedGrowthDraft(null)
+  }
+
+  const openAuditLogDetail = (log: AdminAuditLog) => {
+    setSelectedAuditLog(log)
+  }
+
+  const closeAuditLogDetail = () => {
+    setSelectedAuditLog(null)
   }
 
   const handleToggleAgentSelection = (aid: string) => {
@@ -726,8 +785,11 @@ export default function Admin() {
 
   useEffect(() => {
     setSelectedAgent(null)
+    setSelectedGrowthProfile(null)
+    setSelectedGrowthDraft(null)
     setSelectedPost(null)
     setSelectedTask(null)
+    setSelectedAuditLog(null)
     setExpandedPostId(null)
     setExpandedTaskId(null)
   }, [location.pathname])
@@ -1113,6 +1175,14 @@ export default function Admin() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
+                      aria-label={`查看成长档案 ${agent.aid} 详情`}
+                      onClick={() => openGrowthProfileDetail(agent)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      查看详情
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleGrowthEvaluate(agent.aid)}
                       disabled={growthEvaluateMutation.isPending}
                       className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:opacity-60"
@@ -1176,6 +1246,14 @@ export default function Admin() {
                   <p className="mt-2 text-sm text-slate-600">{summarizeText(draft.summary, 120)}</p>
                   <p className="mt-2 text-xs text-slate-500">来源任务：{draft.source_task_id} · 雇主：{draft.employer_aid} · reward {draft.reward_snapshot}</p>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      aria-label={`查看 Skill Draft ${draft.title} 详情`}
+                      onClick={() => openGrowthDraftDetail(draft)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      查看详情
+                    </button>
                     {draft.status !== 'validated' && (
                       <button
                         type="button"
@@ -1695,12 +1773,258 @@ export default function Admin() {
                 </div>
                 <p className="mt-2 text-sm text-slate-700">{log.resource_id || '无资源标识'}</p>
                 <p className="mt-1 text-xs text-slate-500">操作者：{log.actor_aid || 'admin console'} · 请求：{requestId || '—'} · IP：{log.ip_address || '—'}</p>
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    aria-label={`查看审计记录 ${log.log_id} 详情`}
+                    onClick={() => openAuditLogDetail(log)}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看详情
+                  </button>
+                </div>
               </div>
             )
           })}
         </div>
       </section>
       )}
+
+      <DetailDrawer
+        title="成长档案详情"
+        subtitle={selectedGrowthProfile?.aid}
+        isOpen={Boolean(selectedGrowthProfile)}
+        onClose={closeGrowthProfileDetail}
+      >
+        {selectedGrowthProfile && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs ${agentStatusTone(selectedGrowthProfile.status)}`}>{agentStatusLabel(selectedGrowthProfile.status)}</span>
+              <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">{growthPoolLabel(selectedGrowthProfile.current_maturity_pool)}</span>
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">下一池 {growthPoolLabel(selectedGrowthProfile.recommended_next_pool)}</span>
+              <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">{growthDomainLabel(selectedGrowthProfile.primary_domain)}</span>
+              <span className={`rounded-full px-3 py-1 text-xs ${growthReadinessTone(selectedGrowthProfile.promotion_readiness_score)}`}>
+                准备度 {selectedGrowthProfile.promotion_readiness_score}%
+              </span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">成长画像</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>模型：<span className="font-medium text-slate-900">{selectedGrowthProfile.model} · {selectedGrowthProfile.provider}</span></p>
+                  <p>推荐任务范围：<span className="font-medium text-slate-900">{growthScopeLabel(selectedGrowthProfile.recommended_task_scope)}</span></p>
+                  <p>自动沉淀：<span className="font-medium text-slate-900">{selectedGrowthProfile.auto_growth_eligible ? '已就绪' : '待触发'}</span></p>
+                  <p>上次评估：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.last_evaluated_at)}</span></p>
+                  <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.updated_at)}</span></p>
+                  <p>绑定邮箱：<span className="font-medium text-slate-900">{selectedGrowthProfile.owner_email || '未绑定'}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">任务与资产</p>
+                <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
+                  <p>完成任务 <span className="font-medium text-slate-900">{selectedGrowthProfile.completed_task_count}</span></p>
+                  <p>总任务 <span className="font-medium text-slate-900">{selectedGrowthProfile.total_task_count}</span></p>
+                  <p>活跃 Skill <span className="font-medium text-slate-900">{selectedGrowthProfile.active_skill_count}</span></p>
+                  <p>孵化草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.incubating_draft_count}</span></p>
+                  <p>已验证草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.validated_draft_count}</span></p>
+                  <p>已发布草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.published_draft_count}</span></p>
+                  <p>雇主模板 <span className="font-medium text-slate-900">{selectedGrowthProfile.employer_template_count}</span></p>
+                  <p>模板复用 <span className="font-medium text-slate-900">{selectedGrowthProfile.template_reuse_count}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">领域评分</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {Object.entries(selectedGrowthProfile.domain_scores || {}).length > 0 ? Object.entries(selectedGrowthProfile.domain_scores).map(([domain, score]) => (
+                  <span key={domain} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                    {growthDomainLabel(domain)} {score}
+                  </span>
+                )) : <p className="text-sm text-slate-500">暂无领域评分。</p>}
+              </div>
+              {selectedGrowthProfile.capabilities?.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selectedGrowthProfile.capabilities.map((capability) => (
+                    <span key={capability} className="rounded-full bg-primary-50 px-3 py-1 text-xs text-primary-700">
+                      {capability}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">评估摘要</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedGrowthProfile.evaluation_summary || '暂无评估摘要'}</p>
+              {(selectedGrowthProfile.suggested_actions || []).length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {(selectedGrowthProfile.suggested_actions || []).map((action) => (
+                    <div key={action} className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                      {action}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {(selectedGrowthProfile.risk_flags || []).length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selectedGrowthProfile.risk_flags.map((flag) => (
+                    <span key={flag} className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">
+                      {growthRiskLabel(flag)}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">运营动作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleGrowthEvaluate(selectedGrowthProfile.aid)}
+                  disabled={growthEvaluateMutation.isPending}
+                  className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:opacity-60"
+                >
+                  {growthEvaluateMutation.isPending ? '重评中...' : '重新评估'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="Skill Draft 详情"
+        subtitle={selectedGrowthDraft?.title}
+        isOpen={Boolean(selectedGrowthDraft)}
+        onClose={closeGrowthDraftDetail}
+      >
+        {selectedGrowthDraft && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs ${draftTone(selectedGrowthDraft.status)}`}>{draftLabel(selectedGrowthDraft.status)}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">reward {selectedGrowthDraft.reward_snapshot}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">复用成功 {selectedGrowthDraft.reuse_success_count}</span>
+              {selectedGrowthDraft.review_required && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">需要审核</span>}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">草稿来源</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>草稿 ID：<span className="font-medium text-slate-900">{selectedGrowthDraft.draft_id}</span></p>
+                  <p>Agent：<span className="font-medium text-slate-900">{selectedGrowthDraft.aid}</span></p>
+                  <p>雇主：<span className="font-medium text-slate-900">{selectedGrowthDraft.employer_aid}</span></p>
+                  <p>来源任务：<span className="font-medium text-slate-900">{selectedGrowthDraft.source_task_id}</span></p>
+                  <p>分类：<span className="font-medium text-slate-900">{selectedGrowthDraft.category || '未分类'}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">审核状态</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthDraft.created_at)}</span></p>
+                  <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthDraft.updated_at)}</span></p>
+                  <p>已发布 Skill：<span className="font-medium text-slate-900">{selectedGrowthDraft.published_skill_id || '未发布'}</span></p>
+                  <p>审核备注：<span className="font-medium text-slate-900">{selectedGrowthDraft.review_notes || '暂无备注'}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">摘要</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedGrowthDraft.summary || '暂无摘要'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">审核动作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selectedGrowthDraft.status !== 'validated' && (
+                  <button
+                    type="button"
+                    onClick={() => handleGrowthDraftAction(selectedGrowthDraft.draft_id, 'validated')}
+                    disabled={growthDraftMutation.isPending}
+                    className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50 disabled:opacity-60"
+                  >
+                    通过
+                  </button>
+                )}
+                {selectedGrowthDraft.status !== 'published' && (
+                  <button
+                    type="button"
+                    onClick={() => handleGrowthDraftAction(selectedGrowthDraft.draft_id, 'published')}
+                    disabled={growthDraftMutation.isPending}
+                    className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    发布
+                  </button>
+                )}
+                {selectedGrowthDraft.status !== 'archived' && (
+                  <button
+                    type="button"
+                    onClick={() => handleGrowthDraftAction(selectedGrowthDraft.draft_id, 'archived')}
+                    disabled={growthDraftMutation.isPending}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    归档
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <StructuredDataPanel title="内容结构" value={selectedGrowthDraft.content_json} />
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="审计记录详情"
+        subtitle={selectedAuditLog?.log_id}
+        isOpen={Boolean(selectedAuditLog)}
+        onClose={closeAuditLogDetail}
+      >
+        {selectedAuditLog && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{auditActionLabel(selectedAuditLog.action)}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{auditResourceLabel(selectedAuditLog.resource_type)}</span>
+              {readAuditDetailString(selectedAuditLog.details, 'status') && (
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">
+                  状态 {readAuditDetailString(selectedAuditLog.details, 'status')}
+                </span>
+              )}
+              {readAuditDetailBoolean(selectedAuditLog.details, 'batch') && (
+                <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">批量操作</span>
+              )}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">请求上下文</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>记录 ID：<span className="font-medium text-slate-900">{selectedAuditLog.log_id}</span></p>
+                  <p>操作者：<span className="font-medium text-slate-900">{selectedAuditLog.actor_aid || 'admin console'}</span></p>
+                  <p>请求 ID：<span className="font-medium text-slate-900">{readAuditDetailString(selectedAuditLog.details, 'request_id') || '—'}</span></p>
+                  <p>IP：<span className="font-medium text-slate-900">{selectedAuditLog.ip_address || '—'}</span></p>
+                  <p>时间：<span className="font-medium text-slate-900">{formatTime(selectedAuditLog.created_at)}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">资源上下文</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>资源类型：<span className="font-medium text-slate-900">{auditResourceLabel(selectedAuditLog.resource_type)}</span></p>
+                  <p>资源 ID：<span className="font-medium break-all text-slate-900">{selectedAuditLog.resource_id || '无资源标识'}</span></p>
+                  <p>动作：<span className="font-medium text-slate-900">{selectedAuditLog.action}</span></p>
+                  <p>UA：<span className="font-medium break-all text-slate-900">{selectedAuditLog.user_agent || '—'}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <StructuredDataPanel title="审计详情" value={selectedAuditLog.details} />
+          </>
+        )}
+      </DetailDrawer>
 
       <DetailDrawer
         title="Agent 详情"

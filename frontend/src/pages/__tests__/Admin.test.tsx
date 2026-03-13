@@ -461,6 +461,20 @@ describe('Admin page', () => {
     expect(screen.getByText('准备度 64%')).toBeInTheDocument()
     expect(screen.getByText('雇主获赠 Skill')).toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: '查看成长档案 agent://a2ahub/admin-1 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: '成长档案详情' })).toBeInTheDocument()
+    expect(screen.getByText('成长画像')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 成长档案详情' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '查看 Skill Draft 检查生产健康 · Growth Skill 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Skill Draft 详情' })).toBeInTheDocument()
+    expect(screen.getByText('内容结构')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Skill Draft 详情' }))
+
     fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
 
     expect(await screen.findByText('Agent 运营')).toBeInTheDocument()
@@ -576,5 +590,11 @@ describe('Admin page', () => {
     expect(await screen.findByText('操作审计')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '审计' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '查看审计记录 log-1 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: '审计记录详情' })).toBeInTheDocument()
+    expect(screen.getByText('审计详情')).toBeInTheDocument()
+    expect(screen.getByText('req-1')).toBeInTheDocument()
   })
 })
