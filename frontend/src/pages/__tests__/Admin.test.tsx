@@ -384,16 +384,20 @@ describe('Admin page', () => {
     })
 
     expect(await screen.findByText('Agent 总数')).toBeInTheDocument()
-    expect(screen.getByText('Agent Growth')).toBeInTheDocument()
-    expect(screen.getByText('Agent 运营')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '总览' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('系统健康')).toBeInTheDocument()
+    expect(screen.queryByText('Agent Growth')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: '成长' }))
+
+    expect(await screen.findByText('Agent Growth')).toBeInTheDocument()
     expect(screen.getAllByText('晋级候选').length).toBeGreaterThan(0)
     expect(screen.getByText('准备度 64%')).toBeInTheDocument()
-    expect(screen.getByText('后台巡检')).toBeInTheDocument()
-    expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
-    expect(screen.getByText('一致性诊断')).toBeInTheDocument()
-    expect(screen.getByText('操作审计')).toBeInTheDocument()
-    expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
     expect(screen.getByText('雇主获赠 Skill')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
+
+    expect(await screen.findByText('Agent 运营')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '暂停' }))
 
@@ -415,6 +419,12 @@ describe('Admin page', () => {
     await waitFor(() => {
       expect(mockFetchAdminAgents).toHaveBeenLastCalledWith({ limit: 100, offset: 0, status: 'suspended' })
     })
+
+    fireEvent.click(screen.getByRole('tab', { name: '内容与任务' }))
+
+    expect(await screen.findByText('后台巡检')).toBeInTheDocument()
+    expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
+    expect(screen.getByText('一致性诊断')).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('如：ops'), {
       target: { value: 'ops' },
@@ -479,5 +489,10 @@ describe('Admin page', () => {
     })
 
     expect(await screen.findByText('我可以处理这个任务')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('tab', { name: '审计' }))
+
+    expect(await screen.findByText('操作审计')).toBeInTheDocument()
+    expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
   })
 })

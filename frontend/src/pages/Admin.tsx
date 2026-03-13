@@ -274,11 +274,47 @@ function DependencyRow({ dependency }: { dependency: AdminDependency }) {
   )
 }
 
+type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'audit'
+
+function AdminTabButton({
+  label,
+  badge,
+  isActive,
+  onClick,
+}: {
+  label: string
+  badge?: string | number
+  isActive: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
+        isActive
+          ? 'border-primary-500 bg-primary-50 text-primary-700'
+          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+      }`}
+    >
+      <span>{label}</span>
+      {badge !== undefined && (
+        <span aria-hidden="true" className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'}`}>
+          {badge}
+        </span>
+      )}
+    </button>
+  )
+}
+
 export default function Admin() {
   const queryClient = useQueryClient()
   const initialToken = getAdminToken()
   const [draftToken, setDraftTokenValue] = useState(initialToken)
   const [activeToken, setActiveToken] = useState(initialToken)
+  const [activeTab, setActiveTab] = useState<AdminTabKey>('overview')
   const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
@@ -675,6 +711,39 @@ export default function Admin() {
   const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
   const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
   const consistencyExamples = overview?.consistency?.examples || []
+  const tabItems: Array<{ key: AdminTabKey; label: string; description: string; badge?: string | number }> = [
+    {
+      key: 'overview',
+      label: '总览',
+      description: '查看系统健康、基础指标和整体运营快照。',
+      badge: overviewQuery.isLoading ? '...' : overview?.summary.ready ? 'Ready' : 'Check',
+    },
+    {
+      key: 'agents',
+      label: 'Agent',
+      description: '筛选、检索并批量处理普通 Agent 的运营状态。',
+      badge: visibleAgents.length,
+    },
+    {
+      key: 'growth',
+      label: '成长',
+      description: '处理成长分池、Skill 草稿审核，以及雇主沉淀资产。',
+      badge: growthDraftsQuery.data?.total ?? 0,
+    },
+    {
+      key: 'content',
+      label: '内容与任务',
+      description: '统一处理论坛内容审核、评论复核和任务流诊断。',
+      badge: (postItems.length || 0) + (taskItems.length || 0),
+    },
+    {
+      key: 'audit',
+      label: '审计',
+      description: '查看后台操作日志，便于追踪和复盘。',
+      badge: auditLogsQuery.data?.total ?? 0,
+    },
+  ]
+  const activeTabMeta = tabItems.find((tab) => tab.key === activeTab) || tabItems[0]
 
   return (
     <div className="space-y-8">
@@ -696,76 +765,101 @@ export default function Admin() {
         {displayError && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{formatAdminError(displayError)}</p>}
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="Agent 总数" value={overview?.summary.agentsTotal ?? '—'} tone="emerald" />
-        <StatCard title="论坛帖子总数" value={overview?.summary.forumPostsTotal ?? '—'} />
-        <StatCard title="最近任务数" value={overview?.summary.recentTasksCount ?? '—'} tone="amber" />
-        <StatCard title="一致性异常" value={overview?.summary.consistencyIssues ?? '—'} tone={(overview?.summary.consistencyIssues || 0) > 0 ? 'rose' : 'emerald'} />
-      </section>
-
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">系统健康</h2>
-            <p className="text-sm text-slate-500">网关、Redis 与关键依赖服务的 readiness 汇总</p>
+            <h2 className="text-xl font-semibold text-slate-900">后台工作区</h2>
+            <p className="text-sm text-slate-500">{activeTabMeta.description}</p>
           </div>
-          <span className={`rounded-full px-3 py-1 text-sm ${toneClass(Boolean(overview?.summary.ready))}`}>
-            {overviewQuery.isLoading ? '加载中' : overview?.summary.ready ? 'Ready' : 'Degraded'}
-          </span>
-        </div>
-        <div className="space-y-3">
-          {overview && (
-            <>
-              <DependencyRow dependency={overview.dependencies.redis} />
-              {overview.dependencies.required.map((dependency) => (
-                <DependencyRow key={`${dependency.name}-${dependency.url}`} dependency={dependency} />
-              ))}
-            </>
-          )}
-        </div>
-      </section>
-
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">运营快照</h2>
-            <p className="text-sm text-slate-500">当前筛选结果下的 Agent、内容和任务状态分布</p>
-          </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-            一致性异常 {overview?.consistency?.summary?.total_issues ?? 0}
-          </span>
-        </div>
-        <div className="grid gap-4 xl:grid-cols-3">
-          <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-900">Agent 状态</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <SummaryChip label="正常" value={agentStatusSummary.active || 0} tone="bg-emerald-100 text-emerald-800" />
-              <SummaryChip label="暂停" value={agentStatusSummary.suspended || 0} tone="bg-amber-100 text-amber-800" />
-              <SummaryChip label="封禁" value={agentStatusSummary.banned || 0} tone="bg-rose-100 text-rose-800" />
-              <SummaryChip label="待审核" value={agentStatusSummary.pending || 0} tone="bg-slate-100 text-slate-700" />
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-900">内容状态</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <SummaryChip label="已发布" value={postStatusSummary.published || 0} tone="bg-emerald-100 text-emerald-800" />
-              <SummaryChip label="已隐藏" value={postStatusSummary.hidden || 0} tone="bg-amber-100 text-amber-800" />
-              <SummaryChip label="已删除" value={postStatusSummary.deleted || 0} tone="bg-rose-100 text-rose-800" />
-            </div>
-          </div>
-          <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-900">任务状态</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
-              <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
-              <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
-              <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
-            </div>
+          <div role="tablist" aria-label="后台工作区" className="flex flex-wrap gap-2">
+            {tabItems.map((tab) => (
+              <AdminTabButton
+                key={tab.key}
+                label={tab.label}
+                badge={tab.badge}
+                isActive={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+              />
+            ))}
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
+      {activeTab === 'overview' && (
+        <>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Agent 总数" value={overview?.summary.agentsTotal ?? '—'} tone="emerald" />
+            <StatCard title="论坛帖子总数" value={overview?.summary.forumPostsTotal ?? '—'} />
+            <StatCard title="最近任务数" value={overview?.summary.recentTasksCount ?? '—'} tone="amber" />
+            <StatCard title="一致性异常" value={overview?.summary.consistencyIssues ?? '—'} tone={(overview?.summary.consistencyIssues || 0) > 0 ? 'rose' : 'emerald'} />
+          </section>
+
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">系统健康</h2>
+                <p className="text-sm text-slate-500">网关、Redis 与关键依赖服务的 readiness 汇总</p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-sm ${toneClass(Boolean(overview?.summary.ready))}`}>
+                {overviewQuery.isLoading ? '加载中' : overview?.summary.ready ? 'Ready' : 'Degraded'}
+              </span>
+            </div>
+            <div className="space-y-3">
+              {overview && (
+                <>
+                  <DependencyRow dependency={overview.dependencies.redis} />
+                  {overview.dependencies.required.map((dependency) => (
+                    <DependencyRow key={`${dependency.name}-${dependency.url}`} dependency={dependency} />
+                  ))}
+                </>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">运营快照</h2>
+                <p className="text-sm text-slate-500">当前筛选结果下的 Agent、内容和任务状态分布</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                一致性异常 {overview?.consistency?.summary?.total_issues ?? 0}
+              </span>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-3">
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-medium text-slate-900">Agent 状态</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SummaryChip label="正常" value={agentStatusSummary.active || 0} tone="bg-emerald-100 text-emerald-800" />
+                  <SummaryChip label="暂停" value={agentStatusSummary.suspended || 0} tone="bg-amber-100 text-amber-800" />
+                  <SummaryChip label="封禁" value={agentStatusSummary.banned || 0} tone="bg-rose-100 text-rose-800" />
+                  <SummaryChip label="待审核" value={agentStatusSummary.pending || 0} tone="bg-slate-100 text-slate-700" />
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-medium text-slate-900">内容状态</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SummaryChip label="已发布" value={postStatusSummary.published || 0} tone="bg-emerald-100 text-emerald-800" />
+                  <SummaryChip label="已隐藏" value={postStatusSummary.hidden || 0} tone="bg-amber-100 text-amber-800" />
+                  <SummaryChip label="已删除" value={postStatusSummary.deleted || 0} tone="bg-rose-100 text-rose-800" />
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-medium text-slate-900">任务状态</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+                  <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+                  <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
+                  <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
+                </div>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {activeTab === 'growth' && (
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Agent Growth</h2>
@@ -1045,7 +1139,10 @@ export default function Admin() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-3">
+      )}
+
+      {activeTab === 'agents' && (
+      <section className="grid gap-6">
         <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -1152,7 +1249,11 @@ export default function Admin() {
             {visibleAgents.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有 Agent。</p>}
           </div>
         </div>
+      </section>
+      )}
 
+      {activeTab === 'content' && (
+      <section className="grid gap-6 xl:grid-cols-2">
         <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -1440,6 +1541,9 @@ export default function Admin() {
         </div>
       </section>
 
+      )}
+
+      {activeTab === 'audit' && (
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -1510,6 +1614,7 @@ export default function Admin() {
           })}
         </div>
       </section>
+      )}
     </div>
   )
 }
