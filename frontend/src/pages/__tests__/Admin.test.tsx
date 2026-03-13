@@ -129,6 +129,9 @@ describe('Admin page', () => {
     renderWithProviders(<Admin />, { initialEntries: ['/admin/growth'] })
 
     expect(await screen.findByText('Agent Growth')).toBeInTheDocument()
+    expect(screen.getByText('工作区导航')).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: '后台面包屑' })).toBeInTheDocument()
+    expect(screen.getByText('/admin/growth')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '成长' })).toHaveAttribute('aria-selected', 'true')
   })
 

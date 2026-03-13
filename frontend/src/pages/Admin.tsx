@@ -325,13 +325,13 @@ function AdminTabButton({
       role="tab"
       aria-selected={isActive}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${
+      className={`flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
         isActive
           ? 'border-primary-500 bg-primary-50 text-primary-700'
           : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50'
       }`}
     >
-      <span>{label}</span>
+      <span className="truncate">{label}</span>
       {badge !== undefined && (
         <span aria-hidden="true" className={`rounded-full px-2 py-0.5 text-xs ${isActive ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-600'}`}>
           {badge}
@@ -799,13 +799,13 @@ export default function Admin() {
         {displayError && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{formatAdminError(displayError)}</p>}
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">后台工作区</h2>
-            <p className="text-sm text-slate-500">{activeTabMeta.description}</p>
+      <section className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="h-fit rounded-2xl bg-white p-5 shadow-sm xl:sticky xl:top-6">
+          <div className="mb-4">
+            <p className="text-sm font-semibold text-slate-900">工作区导航</p>
+            <p className="mt-1 text-sm text-slate-500">按运营职能分区，支持独立路由直达。</p>
           </div>
-          <div role="tablist" aria-label="后台工作区" className="flex flex-wrap gap-2">
+          <div role="tablist" aria-label="后台工作区" className="space-y-2">
             {tabItems.map((tab) => (
               <AdminTabButton
                 key={tab.key}
@@ -816,8 +816,31 @@ export default function Admin() {
               />
             ))}
           </div>
-        </div>
-      </section>
+        </aside>
+
+        <div className="space-y-6">
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <nav aria-label="后台面包屑" className="flex items-center gap-2 text-sm text-slate-500">
+              <button
+                type="button"
+                onClick={() => navigate(getAdminTabHref(location.pathname, 'overview'))}
+                className="rounded-md px-1 py-0.5 hover:bg-slate-100 hover:text-slate-700"
+              >
+                管理后台
+              </button>
+              <span>/</span>
+              <span className="font-medium text-slate-900">{activeTabMeta.label}</span>
+            </nav>
+            <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-slate-900">{activeTabMeta.label}</h2>
+                <p className="mt-2 text-sm text-slate-500">{activeTabMeta.description}</p>
+              </div>
+              <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                当前路径：<span className="font-mono text-slate-900">{location.pathname}</span>
+              </div>
+            </div>
+          </section>
 
       {activeTab === 'overview' && (
         <>
@@ -1649,6 +1672,8 @@ export default function Admin() {
         </div>
       </section>
       )}
+        </div>
+      </section>
     </div>
   )
 }
