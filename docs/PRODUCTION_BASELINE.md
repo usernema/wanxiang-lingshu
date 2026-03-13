@@ -65,6 +65,33 @@
 - `SMTP_USER`
 - `SMTP_PASSWORD`
 - `SMTP_FROM`
+- `NGINX_API_RATE_LIMIT`
+- `NGINX_AUTH_RATE_LIMIT`
+- `AUTH_BURST_RATE_LIMIT_MAX_REQUESTS`
+- `AUTHENTICATED_IP_RATE_LIMIT_MAX_REQUESTS`
+- `ADMIN_RATE_LIMIT_MAX_REQUESTS`
+
+## 抗滥用基线
+
+线上默认启用“双层限流”：
+
+- **Ingress / Nginx**：对 `/api/` 做单 IP 速率限制，对登录 / 注册 / 验证码接口做更严格的单 IP 限速，并限制单 IP 并发连接数
+- **API Gateway**：对鉴权接口、已登录写操作、后台接口分别做 Redis 共享计数限流
+- **静态资源**：`/assets/` 走浏览器缓存，减少重复命中源站
+
+建议默认基线：
+
+- API 总入口：`12r/s`，`burst=25`
+- Auth 入口：`10r/m`，`burst=5`
+- 已登录 IP：`120/min`
+- Auth 突发：`3/10s`
+- 管理后台：`30/min/IP`
+
+说明：
+
+- 这套基线适合当前 4C / 8G 单机 VPS 的“中低写入、读多写少”场景
+- 能明显降低撞库、验证码轰炸、评论刷接口、脚本扫后台的风险
+- 不能替代 Cloudflare / WAF / 高防；真正的大流量攻击仍需要边缘防护
 
 ## 标准发布流程
 

@@ -21,6 +21,30 @@ function buildStore(redis, prefix) {
   });
 }
 
+function keyStrategyForProfile(profile) {
+  return profile?.keyStrategy || 'agentOrIp';
+}
+
+function limitKeyForRequest(req, profileName, keyStrategy) {
+  if (keyStrategy === 'ip') {
+    return `${profileName}:ip:${req.ip}`;
+  }
+
+  if (req.agent?.aid) {
+    return `${profileName}:agent:${req.agent.aid}`;
+  }
+
+  return `${profileName}:ip:${req.ip}`;
+}
+
+function limitKeyType(req, keyStrategy) {
+  if (keyStrategy === 'agentOrIp' && req.agent?.aid) {
+    return 'agent';
+  }
+
+  return 'ip';
+}
+
 function limitExceededResponse(req, res, profile, keyType) {
   metrics.rateLimitExceeded.inc({ key_type: keyType });
   logger.warn('Rate limit exceeded', {
@@ -52,7 +76,7 @@ function createLimiterOptions(profileName, redis) {
     throw new Error(`Unknown rate limit profile: ${profileName}`);
   }
 
-  const byAgent = profileName !== 'auth' && profileName !== 'health';
+  const keyStrategy = keyStrategyForProfile(profile);
   const prefix = `ratelimit:${profileName}:`;
 
   return {
@@ -63,19 +87,11 @@ function createLimiterOptions(profileName, redis) {
       }
       return profile.maxRequests;
     },
-    keyGenerator: (req) => {
-      if (profileName === 'auth') {
-        return `auth:ip:${req.ip}`;
-      }
-      if (byAgent && req.agent?.aid) {
-        return `${profileName}:agent:${req.agent.aid}`;
-      }
-      return `${profileName}:ip:${req.ip}`;
-    },
+    keyGenerator: (req) => limitKeyForRequest(req, profileName, keyStrategy),
     store: buildStore(redis, prefix),
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req, res) => limitExceededResponse(req, res, profileName, byAgent && req.agent?.aid ? 'agent' : 'ip'),
+    handler: (req, res) => limitExceededResponse(req, res, profileName, limitKeyType(req, keyStrategy)),
     skip: skipHealthAndMetrics,
   };
 }
@@ -86,23 +102,25 @@ async function createRateLimiter(profileName = 'default') {
 }
 
 async function createProfileLimiters() {
-  const [defaultLimiter, authLimiter, publicReadLimiter, writeLimiter, internalLimiter, healthLimiter] = await Promise.all([
-    createRateLimiter('default'),
-    createRateLimiter('auth'),
-    createRateLimiter('publicRead'),
-    createRateLimiter('write'),
-    createRateLimiter('internal'),
-    createRateLimiter('health'),
-  ]);
-
-  return {
-    defaultLimiter,
-    authLimiter,
-    publicReadLimiter,
-    writeLimiter,
-    internalLimiter,
-    healthLimiter,
+  const profileToLimiterName = {
+    default: 'defaultLimiter',
+    auth: 'authLimiter',
+    authBurst: 'authBurstLimiter',
+    publicRead: 'publicReadLimiter',
+    write: 'writeLimiter',
+    authenticatedIp: 'authenticatedIpLimiter',
+    internal: 'internalLimiter',
+    admin: 'adminLimiter',
+    health: 'healthLimiter',
   };
+
+  const entries = await Promise.all(
+    Object.entries(profileToLimiterName).map(async ([profileName, limiterName]) => (
+      [limiterName, await createRateLimiter(profileName)]
+    )),
+  );
+
+  return Object.fromEntries(entries);
 }
 
 module.exports = {

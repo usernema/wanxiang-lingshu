@@ -7,6 +7,12 @@ ADMIN_SERVER_NAME="${NGINX_ADMIN_SERVER_NAME:-}"
 ENABLE_TLS="${NGINX_ENABLE_TLS:-false}"
 TLS_CERT_PATH="${NGINX_TLS_CERT_PATH:-/etc/nginx/certs/tls.crt}"
 TLS_KEY_PATH="${NGINX_TLS_KEY_PATH:-/etc/nginx/certs/tls.key}"
+API_RATE_LIMIT="${NGINX_API_RATE_LIMIT:-12r/s}"
+API_BURST="${NGINX_API_BURST:-25}"
+AUTH_RATE_LIMIT="${NGINX_AUTH_RATE_LIMIT:-10r/m}"
+AUTH_BURST="${NGINX_AUTH_BURST:-5}"
+CONN_LIMIT_PER_IP="${NGINX_CONN_LIMIT_PER_IP:-30}"
+CLIENT_MAX_BODY_SIZE="${NGINX_CLIENT_MAX_BODY_SIZE:-2m}"
 PUBLIC_SERVER_NAMES="$(printf '%s %s' "$SERVER_NAME" "$SERVER_ALIASES" | tr -s ' ' | sed 's/^ //; s/ $//')"
 EXTERNAL_SCHEME="http"
 
@@ -34,35 +40,119 @@ if [ -n "$ADMIN_SERVER_NAME" ] && [ "$ADMIN_SERVER_NAME" = "$SERVER_NAME" ]; the
   exit 1
 fi
 
-cat <<'EOF' >/etc/nginx/snippets-ingress-common.conf
+cat <<EOF >/etc/nginx/conf.d/00-security.conf
+limit_req_status 429;
+limit_conn_status 429;
+limit_req_log_level warn;
+limit_conn_log_level warn;
+limit_req_zone \$binary_remote_addr zone=api_per_ip:10m rate=${API_RATE_LIMIT};
+limit_req_zone \$binary_remote_addr zone=auth_per_ip:10m rate=${AUTH_RATE_LIMIT};
+limit_conn_zone \$binary_remote_addr zone=conn_per_ip:10m;
+server_tokens off;
+client_max_body_size ${CLIENT_MAX_BODY_SIZE};
+EOF
+
+cat <<'EOF' >/etc/nginx/snippets-proxy-common.conf
+proxy_http_version 1.1;
+proxy_set_header Host $host;
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+EOF
+
+cat <<EOF >/etc/nginx/snippets-ingress-common.conf
+location = /api/v1/agents/register {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/register;
+}
+
+location = /api/v1/agents/email/register/request-code {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/email/register/request-code;
+}
+
+location = /api/v1/agents/email/register/complete {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/email/register/complete;
+}
+
+location = /api/v1/agents/email/login/request-code {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/email/login/request-code;
+}
+
+location = /api/v1/agents/email/login/complete {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/email/login/complete;
+}
+
+location = /api/v1/agents/challenge {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/challenge;
+}
+
+location = /api/v1/agents/login {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/login;
+}
+
+location = /api/v1/agents/verify {
+  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
+  proxy_pass http://api-gateway:3000/api/v1/agents/verify;
+}
+
 location /api/ {
+  limit_req zone=api_per_ip burst=${API_BURST} nodelay;
+  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
+  include /etc/nginx/snippets-proxy-common.conf;
   proxy_pass http://api-gateway:3000/api/;
-  proxy_http_version 1.1;
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Host $host;
-  proxy_set_header X-Forwarded-Proto $scheme;
+}
+
+location ^~ /assets/ {
+  expires 7d;
+  add_header Cache-Control "public, max-age=604800, immutable";
+  try_files \$uri =404;
+}
+
+location = /favicon.ico {
+  expires 1d;
+  add_header Cache-Control "public, max-age=86400";
+  try_files \$uri =404;
+}
+
+location = /robots.txt {
+  expires 1d;
+  add_header Cache-Control "public, max-age=86400";
+  try_files \$uri =404;
 }
 
 location = /health/live {
+  access_log off;
+  include /etc/nginx/snippets-proxy-common.conf;
   proxy_pass http://api-gateway:3000/health/live;
-  proxy_http_version 1.1;
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Host $host;
-  proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location = /health/ready {
+  access_log off;
+  include /etc/nginx/snippets-proxy-common.conf;
   proxy_pass http://api-gateway:3000/health/ready;
-  proxy_http_version 1.1;
-  proxy_set_header Host $host;
-  proxy_set_header X-Real-IP $remote_addr;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Host $host;
-  proxy_set_header X-Forwarded-Proto $scheme;
 }
 
 location = /health {

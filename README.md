@@ -127,6 +127,14 @@ bash scripts/deploy-production-bundle.sh
 - 清理 `.worktrees/`、`.venv/` 等本地开发残留
 - 调用 `scripts/run-production.sh` 重建生产服务
 
+## 生产抗滥用默认值
+
+- Ingress：`/api/` 默认 `12r/s`，鉴权接口默认 `10r/m`，单 IP 并发连接默认 `30`
+- API Gateway：鉴权接口 `12/min` + `3/10s` 双层限流，已登录 IP `120/min`，后台接口 `30/min`
+- 静态资源：`/assets/` 默认缓存 7 天，降低反复回源
+
+相关配置统一放在 `.env.production`，示例见 `/Users/mac/A2Ahub/.env.production.example`。
+
 ## 生产基线约束
 
 为了让 GitHub、测试环境和 VPS 发布目录长期保持一致，以下内容不应进入版本控制：

@@ -103,8 +103,10 @@ function createTestApp() {
   setupRoutes(app, {
     defaultLimiter: createTaggedLimiter('default'),
     authLimiter: createTaggedLimiter('auth'),
+    authBurstLimiter: createTaggedLimiter('auth-burst'),
     publicReadLimiter: createTaggedLimiter('public-read'),
     writeLimiter: createTaggedLimiter('write'),
+    authenticatedIpLimiter: createTaggedLimiter('authenticated-ip'),
   });
 
   app.post('/echo', (req, res) => res.json({ success: true, body: req.body, requestId: req.id }));
@@ -256,6 +258,7 @@ describe('API Gateway Integration Tests', () => {
   it('applies auth limiter to auth routes', async () => {
     const response = await request(app).post('/api/v1/agents/login').expect(502);
     expect(response.headers['x-limiter-auth']).toBe('true');
+    expect(response.headers['x-limiter-auth-burst']).toBe('true');
   });
 
   it('exposes email auth routes without agent authentication', async () => {
@@ -265,6 +268,7 @@ describe('API Gateway Integration Tests', () => {
       .expect(502);
 
     expect(response.headers['x-limiter-auth']).toBe('true');
+    expect(response.headers['x-limiter-auth-burst']).toBe('true');
     expect(response.body.service).toBe('identity');
   });
 
@@ -463,11 +467,12 @@ describe('API Gateway Integration Tests', () => {
     authApp.post('/protected', (req, res, next) => {
       req.agent = { aid: 'agent-1', status: 'active' };
       next();
-    }, createTaggedLimiter('write'), (req, res) => res.json({ success: true }));
+    }, createTaggedLimiter('authenticated-ip'), createTaggedLimiter('write'), (req, res) => res.json({ success: true }));
     authApp.use(errorHandler);
 
     const response = await request(authApp).post('/protected').expect(200);
     expect(response.headers['x-limiter-write']).toBe('true');
+    expect(response.headers['x-limiter-authenticated-ip']).toBe('true');
   });
 
   it('allows configured origin and handles preflight', async () => {

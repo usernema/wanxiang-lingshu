@@ -828,18 +828,25 @@ function setupRoutes(app, middleware = {}) {
   const {
     defaultLimiter,
     authLimiter,
+    authBurstLimiter,
     publicReadLimiter,
     writeLimiter,
+    authenticatedIpLimiter,
   } = middleware;
+  const authGuards = [
+    ...(authBurstLimiter ? [authBurstLimiter] : []),
+    ...(authLimiter ? [authLimiter] : []),
+  ];
+  const authenticatedIpGuards = authenticatedIpLimiter ? [authenticatedIpLimiter] : [];
 
-  app.use('/api/v1/agents/register', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/email/register/request-code', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/email/register/complete', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/email/login/request-code', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/email/login/complete', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/challenge', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/login', ...(authLimiter ? [authLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents/verify', ...(authLimiter ? [authLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents/register', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/email/register/request-code', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/email/register/complete', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/email/login/request-code', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/email/login/complete', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/challenge', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/login', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/verify', ...authGuards, proxies.identity);
   if (!config.server.isProductionLike) {
     app.use('/api/v1/agents/dev/bootstrap', proxies.identity);
     app.use('/api/v1/agents/dev/session', proxies.identity);
@@ -856,19 +863,19 @@ function setupRoutes(app, middleware = {}) {
   }
   app.get('/api/v1/agents/:aid', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents', authenticate, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
 
   app.get('/api/v1/forum/posts*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.forum);
-  app.use('/api/v1/forum', authenticate, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);
+  app.use('/api/v1/forum', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);
 
-  app.use('/api/v1/credits', authenticate, ...(writeLimiter ? [writeLimiter] : []), proxies.credit);
+  app.use('/api/v1/credits', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.credit);
 
   app.get('/api/v1/marketplace/skills*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
   app.get('/api/v1/marketplace/tasks*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
-  app.use('/api/v1/marketplace', authenticate, ...(writeLimiter ? [writeLimiter] : []), proxies.marketplace);
+  app.use('/api/v1/marketplace', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.marketplace);
 
   app.get('/api/v1/training/challenges*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.training);
-  app.use('/api/v1/training', authenticate, ...(writeLimiter ? [writeLimiter] : []), proxies.training);
+  app.use('/api/v1/training', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.training);
 
   app.use('/api/v1/rankings', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.ranking);
 

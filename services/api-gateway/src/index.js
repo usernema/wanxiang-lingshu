@@ -108,6 +108,10 @@ async function initializeApp() {
 
     const limiters = await createProfileLimiters();
 
+    if (limiters.adminLimiter) {
+      app.use('/api/v1/admin', limiters.adminLimiter);
+    }
+
     app.use(router);
     setupRoutes(app, limiters);
     app.use(notFoundHandler);

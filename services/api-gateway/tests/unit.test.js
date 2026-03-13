@@ -558,6 +558,11 @@ describe('rate limit helpers', () => {
     expect(options.keyGenerator({ ip: '127.0.0.1', agent: { aid: 'agent-1' } })).toBe('default:agent:agent-1');
   });
 
+  it('builds authenticated-ip limiter options keyed by ip even for signed-in agents', () => {
+    const options = createLimiterOptions('authenticatedIp', { sendCommand: jest.fn() });
+    expect(options.keyGenerator({ ip: '127.0.0.1', agent: { aid: 'agent-1' } })).toBe('authenticatedIp:ip:127.0.0.1');
+  });
+
   it('sends structured rate limit response from handler', () => {
     const options = createLimiterOptions('write', { sendCommand: jest.fn() });
     const res = createRes();
@@ -577,9 +582,12 @@ describe('rate limit helpers', () => {
     const limiters = await createProfileLimiters();
     expect(limiters).toHaveProperty('defaultLimiter');
     expect(limiters).toHaveProperty('authLimiter');
+    expect(limiters).toHaveProperty('authBurstLimiter');
     expect(limiters).toHaveProperty('publicReadLimiter');
     expect(limiters).toHaveProperty('writeLimiter');
+    expect(limiters).toHaveProperty('authenticatedIpLimiter');
     expect(limiters).toHaveProperty('internalLimiter');
+    expect(limiters).toHaveProperty('adminLimiter');
     expect(limiters).toHaveProperty('healthLimiter');
   });
 });
@@ -809,16 +817,18 @@ describe('route helpers', () => {
     const middleware = {
       defaultLimiter: 'defaultLimiter',
       authLimiter: 'authLimiter',
+      authBurstLimiter: 'authBurstLimiter',
       publicReadLimiter: 'publicReadLimiter',
       writeLimiter: 'writeLimiter',
+      authenticatedIpLimiter: 'authenticatedIpLimiter',
     };
 
     setupRoutes(app, middleware);
 
-    expect(app.use).toHaveBeenCalledWith('/api/v1/agents/register', 'authLimiter', expect.anything());
-    expect(app.use).toHaveBeenCalledWith('/api/v1/agents/email/register/request-code', 'authLimiter', expect.anything());
+    expect(app.use).toHaveBeenCalledWith('/api/v1/agents/register', 'authBurstLimiter', 'authLimiter', expect.anything());
+    expect(app.use).toHaveBeenCalledWith('/api/v1/agents/email/register/request-code', 'authBurstLimiter', 'authLimiter', expect.anything());
     expect(app.get).toHaveBeenCalledWith('/api/v1/agents/:aid', 'publicReadLimiter', expect.anything());
-    expect(app.use).toHaveBeenCalledWith('/api/v1/forum', expect.any(Function), 'writeLimiter', expect.anything());
+    expect(app.use).toHaveBeenCalledWith('/api/v1/forum', expect.any(Function), 'authenticatedIpLimiter', 'writeLimiter', expect.anything());
     expect(logger.info).toHaveBeenCalledWith('Routes configured successfully');
   });
 
@@ -847,7 +857,10 @@ describe('config defaults', () => {
   it('includes expected hardening config defaults', () => {
     expect(config.health.skipLogPaths).toContain('/metrics');
     expect(config.rateLimit.profiles).toHaveProperty('auth');
+    expect(config.rateLimit.profiles).toHaveProperty('authBurst');
     expect(config.rateLimit.profiles).toHaveProperty('publicRead');
     expect(config.rateLimit.profiles).toHaveProperty('write');
+    expect(config.rateLimit.profiles).toHaveProperty('authenticatedIp');
+    expect(config.rateLimit.profiles).toHaveProperty('admin');
   });
 });

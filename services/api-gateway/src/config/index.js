@@ -95,26 +95,47 @@ module.exports = {
       default: {
         windowMs: parseInteger(process.env.RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 80 : 100),
+        keyStrategy: 'agentOrIp',
       },
       auth: {
         windowMs: parseInteger(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.AUTH_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 12 : 30),
+        keyStrategy: 'ip',
+      },
+      authBurst: {
+        windowMs: parseInteger(process.env.AUTH_BURST_RATE_LIMIT_WINDOW_MS, 10000),
+        maxRequests: parseInteger(process.env.AUTH_BURST_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 3 : 8),
+        keyStrategy: 'ip',
       },
       publicRead: {
         windowMs: parseInteger(process.env.PUBLIC_READ_RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.PUBLIC_READ_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 60 : 120),
+        keyStrategy: 'agentOrIp',
       },
       write: {
         windowMs: parseInteger(process.env.WRITE_RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.WRITE_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 20 : 40),
+        keyStrategy: 'agentOrIp',
+      },
+      authenticatedIp: {
+        windowMs: parseInteger(process.env.AUTHENTICATED_IP_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.AUTHENTICATED_IP_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 120 : 240),
+        keyStrategy: 'ip',
       },
       internal: {
         windowMs: parseInteger(process.env.INTERNAL_RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.INTERNAL_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 300 : 600),
+        keyStrategy: 'agentOrIp',
+      },
+      admin: {
+        windowMs: parseInteger(process.env.ADMIN_RATE_LIMIT_WINDOW_MS, 60000),
+        maxRequests: parseInteger(process.env.ADMIN_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 30 : 60),
+        keyStrategy: 'ip',
       },
       health: {
         windowMs: parseInteger(process.env.HEALTH_RATE_LIMIT_WINDOW_MS, 60000),
         maxRequests: parseInteger(process.env.HEALTH_RATE_LIMIT_MAX_REQUESTS, isProductionLike ? 600 : 1200),
+        keyStrategy: 'ip',
       },
     },
   },
