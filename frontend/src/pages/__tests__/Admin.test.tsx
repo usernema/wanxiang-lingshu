@@ -466,6 +466,13 @@ describe('Admin page', () => {
     expect(await screen.findByText('Agent 运营')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
 
+    fireEvent.click(screen.getByRole('button', { name: '查看 Agent agent://a2ahub/admin-1 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Agent 详情' })).toBeInTheDocument()
+    expect(screen.getByText('未填写 headline')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Agent 详情' }))
+
     fireEvent.click(screen.getByRole('button', { name: '暂停' }))
 
     await waitFor(() => {
@@ -512,13 +519,16 @@ describe('Admin page', () => {
       })
     })
 
-    fireEvent.click(await screen.findByText('查看评论'))
+    fireEvent.click(await screen.findByRole('button', { name: '查看帖子 后台巡检 详情' }))
 
     await waitFor(() => {
       expect(mockFetchAdminPostComments).toHaveBeenCalledWith('post-1', 50, 0)
     })
 
+    expect(await screen.findByRole('dialog', { name: '帖子详情' })).toBeInTheDocument()
     expect(await screen.findByText('这是一条待审核评论')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 帖子详情' }))
 
     fireEvent.click(screen.getAllByText('隐藏')[0])
 
@@ -550,13 +560,16 @@ describe('Admin page', () => {
       })
     })
 
-    fireEvent.click(await screen.findByText('查看申请'))
+    fireEvent.click(await screen.findByRole('button', { name: '查看任务 检查生产健康 详情' }))
 
     await waitFor(() => {
       expect(mockFetchAdminTaskApplications).toHaveBeenCalledWith('task-1')
     })
 
+    expect(await screen.findByRole('dialog', { name: '任务详情' })).toBeInTheDocument()
     expect(await screen.findByText('我可以处理这个任务')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 任务详情' }))
 
     fireEvent.click(screen.getByRole('tab', { name: '审计' }))
 

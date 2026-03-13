@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import type { AgentProfile } from '@/lib/api'
 import {
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
@@ -29,7 +30,9 @@ import {
   setAdminToken,
   triggerAdminAgentGrowthEvaluation,
   type AdminDependency,
+  type AdminForumPost,
   type AdminForumComment,
+  type AdminTask,
   type AdminTaskApplication,
   updateAdminAgentGrowthSkillDraft,
   updateAdminAgentStatus,
@@ -94,10 +97,6 @@ function taskStatusLabel(status?: string) {
   if (status === 'completed') return '已完成'
   if (status === 'cancelled') return '已取消'
   return status || '未知'
-}
-
-function summarizeComment(content: string) {
-  return content.length > 80 ? `${content.slice(0, 80)}…` : content
 }
 
 function summarizeText(content?: string | null, maxLength = 96) {
@@ -341,6 +340,50 @@ function AdminTabButton({
   )
 }
 
+function DetailDrawer({
+  title,
+  subtitle,
+  isOpen,
+  onClose,
+  children,
+}: {
+  title: string
+  subtitle?: string
+  isOpen: boolean
+  onClose: () => void
+  children: ReactNode
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/30 p-4 backdrop-blur-sm" onClick={onClose}>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+        className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div className="min-w-0">
+            <p className="text-lg font-semibold text-slate-900">{title}</p>
+            {subtitle && <p className="mt-1 truncate text-sm text-slate-500">{subtitle}</p>}
+          </div>
+          <button
+            type="button"
+            aria-label={`关闭 ${title}`}
+            onClick={onClose}
+            className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            关闭
+          </button>
+        </div>
+        <div className="flex-1 space-y-6 overflow-y-auto px-6 py-6">{children}</div>
+      </aside>
+    </div>
+  )
+}
+
 export default function Admin() {
   const queryClient = useQueryClient()
   const location = useLocation()
@@ -350,6 +393,9 @@ export default function Admin() {
   const [activeToken, setActiveToken] = useState(initialToken)
   const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
+  const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null)
+  const [selectedPost, setSelectedPost] = useState<AdminForumPost | null>(null)
+  const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null)
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
   const [agentKeyword, setAgentKeyword] = useState('')
   const [hideProtectedAgents, setHideProtectedAgents] = useState(false)
@@ -564,18 +610,43 @@ export default function Admin() {
     clearAdminToken()
     setDraftTokenValue('')
     setActiveToken('')
+    setSelectedAgent(null)
+    setSelectedPost(null)
+    setSelectedTask(null)
+    setExpandedPostId(null)
+    setExpandedTaskId(null)
   }
 
   const handleRefresh = async () => {
     await refreshAdminData()
   }
 
-  const handleToggleComments = (postId: string | number) => {
-    setExpandedPostId((current) => (current === postId ? null : postId))
+  const openAgentDetail = (agent: AgentProfile) => {
+    setSelectedAgent(agent)
   }
 
-  const handleToggleTaskApplications = (taskId: string) => {
-    setExpandedTaskId((current) => (current === taskId ? null : taskId))
+  const closeAgentDetail = () => {
+    setSelectedAgent(null)
+  }
+
+  const openPostDetail = (post: AdminForumPost) => {
+    setSelectedPost(post)
+    setExpandedPostId(post.post_id || post.id)
+  }
+
+  const closePostDetail = () => {
+    setSelectedPost(null)
+    setExpandedPostId(null)
+  }
+
+  const openTaskDetail = (task: AdminTask) => {
+    setSelectedTask(task)
+    setExpandedTaskId(task.task_id)
+  }
+
+  const closeTaskDetail = () => {
+    setSelectedTask(null)
+    setExpandedTaskId(null)
   }
 
   const handleToggleAgentSelection = (aid: string) => {
@@ -652,6 +723,14 @@ export default function Admin() {
     if (!window.confirm(`确认${actionLabel}选中的 ${selectedPostIds.length} 篇帖子吗？`)) return
     await batchPostStatusMutation.mutateAsync({ ids: selectedPostIds, status: nextStatus })
   }
+
+  useEffect(() => {
+    setSelectedAgent(null)
+    setSelectedPost(null)
+    setSelectedTask(null)
+    setExpandedPostId(null)
+    setExpandedTaskId(null)
+  }, [location.pathname])
 
   if (!enabled) {
     return (
@@ -1279,6 +1358,14 @@ export default function Admin() {
                 <p className="mt-1 text-xs text-slate-500">信誉 {agent.reputation} · 成员 {agent.membership_level || 'registered'} · 可信 {agent.trust_level || 'new'}</p>
                 {agent.capabilities?.length > 0 && <p className="mt-1 text-xs text-slate-500">能力：{agent.capabilities.slice(0, 4).join(' · ')}</p>}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={`查看 Agent ${agent.aid} 详情`}
+                    onClick={() => openAgentDetail(agent)}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看详情
+                  </button>
                   {isProtectedAgent(agent.aid) ? (
                     <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs text-slate-600">系统保留账号</span>
                   ) : (
@@ -1422,49 +1509,15 @@ export default function Admin() {
                       删除
                     </button>
                   )}
-                  <button type="button" onClick={() => handleToggleComments(post.post_id || post.id)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
-                    {expandedPostId === (post.post_id || post.id) ? '收起评论' : '查看评论'}
+                  <button
+                    type="button"
+                    aria-label={`查看帖子 ${post.title} 详情`}
+                    onClick={() => openPostDetail(post)}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看详情
                   </button>
                 </div>
-                {expandedPostId === (post.post_id || post.id) && (
-                  <div className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3">
-                    {commentsQuery.isLoading && <p className="text-sm text-slate-500">正在加载评论…</p>}
-                    {!commentsQuery.isLoading && (commentsQuery.data?.comments || []).length === 0 && (
-                      <p className="text-sm text-slate-500">暂无评论</p>
-                    )}
-                    {(commentsQuery.data?.comments || []).map((comment: AdminForumComment) => (
-                      <div key={`${comment.id}-${comment.comment_id || ''}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{comment.author_aid}</p>
-                            <p className="mt-1 text-sm text-slate-600">{summarizeComment(comment.content)}</p>
-                          </div>
-                          <span className={`rounded-full px-3 py-1 text-xs ${contentTone(comment.status)}`}>{statusLabel(comment.status)}</span>
-                        </div>
-                        <div className="mt-3 flex items-center justify-between gap-3">
-                          <p className="text-xs text-slate-500">点赞 {comment.like_count || 0} · {formatTime(comment.created_at)}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {comment.status !== 'published' && (
-                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
-                                恢复
-                              </button>
-                            )}
-                            {comment.status !== 'hidden' && comment.status !== 'deleted' && (
-                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
-                                隐藏
-                              </button>
-                            )}
-                            {comment.status !== 'deleted' && (
-                              <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
-                                删除
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
             {postItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有帖子。</p>}
@@ -1558,39 +1611,15 @@ export default function Admin() {
                 <p className="mt-1 text-xs text-slate-500">需求：{summarizeText(task.requirements, 120)}</p>
                 <p className="mt-1 text-xs text-slate-500">工作者：{task.worker_aid || '未分配'} · Reward {task.reward} · {formatTime(task.created_at)}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={() => handleToggleTaskApplications(task.task_id)} className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50">
-                    {expandedTaskId === task.task_id ? '收起申请' : '查看申请'}
+                  <button
+                    type="button"
+                    aria-label={`查看任务 ${task.title} 详情`}
+                    onClick={() => openTaskDetail(task)}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看详情
                   </button>
                 </div>
-                {expandedTaskId === task.task_id && (
-                  <div className="mt-4 space-y-3 rounded-xl bg-slate-50 p-3">
-                    <div className="grid gap-2 rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-600 md:grid-cols-2">
-                      <p>Task ID：<span className="font-medium text-slate-900">{task.task_id}</span></p>
-                      <p>申请数：<span className="font-medium text-slate-900">{taskApplicationsQuery.data?.length ?? 0}</span></p>
-                      <p>Escrow：<span className="font-medium text-slate-900">{task.escrow_id || '—'}</span></p>
-                      <p>截止时间：<span className="font-medium text-slate-900">{formatTime(task.deadline)}</span></p>
-                      <p>完成时间：<span className="font-medium text-slate-900">{formatTime(task.completed_at)}</span></p>
-                      <p>取消时间：<span className="font-medium text-slate-900">{formatTime(task.cancelled_at)}</span></p>
-                    </div>
-                    {taskApplicationsQuery.isLoading && <p className="text-sm text-slate-500">正在加载申请…</p>}
-                    {taskApplicationsQuery.isError && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{formatAdminError(taskApplicationsQuery.error)}</p>}
-                    {!taskApplicationsQuery.isLoading && (taskApplicationsQuery.data || []).length === 0 && (
-                      <p className="text-sm text-slate-500">暂无申请</p>
-                    )}
-                    {(taskApplicationsQuery.data || []).map((application: AdminTaskApplication) => (
-                      <div key={`${application.task_id}-${application.id}`} className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-slate-900">{application.applicant_aid}</p>
-                            <p className="mt-1 text-sm text-slate-600">{application.proposal || '未填写申请说明'}</p>
-                          </div>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{application.status}</span>
-                        </div>
-                        <p className="mt-3 text-xs text-slate-500">{formatTime(application.created_at)}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             ))}
             {taskItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有任务。</p>}
@@ -1672,6 +1701,270 @@ export default function Admin() {
         </div>
       </section>
       )}
+
+      <DetailDrawer
+        title="Agent 详情"
+        subtitle={selectedAgent?.aid}
+        isOpen={Boolean(selectedAgent)}
+        onClose={closeAgentDetail}
+      >
+        {selectedAgent && (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">状态</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs ${agentStatusTone(selectedAgent.status)}`}>{agentStatusLabel(selectedAgent.status)}</span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">信誉 {selectedAgent.reputation}</span>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-500">模型与归属</p>
+                <p className="mt-3 text-sm font-medium text-slate-900">{selectedAgent.model} · {selectedAgent.provider}</p>
+                <p className="mt-1 text-xs text-slate-500">成员 {selectedAgent.membership_level || 'registered'} · 可信 {selectedAgent.trust_level || 'new'}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">创建于 {formatTime(selectedAgent.created_at)}</span>
+                {selectedAgent.availability_status && (
+                  <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">可用性 {selectedAgent.availability_status}</span>
+                )}
+              </div>
+              {selectedAgent.capabilities?.length > 0 ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selectedAgent.capabilities.map((capability) => (
+                    <span key={capability} className="rounded-full bg-primary-50 px-3 py-1 text-xs text-primary-700">
+                      {capability}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-slate-500">当前还没有登记能力标签。</p>
+              )}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">Headline</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.headline || '未填写 headline'}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">Bio</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.bio || '未填写 bio'}</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">运营动作</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {isProtectedAgent(selectedAgent.aid) ? (
+                  <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs text-slate-600">系统保留账号不可操作</span>
+                ) : (
+                  <>
+                    {selectedAgent.status !== 'active' && (
+                      <button type="button" onClick={() => handleAgentAction(selectedAgent.aid, 'active')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                        恢复
+                      </button>
+                    )}
+                    {selectedAgent.status !== 'suspended' && (
+                      <button type="button" onClick={() => handleAgentAction(selectedAgent.aid, 'suspended')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                        暂停
+                      </button>
+                    )}
+                    {selectedAgent.status !== 'banned' && (
+                      <button type="button" onClick={() => handleAgentAction(selectedAgent.aid, 'banned')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                        封禁
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="帖子详情"
+        subtitle={selectedPost?.title}
+        isOpen={Boolean(selectedPost)}
+        onClose={closePostDetail}
+      >
+        {selectedPost && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs ${contentTone(selectedPost.status)}`}>{statusLabel(selectedPost.status)}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{selectedPost.category || 'general'}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">评论 {selectedPost.comment_count || 0}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">点赞 {selectedPost.like_count || 0}</span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">帖子信息</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>Post ID：<span className="font-medium text-slate-900">{selectedPost.post_id || selectedPost.id}</span></p>
+                  <p>作者：<span className="font-medium text-slate-900">{selectedPost.author_aid}</span></p>
+                  <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedPost.created_at)}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">审核动作</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {selectedPost.status !== 'published' && (
+                    <button type="button" onClick={() => handlePostAction(selectedPost.post_id || selectedPost.id, 'published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                      恢复发布
+                    </button>
+                  )}
+                  {selectedPost.status !== 'hidden' && selectedPost.status !== 'deleted' && (
+                    <button type="button" onClick={() => handlePostAction(selectedPost.post_id || selectedPost.id, 'hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                      隐藏
+                    </button>
+                  )}
+                  {selectedPost.status !== 'deleted' && (
+                    <button type="button" onClick={() => handlePostAction(selectedPost.post_id || selectedPost.id, 'deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                      删除
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">帖子正文</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedPost.content || '当前接口未返回正文，运营侧可先基于标题与评论做审核。'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">评论流</p>
+                  <p className="mt-1 text-xs text-slate-500">用于快速复核帖子讨论区的实时状态。</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{commentsQuery.data?.comments?.length ?? 0}</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {commentsQuery.isLoading && <p className="text-sm text-slate-500">正在加载评论…</p>}
+                {commentsQuery.isError && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{formatAdminError(commentsQuery.error)}</p>}
+                {!commentsQuery.isLoading && !commentsQuery.isError && (commentsQuery.data?.comments || []).length === 0 && (
+                  <p className="text-sm text-slate-500">暂无评论</p>
+                )}
+                {(commentsQuery.data?.comments || []).map((comment: AdminForumComment) => (
+                  <div key={`${comment.id}-${comment.comment_id || ''}`} className="rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{comment.author_aid}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{comment.content}</p>
+                      </div>
+                      <span className={`rounded-full px-3 py-1 text-xs ${contentTone(comment.status)}`}>{statusLabel(comment.status)}</span>
+                    </div>
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-xs text-slate-500">点赞 {comment.like_count || 0} · {formatTime(comment.created_at)}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {comment.status !== 'published' && (
+                          <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'published')} className="rounded-lg border border-emerald-300 px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50">
+                            恢复
+                          </button>
+                        )}
+                        {comment.status !== 'hidden' && comment.status !== 'deleted' && (
+                          <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'hidden')} className="rounded-lg border border-amber-300 px-3 py-1 text-xs text-amber-700 hover:bg-amber-50">
+                            隐藏
+                          </button>
+                        )}
+                        {comment.status !== 'deleted' && (
+                          <button type="button" onClick={() => handleCommentAction(comment.comment_id || comment.id, 'deleted')} className="rounded-lg border border-rose-300 px-3 py-1 text-xs text-rose-700 hover:bg-rose-50">
+                            删除
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="任务详情"
+        subtitle={selectedTask?.title}
+        isOpen={Boolean(selectedTask)}
+        onClose={closeTaskDetail}
+      >
+        {selectedTask && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs ${taskStatusTone(selectedTask.status)}`}>{taskStatusLabel(selectedTask.status)}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">Reward {selectedTask.reward}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">申请 {taskApplicationsQuery.data?.length ?? 0}</span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">任务信息</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>Task ID：<span className="font-medium text-slate-900">{selectedTask.task_id}</span></p>
+                  <p>雇主：<span className="font-medium text-slate-900">{selectedTask.employer_aid}</span></p>
+                  <p>工作者：<span className="font-medium text-slate-900">{selectedTask.worker_aid || '未分配'}</span></p>
+                  <p>Escrow：<span className="font-medium text-slate-900">{selectedTask.escrow_id || '—'}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">生命周期</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>创建：<span className="font-medium text-slate-900">{formatTime(selectedTask.created_at)}</span></p>
+                  <p>更新：<span className="font-medium text-slate-900">{formatTime(selectedTask.updated_at)}</span></p>
+                  <p>截止：<span className="font-medium text-slate-900">{formatTime(selectedTask.deadline)}</span></p>
+                  <p>完成：<span className="font-medium text-slate-900">{formatTime(selectedTask.completed_at)}</span></p>
+                  <p>取消：<span className="font-medium text-slate-900">{formatTime(selectedTask.cancelled_at)}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">任务描述</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.description || '未填写任务描述'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">交付要求</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedTask.requirements || '未填写交付要求'}</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">申请队列</p>
+                  <p className="mt-1 text-xs text-slate-500">用于运营核对报名质量与任务匹配情况。</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{taskApplicationsQuery.data?.length ?? 0}</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {taskApplicationsQuery.isLoading && <p className="text-sm text-slate-500">正在加载申请…</p>}
+                {taskApplicationsQuery.isError && <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{formatAdminError(taskApplicationsQuery.error)}</p>}
+                {!taskApplicationsQuery.isLoading && !taskApplicationsQuery.isError && (taskApplicationsQuery.data || []).length === 0 && (
+                  <p className="text-sm text-slate-500">暂无申请</p>
+                )}
+                {(taskApplicationsQuery.data || []).map((application: AdminTaskApplication) => (
+                  <div key={`${application.task_id}-${application.id}`} className="rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-900">{application.applicant_aid}</p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{application.proposal || '未填写申请说明'}</p>
+                      </div>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{application.status}</span>
+                    </div>
+                    <p className="mt-4 text-xs text-slate-500">{formatTime(application.created_at)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </DetailDrawer>
         </div>
       </section>
     </div>
