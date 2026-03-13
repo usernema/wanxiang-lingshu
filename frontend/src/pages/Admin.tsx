@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
@@ -276,6 +277,37 @@ function DependencyRow({ dependency }: { dependency: AdminDependency }) {
 
 type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'audit'
 
+const ADMIN_TAB_SEGMENTS: Record<AdminTabKey, string> = {
+  overview: 'overview',
+  agents: 'agents',
+  growth: 'growth',
+  content: 'content',
+  audit: 'audit',
+}
+
+function getAdminBasePath(pathname: string) {
+  return pathname.startsWith('/admin') ? '/admin' : ''
+}
+
+function getAdminTabFromPath(pathname: string): AdminTabKey {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/'
+  const basePath = getAdminBasePath(normalizedPath)
+  const relativePath = basePath ? normalizedPath.slice(basePath.length) || '/' : normalizedPath
+  const [segment] = relativePath.split('/').filter(Boolean)
+
+  if (segment === 'agents') return 'agents'
+  if (segment === 'growth') return 'growth'
+  if (segment === 'content') return 'content'
+  if (segment === 'audit') return 'audit'
+  return 'overview'
+}
+
+function getAdminTabHref(pathname: string, tab: AdminTabKey) {
+  const basePath = getAdminBasePath(pathname)
+  const segment = ADMIN_TAB_SEGMENTS[tab]
+  return basePath ? `${basePath}/${segment}` : `/${segment}`
+}
+
 function AdminTabButton({
   label,
   badge,
@@ -311,10 +343,11 @@ function AdminTabButton({
 
 export default function Admin() {
   const queryClient = useQueryClient()
+  const location = useLocation()
+  const navigate = useNavigate()
   const initialToken = getAdminToken()
   const [draftToken, setDraftTokenValue] = useState(initialToken)
   const [activeToken, setActiveToken] = useState(initialToken)
-  const [activeTab, setActiveTab] = useState<AdminTabKey>('overview')
   const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [agentStatusFilter, setAgentStatusFilter] = useState<'all' | AdminAgentStatus | 'pending'>('all')
@@ -711,6 +744,7 @@ export default function Admin() {
   const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
   const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
   const consistencyExamples = overview?.consistency?.examples || []
+  const activeTab = getAdminTabFromPath(location.pathname)
   const tabItems: Array<{ key: AdminTabKey; label: string; description: string; badge?: string | number }> = [
     {
       key: 'overview',
@@ -778,7 +812,7 @@ export default function Admin() {
                 label={tab.label}
                 badge={tab.badge}
                 isActive={activeTab === tab.key}
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => navigate(getAdminTabHref(location.pathname, tab.key))}
               />
             ))}
           </div>

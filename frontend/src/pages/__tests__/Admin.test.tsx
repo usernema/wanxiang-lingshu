@@ -70,6 +70,68 @@ describe('Admin page', () => {
     expect(mockFetchAdminOverview).not.toHaveBeenCalled()
   })
 
+  it('supports direct admin sub-route entry', async () => {
+    mockGetAdminToken.mockReturnValue('secret-admin-token')
+    mockFetchAdminOverview.mockResolvedValue({
+      summary: {
+        agentsTotal: 1,
+        forumPostsTotal: 0,
+        recentTasksCount: 0,
+        consistencyIssues: 0,
+        ready: true,
+      },
+      dependencies: {
+        redis: { name: 'redis', required: true, ok: true },
+        required: [],
+        optional: [],
+      },
+      agents: [],
+      forumPosts: [],
+      tasks: [],
+      consistency: {
+        summary: {
+          total_issues: 0,
+          open_with_lifecycle_fields: 0,
+          in_progress_missing_assignment: 0,
+          completed_missing_completed_at: 0,
+          cancelled_missing_cancelled_at: 0,
+        },
+        examples: [],
+      },
+    })
+    mockFetchAdminAgents.mockResolvedValue({ items: [], total: 1, limit: 20, offset: 0 })
+    mockFetchAdminAgentGrowthOverview.mockResolvedValue({
+      total_agents: 1,
+      evaluated_agents: 1,
+      auto_growth_eligible: 0,
+      promotion_candidates: 0,
+      by_maturity_pool: { cold_start: 1 },
+      by_primary_domain: { automation: 1 },
+    })
+    mockFetchAdminAgentGrowthProfiles.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthSkillDrafts.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminEmployerTemplates.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+    mockFetchAdminEmployerSkillGrants.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+    mockFetchAdminForumPosts.mockResolvedValue({ posts: [], total: 0 })
+    mockFetchAdminTasks.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+    mockFetchAdminAuditLogs.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+
+    renderWithProviders(<Admin />, { initialEntries: ['/admin/growth'] })
+
+    expect(await screen.findByText('Agent Growth')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '成长' })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('loads admin sections after token submission', async () => {
     mockGetAdminToken
       .mockReturnValueOnce('')
@@ -391,6 +453,7 @@ describe('Admin page', () => {
     fireEvent.click(screen.getByRole('tab', { name: '成长' }))
 
     expect(await screen.findByText('Agent Growth')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '成长' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByText('晋级候选').length).toBeGreaterThan(0)
     expect(screen.getByText('准备度 64%')).toBeInTheDocument()
     expect(screen.getByText('雇主获赠 Skill')).toBeInTheDocument()
@@ -398,6 +461,7 @@ describe('Admin page', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
 
     expect(await screen.findByText('Agent 运营')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.click(screen.getByRole('button', { name: '暂停' }))
 
@@ -423,6 +487,7 @@ describe('Admin page', () => {
     fireEvent.click(screen.getByRole('tab', { name: '内容与任务' }))
 
     expect(await screen.findByText('后台巡检')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '内容与任务' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
 
@@ -493,6 +558,7 @@ describe('Admin page', () => {
     fireEvent.click(screen.getByRole('tab', { name: '审计' }))
 
     expect(await screen.findByText('操作审计')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '审计' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('Agent 状态更新')).toBeInTheDocument()
   })
 })
