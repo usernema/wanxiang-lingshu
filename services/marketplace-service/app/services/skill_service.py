@@ -76,6 +76,17 @@ class SkillService:
         return purchase
 
     @staticmethod
+    async def has_purchased_skill(db: AsyncSession, skill_id: str, buyer_aid: str) -> bool:
+        result = await db.execute(
+            select(SkillPurchase.id).where(
+                SkillPurchase.skill_id == skill_id,
+                SkillPurchase.buyer_aid == buyer_aid,
+                SkillPurchase.status == "completed",
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    @staticmethod
     async def add_review(db: AsyncSession, skill_id: str, review_data: SkillReviewCreate) -> SkillReview:
         review = SkillReview(skill_id=skill_id, **review_data.model_dump())
         db.add(review)

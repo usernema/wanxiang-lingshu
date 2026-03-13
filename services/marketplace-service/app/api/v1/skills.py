@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
+from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.skill import (
     SkillCreate, SkillUpdate, SkillResponse,
@@ -13,6 +14,12 @@ from app.services.storage_service import storage_service
 from app.core.config import settings
 
 router = APIRouter()
+
+
+def require_agent_header(x_agent_id: Optional[str]) -> str:
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    return x_agent_id
 
 @router.post("/skills", response_model=SkillResponse, status_code=201)
 async def create_skill(
@@ -31,12 +38,16 @@ async def create_skill(
 async def upload_skill_file(
     skill_id: str,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """上传技能文件"""
+    actor_aid = require_agent_header(x_agent_id)
     skill = await SkillService.get_skill(db, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.author_aid != actor_aid:
+        raise HTTPException(status_code=403, detail="Only skill owner can upload files")
 
     try:
         file_url = await storage_service.upload_file(
@@ -81,9 +92,17 @@ async def get_skill(skill_id: str, db: AsyncSession = Depends(get_db)):
 async def update_skill(
     skill_id: str,
     skill_data: SkillUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """更新技能"""
+    actor_aid = require_agent_header(x_agent_id)
+    existing_skill = await SkillService.get_skill(db, skill_id)
+    if not existing_skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    if existing_skill.author_aid != actor_aid:
+        raise HTTPException(status_code=403, detail="Only skill owner can update the skill")
+
     skill = await SkillService.update_skill(db, skill_id, skill_data)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
@@ -105,27 +124,40 @@ async def purchase_skill(
     skill = await SkillService.get_skill(db, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.author_aid == purchase_data.buyer_aid:
+        raise HTTPException(status_code=400, detail="Skill author cannot purchase own skill")
 
     try:
         platform_fee = float(skill.price) * settings.PLATFORM_FEE_RATE
         seller_receives = float(skill.price) - platform_fee
+        treasury_aid = settings.PLATFORM_TREASURY_AID
 
-        transaction = await CreditService.transfer(
+        charge_transaction = await CreditService.transfer(
             from_aid=purchase_data.buyer_aid,
-            to_aid=skill.author_aid,
-            amount=seller_receives,
-            memo=f"Purchase skill: {skill.name}"
+            to_aid=treasury_aid,
+            amount=float(skill.price),
+            memo=f"Purchase skill charge: {skill.name}"
         )
 
-        purchase = await SkillService.purchase_skill(
-            db, skill_id, purchase_data.buyer_aid, transaction.get("transaction_id")
-        )
+        payout_transaction = None
+        if seller_receives > 0:
+            payout_transaction = await CreditService.transfer(
+                from_aid=treasury_aid,
+                to_aid=skill.author_aid,
+                amount=seller_receives,
+                memo=f"Skill sale payout: {skill.name}"
+            )
+
+        await SkillService.purchase_skill(db, skill_id, purchase_data.buyer_aid, charge_transaction.get("transaction_id"))
 
         return {
             "skill_id": skill_id,
-            "transaction_id": transaction.get("transaction_id"),
+            "transaction_id": charge_transaction.get("transaction_id"),
+            "payout_transaction_id": payout_transaction.get("transaction_id") if payout_transaction else None,
             "price": float(skill.price),
             "platform_fee": platform_fee,
+            "seller_receives": seller_receives,
+            "platform_treasury_aid": treasury_aid,
             "file_url": skill.file_url,
             "status": "completed"
         }
@@ -136,12 +168,21 @@ async def purchase_skill(
 async def add_review(
     skill_id: str,
     review: SkillReviewCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
     """添加技能评价"""
+    actor_aid = require_agent_header(x_agent_id)
+    if review.reviewer_aid != actor_aid:
+        raise HTTPException(status_code=403, detail="reviewer_aid must match authenticated agent")
+
     skill = await SkillService.get_skill(db, skill_id)
     if not skill:
         raise HTTPException(status_code=404, detail="Skill not found")
+    if skill.author_aid == actor_aid:
+        raise HTTPException(status_code=400, detail="Skill author cannot review own skill")
+    if not await SkillService.has_purchased_skill(db, skill_id, actor_aid):
+        raise HTTPException(status_code=403, detail="Only verified buyers can review this skill")
 
     return await SkillService.add_review(db, skill_id, review)
 

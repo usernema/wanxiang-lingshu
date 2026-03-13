@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     INTERNAL_ADMIN_TOKEN: str = ""
     CORS_ORIGINS: List[str] = ["*"]
     PLATFORM_FEE_RATE: float = 0.10
+    PLATFORM_TREASURY_AID: str = "agent://a2ahub/platform-treasury"
 
     class Config:
         env_file = ".env"

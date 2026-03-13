@@ -14,7 +14,7 @@ import type {
 import type { AppSessionState } from '@/App'
 
 type Role = 'employer' | 'worker'
-type TaskAction = 'apply' | 'assign' | 'complete' | 'cancel'
+type TaskAction = 'apply' | 'assign' | 'complete' | 'accept' | 'requestRevision' | 'cancel'
 
 type HttpErrorPayload = {
   detail?: string
@@ -34,7 +34,7 @@ type RecommendedMarketplaceAction = {
   title: string
   description: string
   ctaLabel: string | null
-  ctaKind: 'apply' | 'complete' | 'profile' | null
+  ctaKind: 'apply' | 'complete' | 'accept' | 'profile' | null
   hint: string | null
   tone: 'blue' | 'amber' | 'green' | 'slate'
 }
@@ -124,6 +124,7 @@ function getTaskHiringSummary(task: MarketplaceTask, applications: TaskApplicati
   if (task.status === 'open' && applications.length === 0) return '已发布，等待申请人投递 proposal。'
   if (task.status === 'open' && applications.length > 0) return `已收到 ${applications.length} 个申请，待 employer 决策。`
   if (task.status === 'in_progress') return `已分配给 ${task.worker_aid || '指定 worker'}，escrow ${task.escrow_id ? '已创建' : '待核对'}。`
+  if (task.status === 'submitted') return `执行者 ${task.worker_aid || '已分配 worker'} 已提交交付，等待 employer 验收。`
   if (task.status === 'completed') return '任务已完成，建议转去 Profile / Wallet 核对结算。'
   if (task.status === 'cancelled') return '任务已取消，如存在托管应已退款。'
   return '任务状态待确认。'
@@ -142,6 +143,7 @@ function getWorkerTaskActionSummary(task: MarketplaceTask, applications: TaskApp
   if (task.status === 'open' && !hasApplied) return '你可以提交 proposal 争取被雇佣。'
   if (task.status === 'open' && hasApplied) return '你已提交 proposal，等待 employer 做分配决策。'
   if (task.status === 'in_progress' && task.worker_aid === workerSession.aid) return '你已被雇佣，可以开始交付并完成任务。'
+  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待 employer 验收或退回修改。'
   if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成此任务，建议去 Wallet 查看收入流水。'
   return '当前这个任务没有分配给你。'
 }
@@ -151,6 +153,7 @@ function getEmployerTaskActionSummary(task: MarketplaceTask, applications: TaskA
   if (task.status === 'open' && applications.length === 0) return '任务已发布，下一步是等待或引导 worker 申请。'
   if (task.status === 'open' && applications.length > 0) return '任务已收到申请，下一步是选择 proposal 并 assign。'
   if (task.status === 'in_progress') return '任务已进入执行中，下一步重点是等待 worker 完成。'
+  if (task.status === 'submitted') return 'worker 已提交交付，下一步是验收通过或退回修改。'
   if (task.status === 'completed') return '任务已闭环完成，建议核对 escrow 和 balance 变化。'
   return '当前任务已取消。'
 }
@@ -182,13 +185,14 @@ function getTaskDecisionState(task: MarketplaceTask, applications: TaskApplicati
   if (task.status === 'open' && applications.length > 0) return '待分配'
   if (task.status === 'open') return '待申请'
   if (task.status === 'in_progress') return '待交付'
+  if (task.status === 'submitted') return '待验收'
   if (task.status === 'completed') return '已完成'
   return '已取消'
 }
 
 function getTaskDecisionStateTone(state: string) {
   if (state === '待申请') return 'bg-blue-100 text-blue-800'
-  if (state === '待分配' || state === '待交付') return 'bg-amber-100 text-amber-800'
+  if (state === '待分配' || state === '待交付' || state === '待验收') return 'bg-amber-100 text-amber-800'
   if (state === '已完成') return 'bg-green-100 text-green-800'
   return 'bg-slate-100 text-slate-700'
 }
@@ -268,14 +272,15 @@ function TaskPipeline({ task, applications }: { task: MarketplaceTask; applicati
   const steps = [
     { label: '发布任务', done: true },
     { label: '收到申请', done: applications.length > 0 || task.status !== 'open' },
-    { label: '雇佣并托管', done: Boolean(task.worker_aid || task.escrow_id || task.status === 'completed') },
+    { label: '雇佣并托管', done: Boolean(task.worker_aid || task.escrow_id || task.status === 'submitted' || task.status === 'completed') },
+    { label: '提交验收', done: task.status === 'submitted' || task.status === 'completed' },
     { label: '完成结算', done: task.status === 'completed' },
   ]
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="text-sm font-medium text-gray-900">Hiring pipeline</div>
-      <div className="mt-3 grid gap-3 sm:grid-cols-4">
+      <div className="mt-3 grid gap-3 sm:grid-cols-5">
         {steps.map((step) => (
           <div key={step.label} className={`rounded-lg px-3 py-3 text-sm ${step.done ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
             <div className="font-medium">{step.label}</div>
@@ -357,6 +362,7 @@ function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplica
   if (task.status === 'open' && hasAppliedToTask(applications, workerSession)) return '你已提交 proposal，等待 employer 选择申请人。'
   if (task.status === 'open') return '你可以作为 worker 申请该任务。'
   if (task.status === 'in_progress' && task.worker_aid === workerSession.aid) return '你已被雇佣，接下来可以完成任务。'
+  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待雇主验收。'
   if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成该任务，可以去 Wallet 查看收入流水。'
   return '当前该任务没有分配给你。'
 }
@@ -383,9 +389,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     setActiveRole(role)
   }, [role])
 
-  const currentSession = getSession(role) || getSession('default')
-  const employerSession = getSession('employer')
-  const workerSession = getSession('worker')
+  const currentSession = getSession('default')
+  const employerSession = currentSession
+  const workerSession = currentSession
 
   const tasksQuery = useQuery({
     queryKey: ['marketplace-tasks', taskStatus],
@@ -439,11 +445,18 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   }, [tasksQuery.data, selectedTaskId])
 
   const applicationsQuery = useQuery({
-    queryKey: ['task-applications', selectedTaskId],
+    queryKey: ['task-applications', selectedTaskId, currentSession?.aid],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(selectedTaskId),
     queryFn: async () => {
-      const response = await api.get(`/v1/marketplace/tasks/${selectedTaskId}/applications`)
-      return response.data as TaskApplication[]
+      try {
+        const response = await api.get(`/v1/marketplace/tasks/${selectedTaskId}/applications`)
+        return response.data as TaskApplication[]
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 403) {
+          return [] as TaskApplication[]
+        }
+        throw error
+      }
     },
   })
 
@@ -452,6 +465,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   )
   const canCompleteSelectedTask = Boolean(
     selectedTask && workerSession && selectedTask.status === 'in_progress' && selectedTask.worker_aid === workerSession.aid,
+  )
+  const canAcceptSelectedTask = Boolean(
+    selectedTask && employerSession && selectedTask.status === 'submitted' && selectedTask.employer_aid === employerSession.aid,
+  )
+  const canRequestRevisionSelectedTask = Boolean(
+    selectedTask && employerSession && selectedTask.status === 'submitted' && selectedTask.employer_aid === employerSession.aid,
   )
   const canCancelSelectedTask = Boolean(
     selectedTask &&
@@ -462,6 +481,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const applyDisabledReason = getTaskActionDisabledReason('apply', selectedTask, employerSession, workerSession)
   const completeDisabledReason = getTaskActionDisabledReason('complete', selectedTask, employerSession, workerSession)
+  const acceptDisabledReason = getTaskActionDisabledReason('accept', selectedTask, employerSession, workerSession)
+  const requestRevisionDisabledReason = getTaskActionDisabledReason('requestRevision', selectedTask, employerSession, workerSession)
   const cancelDisabledReason = getTaskActionDisabledReason('cancel', selectedTask, employerSession, workerSession)
   const selectedTaskDiagnostic = diagnosticsQuery.data?.examples.find((example) => example.task_id === selectedTask?.task_id) ?? null
 
@@ -471,6 +492,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     workerSession,
     applyDisabledReason,
     completeDisabledReason,
+    acceptDisabledReason,
+    requestRevisionDisabledReason,
     cancelDisabledReason,
     applications: applicationsQuery.data || [],
   })
@@ -484,6 +507,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     applications: currentApplications,
     applyDisabledReason,
     completeDisabledReason,
+    acceptDisabledReason,
     cancelDisabledReason,
   })
 
@@ -617,10 +641,27 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as MarketplaceTaskCompleteResponse
     },
     onSuccess: async (response) => {
+      setActionMessage(response.message)
+      setErrorMessage(null)
+      await refetchTaskWorkspace()
+    },
+    onError: (error) => {
+      setErrorMessage(mapMarketplaceError(error, 'completeTask'))
+      setActionMessage(null)
+    },
+  })
+
+  const acceptTask = useMutation({
+    mutationFn: async (taskId: string) => {
+      await switchRole('employer')
+      const response = await api.post(`/v1/marketplace/tasks/${taskId}/accept-completion`)
+      return response.data as MarketplaceTaskCompleteResponse
+    },
+    onSuccess: async (response) => {
       if (response.growth_assets?.employer_skill_grant_id) {
-        setActionMessage('任务已完成，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')
+        setActionMessage('任务已验收，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')
       } else if (response.growth_assets?.published_skill_id) {
-        setActionMessage('任务已完成，托管已释放，成功经验已自动发布为 Skill。')
+        setActionMessage('任务已验收，托管已释放，成功经验已自动发布为 Skill。')
       } else {
         setActionMessage(response.message)
       }
@@ -628,7 +669,23 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       await refetchTaskWorkspace()
     },
     onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'completeTask'))
+      setErrorMessage(mapMarketplaceError(error, 'acceptTask'))
+      setActionMessage(null)
+    },
+  })
+
+  const requestRevisionTask = useMutation({
+    mutationFn: async (taskId: string) => {
+      await switchRole('employer')
+      return api.post(`/v1/marketplace/tasks/${taskId}/request-revision`)
+    },
+    onSuccess: async () => {
+      setActionMessage('任务已退回执行中，等待 worker 继续交付。')
+      setErrorMessage(null)
+      await refetchTaskWorkspace()
+    },
+    onError: (error) => {
+      setErrorMessage(mapMarketplaceError(error, 'requestRevisionTask'))
       setActionMessage(null)
     },
   })
@@ -705,11 +762,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold">能力市场</h1>
-            <p className="mt-2 text-sm text-gray-600">当前页面支持在雇主 / 工作者视角之间切换，便于管理任务、申请与交付。</p>
+            <p className="mt-2 text-sm text-gray-600">当前页面按雇主 / 执行者工作视角组织同一账号的任务、申请、验收与结算流程。</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="Employer" aid={employerSession?.aid} />
-            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="Worker" aid={workerSession?.aid} />
+            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="雇主视角" aid={employerSession?.aid} />
+            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="执行者视角" aid={workerSession?.aid} />
             <span className="rounded-full bg-gray-100 px-3 py-2 text-gray-600">当前身份：{currentSession?.aid || '访客'}</span>
           </div>
         </div>
@@ -753,6 +810,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   <option value="">全部状态</option>
                   <option value="open">open</option>
                   <option value="in_progress">in_progress</option>
+                  <option value="submitted">submitted</option>
                   <option value="completed">completed</option>
                   <option value="cancelled">cancelled</option>
                 </select>
@@ -834,6 +892,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                     onOpenProfile={openProfileWithContext}
                     onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
                     onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+                    onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
                   />
                   <TaskStateGuide task={selectedTask} />
 
@@ -932,14 +991,32 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       disabled={!canCompleteSelectedTask || completeTask.isPending}
                       className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {completeTask.isPending ? '完成中...' : '以 Worker 身份完成任务'}
+                      {completeTask.isPending ? '提交中...' : '以 Worker 身份提交验收'}
                     </button>
                     {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
                   </div>
 
                   <div className="border-t border-gray-100 pt-4">
                     <h4 className="mb-3 font-medium">Employer 操作</h4>
-                    <div className="mb-3 text-xs text-gray-500">雇主可以基于 proposal 质量、申请覆盖度和 escrow 状态做出分配或取消决策。</div>
+                    <div className="mb-3 text-xs text-gray-500">雇主可以基于 proposal 质量、申请覆盖度和 escrow 状态做出分配、验收、退回修改或取消决策。</div>
+                    <button
+                      type="button"
+                      onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+                      disabled={!canAcceptSelectedTask || acceptTask.isPending}
+                      className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {acceptTask.isPending ? '验收中...' : '以 Employer 身份验收并放款'}
+                    </button>
+                    {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
+                    <button
+                      type="button"
+                      onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
+                      disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
+                      className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {requestRevisionTask.isPending ? '退回中...' : '退回修改'}
+                    </button>
+                    {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
                     <button
                       type="button"
                       onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
@@ -1031,9 +1108,21 @@ function getTaskActionDisabledReason(
       return null
     case 'complete':
       if (!workerSession) return '当前没有可用的 worker session。'
-      if (task.status !== 'in_progress') return '只有 in_progress 状态的任务可以完成。'
+      if (task.status === 'submitted') return '该任务已提交验收，等待 employer 决策。'
+      if (task.status !== 'in_progress') return '只有 in_progress 状态的任务可以提交验收。'
       if (task.worker_aid !== workerSession.aid) return '只有被分配的 worker 可以完成该任务。'
-      if (!task.escrow_id) return '当前任务缺少 escrow，无法释放托管。'
+      if (!task.escrow_id) return '当前任务缺少 escrow，无法提交验收。'
+      return null
+    case 'accept':
+      if (!employerSession) return '当前没有可用的 employer session。'
+      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以验收任务。'
+      if (task.status !== 'submitted') return '只有 submitted 状态的任务可以验收放款。'
+      if (!task.escrow_id) return '当前任务缺少 escrow，无法验收放款。'
+      return null
+    case 'requestRevision':
+      if (!employerSession) return '当前没有可用的 employer session。'
+      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以退回修改。'
+      if (task.status !== 'submitted') return '只有 submitted 状态的任务可以退回修改。'
       return null
     case 'cancel':
       if (!employerSession) return '当前没有可用的 employer session。'
@@ -1050,6 +1139,8 @@ function mapMarketplaceError(error: unknown, action:
   | 'applyTask'
   | 'assignTask'
   | 'completeTask'
+  | 'acceptTask'
+  | 'requestRevisionTask'
   | 'cancelTask') {
   if (axios.isAxiosError<HttpErrorPayload>(error)) {
     const status = error.response?.status
@@ -1057,7 +1148,7 @@ function mapMarketplaceError(error: unknown, action:
 
     if (status === 401) return '当前登录已失效或已过期，请先刷新会话。'
     if (status === 403) {
-      if (action === 'createTask' || action === 'assignTask' || action === 'cancelTask') return '当前 employer 身份与任务所有者不匹配。'
+      if (action === 'createTask' || action === 'assignTask' || action === 'acceptTask' || action === 'requestRevisionTask' || action === 'cancelTask') return '当前 employer 身份与任务所有者不匹配。'
       if (action === 'applyTask' || action === 'completeTask') return '当前 worker 身份与请求中的执行者不匹配。'
       return detail || '当前身份没有执行该操作的权限。'
     }
@@ -1065,8 +1156,11 @@ function mapMarketplaceError(error: unknown, action:
     if (status === 409) return detail || '当前任务状态不允许执行该操作。'
     if (status === 400) {
       if (detail?.includes('Only assigned worker can complete the task')) return '只有当前被分配的 worker 才能完成该任务。'
-      if (detail?.includes('Task has no escrow to release')) return '当前任务缺少 escrow，无法完成。请先检查分配与 credit 托管状态。'
+      if (detail?.includes('Task has no escrow to submit for acceptance')) return '当前任务缺少 escrow，无法提交验收。请先检查分配与 credit 托管状态。'
+      if (detail?.includes('Task has no escrow to release')) return '当前任务缺少 escrow，无法验收放款。请先检查分配与 credit 托管状态。'
       if (detail?.includes('Task is not open for applications')) return '当前任务不再处于 open 状态，无法继续申请。'
+      if (detail?.includes('Employer cannot apply to own task')) return '雇主本人不能申请自己的任务。'
+      if (detail?.includes('Assigned worker must have an application')) return '只能从已提交 proposal 的申请人里进行分配。'
       if (detail?.includes('worker_aid is required')) return '分配任务时必须明确选择一个申请人。'
       if (detail?.includes('Failed to create escrow')) return '创建 escrow 失败，请检查 employer 余额与 credit 服务状态。'
       if (detail?.includes('Failed to release escrow')) return '释放 escrow 失败，请检查 credit 服务状态。'
@@ -1083,7 +1177,9 @@ function mapMarketplaceError(error: unknown, action:
     createTask: '任务创建失败，请检查 employer session。',
     applyTask: '任务申请失败，请检查 worker session。',
     assignTask: '任务分配失败，请检查 employer 身份、余额和申请列表。',
-    completeTask: '任务完成失败，请确认当前 worker 即为 assigned worker。',
+    completeTask: '任务提交验收失败，请确认当前 worker 即为 assigned worker。',
+    acceptTask: '任务验收失败，请确认当前 employer 为任务所有者。',
+    requestRevisionTask: '任务退回修改失败，请确认当前 employer 为任务所有者。',
     cancelTask: '任务取消失败，请确认当前 employer 为任务所有者。',
   }
 
@@ -1104,6 +1200,7 @@ function getRecommendedMarketplaceAction(
     applications: TaskApplication[]
     applyDisabledReason: string | null
     completeDisabledReason: string | null
+    acceptDisabledReason: string | null
     cancelDisabledReason: string | null
   },
 ): RecommendedMarketplaceAction {
@@ -1142,11 +1239,22 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'in_progress' && context.role === 'worker' && !context.completeDisabledReason) {
     return {
-      title: '推荐立即完成任务',
-      description: '当前任务已经进入 in_progress，且当前 Worker 就是被分配执行者，可以直接完成闭环。',
-      ctaLabel: '完成任务',
+      title: '推荐先提交验收',
+      description: '当前任务已经进入 in_progress，且当前 Worker 就是被分配执行者，可以先提交交付等待验收。',
+      ctaLabel: '提交验收',
       ctaKind: 'complete',
-      hint: '完成后建议去 Profile 查看 balance / frozen_balance 是否变化。',
+      hint: '提交后会进入待验收状态，由 Employer 决定放款或退回修改。',
+      tone: 'amber',
+    }
+  }
+
+  if (task.status === 'submitted' && !context.acceptDisabledReason) {
+    return {
+      title: '推荐验收并放款',
+      description: '当前任务已经收到交付，下一步最适合由 Employer 验收，通过后再释放托管并生成成长资产。',
+      ctaLabel: '立即验收',
+      ctaKind: 'accept',
+      hint: '如果结果不满足预期，也可以使用下方“退回修改”。',
       tone: 'amber',
     }
   }
@@ -1188,11 +1296,13 @@ function RecommendedActionCard({
   onOpenProfile,
   onApply,
   onComplete,
+  onAccept,
 }: {
   recommendedAction: RecommendedMarketplaceAction
   onOpenProfile: () => void
   onApply: () => void
   onComplete: () => void
+  onAccept: () => void
 }) {
   const toneClass =
     recommendedAction.tone === 'green'
@@ -1206,6 +1316,7 @@ function RecommendedActionCard({
   const handleClick = () => {
     if (recommendedAction.ctaKind === 'apply') return onApply()
     if (recommendedAction.ctaKind === 'complete') return onComplete()
+    if (recommendedAction.ctaKind === 'accept') return onAccept()
     if (recommendedAction.ctaKind === 'profile') return onOpenProfile()
   }
 
@@ -1232,6 +1343,8 @@ function getTaskStageGuide(
     workerSession: ReturnType<typeof getSession>
     applyDisabledReason: string | null
     completeDisabledReason: string | null
+    acceptDisabledReason: string | null
+    requestRevisionDisabledReason: string | null
     cancelDisabledReason: string | null
     applications: TaskApplication[]
   },
@@ -1270,6 +1383,17 @@ function getTaskStageGuide(
       nextAction: 'Worker 完成任务',
       blockers: [context.completeDisabledReason, context.cancelDisabledReason].filter(Boolean) as string[],
       progressLabel: '执行中',
+      progressTone: 'amber',
+    }
+  }
+
+  if (task.status === 'submitted') {
+    return {
+      title: '待雇主验收',
+      summary: 'Worker 已提交交付，下一步由 Employer 决定验收放款或退回修改。',
+      nextAction: 'Employer 验收或退回修改',
+      blockers: [context.acceptDisabledReason, context.requestRevisionDisabledReason].filter(Boolean) as string[],
+      progressLabel: '待验收',
       progressTone: 'amber',
     }
   }
@@ -1394,7 +1518,8 @@ function DiagnosticsCard({ diagnosticsQuery }: { diagnosticsQuery: ReturnType<ty
 function TaskStateGuide({ task }: { task: MarketplaceTask }) {
   const guide = {
     open: '当前任务处于 open：worker 可以申请，任务 employer 可以从申请列表中分配执行者。',
-    in_progress: '当前任务处于 in_progress：只有被分配的 worker 可以 complete，employer 可以 cancel。',
+    in_progress: '当前任务处于 in_progress：只有被分配的 worker 可以提交验收，employer 可以 cancel。',
+    submitted: '当前任务处于 submitted：worker 已提交交付，employer 可以验收放款或退回修改。',
     completed: '当前任务处于 completed：任务已完成，托管应已释放，不再允许 assign / complete / cancel。',
     cancelled: '当前任务处于 cancelled：任务已取消，不再允许 apply / assign / complete / cancel。',
   }[task.status] || '当前任务状态未知，请结合服务端状态判断可执行操作。'
@@ -1424,6 +1549,7 @@ function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700',
     in_progress: 'bg-amber-100 text-amber-700',
+    submitted: 'bg-orange-100 text-orange-700',
     completed: 'bg-green-100 text-green-700',
     cancelled: 'bg-red-100 text-red-700',
   }

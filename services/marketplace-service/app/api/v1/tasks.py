@@ -1,9 +1,11 @@
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional
 import httpx
 import logging
 
+from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.task import (
     TaskConsistencyReport,
@@ -18,6 +20,13 @@ from app.services.matching_service import MatchingService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def has_internal_admin_token(x_internal_admin_token: Optional[str]) -> bool:
+    expected = settings.INTERNAL_ADMIN_TOKEN.strip()
+    if not expected or not x_internal_admin_token:
+        return False
+    return secrets.compare_digest(x_internal_admin_token, expected)
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
@@ -120,9 +129,28 @@ async def apply_task(
 
 
 @router.get("/tasks/{task_id}/applications", response_model=List[TaskApplicationResponse])
-async def get_applications(task_id: str, db: AsyncSession = Depends(get_db)):
+async def get_applications(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_admin_token: Optional[str] = Header(None, alias="X-Internal-Admin-Token"),
+):
     """获取任务申请列表"""
-    return await TaskService.get_applications(db, task_id)
+    allow_all = has_internal_admin_token(x_internal_admin_token)
+    if not allow_all and not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+
+    try:
+        return await TaskService.get_applications(
+            db,
+            task_id,
+            viewer_aid=x_agent_id,
+            allow_all=allow_all,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.post("/tasks/{task_id}/assign", response_model=TaskResponse)
@@ -217,7 +245,7 @@ async def complete_task(
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
 ):
-    """完成任务"""
+    """提交任务结果，等待雇主验收"""
     if not x_agent_id:
         raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
     if complete_data.worker_aid != x_agent_id:
@@ -232,9 +260,48 @@ async def complete_task(
             raise HTTPException(status_code=409, detail="Task is already completed")
         if task.status == "cancelled":
             raise HTTPException(status_code=409, detail="Cancelled task cannot be completed")
+        if task.status == "submitted":
+            raise HTTPException(status_code=409, detail="Task is already awaiting employer acceptance")
         raise HTTPException(status_code=409, detail="Task is not in progress")
     if task.worker_aid != complete_data.worker_aid:
         raise HTTPException(status_code=400, detail="Only assigned worker can complete the task")
+    if not task.escrow_id:
+        raise HTTPException(status_code=400, detail="Task has no escrow to submit for acceptance")
+
+    try:
+        submitted_task = await TaskService.submit_task_completion(db, task_id, complete_data.worker_aid)
+    except ValueError as e:
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
+    return {
+        "task_id": task_id,
+        "status": submitted_task.status,
+        "message": "Task submitted for employer acceptance",
+        "growth_assets": None,
+    }
+
+
+@router.post("/tasks/{task_id}/accept-completion")
+async def accept_task_completion(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+):
+    """雇主验收任务并释放托管"""
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+
+    task = await TaskService.get_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.employer_aid != x_agent_id:
+        raise HTTPException(status_code=403, detail="Only employer can accept task completion")
+    if task.status != "submitted":
+        if task.status == "completed":
+            raise HTTPException(status_code=409, detail="Task is already completed")
+        if task.status == "cancelled":
+            raise HTTPException(status_code=409, detail="Cancelled task cannot be accepted")
+        raise HTTPException(status_code=409, detail="Task is not awaiting employer acceptance")
     if not task.escrow_id:
         raise HTTPException(status_code=400, detail="Task has no escrow to release")
 
@@ -245,13 +312,15 @@ async def complete_task(
         raise HTTPException(status_code=400, detail=detail)
 
     try:
-        completed_task = await TaskService.complete_task(db, task_id, complete_data.worker_aid)
+        completed_task = await TaskService.accept_task_completion(db, task_id, x_agent_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
     growth_assets = None
     try:
-        draft, template, grant = await GrowthService.create_growth_assets_for_task(db, completed_task, complete_data.result)
+        draft, template, grant = await GrowthService.create_growth_assets_for_task(db, completed_task)
         if draft or template or grant:
             growth_assets = {
                 "skill_draft_id": draft.draft_id if draft else None,
@@ -261,16 +330,16 @@ async def complete_task(
                 "auto_published": bool(grant and draft and draft.published_skill_id),
             }
     except Exception:
-        logger.exception("Failed to create growth assets after task completion")
+        logger.exception("Failed to create growth assets after task acceptance")
 
     if growth_assets and growth_assets.get("employer_skill_grant_id"):
-        message = "Task completed, payment released, first-success skill auto-published, and employer gift granted"
+        message = "Task accepted, payment released, first-success skill auto-published, and employer gift granted"
     elif growth_assets and growth_assets.get("published_skill_id"):
-        message = "Task completed, payment released, and skill auto-published"
+        message = "Task accepted, payment released, and skill auto-published"
     elif growth_assets:
-        message = "Task completed, payment released, and growth assets generated"
+        message = "Task accepted, payment released, and growth assets generated"
     else:
-        message = "Task completed and payment released"
+        message = "Task accepted and payment released"
 
     return {
         "task_id": task_id,
@@ -278,3 +347,31 @@ async def complete_task(
         "message": message,
         "growth_assets": growth_assets,
     }
+
+
+@router.post("/tasks/{task_id}/request-revision", response_model=TaskResponse)
+async def request_task_revision(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+):
+    """雇主将任务退回执行中"""
+    if not x_agent_id:
+        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+
+    task = await TaskService.get_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.employer_aid != x_agent_id:
+        raise HTTPException(status_code=403, detail="Only employer can request revision")
+
+    try:
+        revised_task = await TaskService.request_task_revision(db, task_id, x_agent_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
+    if not revised_task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return revised_task

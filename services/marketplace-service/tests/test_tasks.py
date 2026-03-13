@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.v1 import tasks as task_routes
 from app.db.database import Base
-from app.models.task import Task
+from app.models.task import Task, TaskApplication
 from app.schemas.task import TaskCompleteRequest, TaskCreate, TaskUpdate
 from app.services.task_service import TaskService
 
@@ -486,7 +486,7 @@ def test_cancel_endpoint_rejects_duplicate_cancel_without_refund(monkeypatch):
     assert recorded["refunded"] is False
 
 
-def test_complete_endpoint_releases_then_completes(monkeypatch):
+def test_complete_endpoint_submits_for_employer_acceptance(monkeypatch):
     recorded = {}
 
     async def fake_get_task(db, task_id):
@@ -498,17 +498,12 @@ def test_complete_endpoint_releases_then_completes(monkeypatch):
             status="in_progress",
         )
 
-    async def fake_release_escrow(escrow_id, actor_aid):
-        recorded["released"] = {"escrow_id": escrow_id, "actor_aid": actor_aid}
-        return {"message": "ok"}
-
-    async def fake_complete_task(db, task_id, worker_aid):
-        recorded["completed"] = {"task_id": task_id, "worker_aid": worker_aid}
-        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="completed")
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = {"task_id": task_id, "worker_aid": worker_aid}
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
-    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
 
     response = run(task_routes.complete_task(
         task_id="task_123",
@@ -517,18 +512,16 @@ def test_complete_endpoint_releases_then_completes(monkeypatch):
         x_agent_id="agent://a2ahub/worker",
     ))
 
-    assert recorded["released"] == {
-        "escrow_id": "escrow_123",
-        "actor_aid": "agent://a2ahub/employer",
-    }
-    assert recorded["completed"] == {
+    assert recorded["submitted"] == {
         "task_id": "task_123",
         "worker_aid": "agent://a2ahub/worker",
     }
-    assert response["status"] == "completed"
+    assert response["status"] == "submitted"
+    assert response["growth_assets"] is None
+    assert response["message"] == "Task submitted for employer acceptance"
 
 
-def test_complete_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
+def test_accept_completion_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
     recorded = {}
 
     async def fake_get_task(db, task_id):
@@ -537,25 +530,25 @@ def test_complete_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
             employer_aid="agent://a2ahub/employer",
             worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
-            status="in_progress",
+            status="submitted",
         )
 
     async def fake_release_escrow(escrow_id, actor_aid):
         recorded["released"] = {"escrow_id": escrow_id, "actor_aid": actor_aid}
         return {"message": "ok"}
 
-    async def fake_complete_task(db, task_id, worker_aid):
-        recorded["completed"] = {"task_id": task_id, "worker_aid": worker_aid}
+    async def fake_accept_task_completion(db, task_id, actor_aid):
+        recorded["accepted"] = {"task_id": task_id, "actor_aid": actor_aid}
         return DummyTask(
             task_id=task_id,
             employer_aid="agent://a2ahub/employer",
-            worker_aid=worker_aid,
+            worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
             status="completed",
             completed_at="now",
         )
 
-    async def fake_create_growth_assets_for_task(db, task, result):
+    async def fake_create_growth_assets_for_task(db, task, result=None):
         recorded["growth"] = {"task_id": task.task_id, "result": result}
         draft = type("Draft", (), {"draft_id": "draft_123", "published_skill_id": "skill_123"})()
         template = type("Template", (), {"template_id": "tmpl_123"})()
@@ -564,14 +557,13 @@ def test_complete_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
     monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
-    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.TaskService, "accept_task_completion", fake_accept_task_completion)
     monkeypatch.setattr(task_routes.GrowthService, "create_growth_assets_for_task", fake_create_growth_assets_for_task)
 
-    response = run(task_routes.complete_task(
+    response = run(task_routes.accept_task_completion(
         task_id="task_123",
-        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="structured summary"),
         db=None,
-        x_agent_id="agent://a2ahub/worker",
+        x_agent_id="agent://a2ahub/employer",
     ))
 
     assert response["status"] == "completed"
@@ -583,54 +575,61 @@ def test_complete_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
         "auto_published": True,
     }
     assert "employer gift granted" in response["message"]
-    assert recorded["growth"] == {"task_id": "task_123", "result": "structured summary"}
+    assert recorded["released"] == {
+        "escrow_id": "escrow_123",
+        "actor_aid": "agent://a2ahub/employer",
+    }
+    assert recorded["accepted"] == {
+        "task_id": "task_123",
+        "actor_aid": "agent://a2ahub/employer",
+    }
+    assert recorded["growth"] == {"task_id": "task_123", "result": None}
 
 
-def test_complete_endpoint_swallows_growth_asset_failures(monkeypatch):
+def test_accept_completion_endpoint_swallows_growth_asset_failures(monkeypatch):
     async def fake_get_task(db, task_id):
         return DummyTask(
             task_id=task_id,
             employer_aid="agent://a2ahub/employer",
             worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
-            status="in_progress",
+            status="submitted",
         )
 
     async def fake_release_escrow(escrow_id, actor_aid):
         return {"message": "ok"}
 
-    async def fake_complete_task(db, task_id, worker_aid):
+    async def fake_accept_task_completion(db, task_id, actor_aid):
         return DummyTask(
             task_id=task_id,
             employer_aid="agent://a2ahub/employer",
-            worker_aid=worker_aid,
+            worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
             status="completed",
             completed_at="now",
         )
 
-    async def fake_create_growth_assets_for_task(db, task, result):
+    async def fake_create_growth_assets_for_task(db, task, result=None):
         raise RuntimeError("growth service down")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
     monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
-    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.TaskService, "accept_task_completion", fake_accept_task_completion)
     monkeypatch.setattr(task_routes.GrowthService, "create_growth_assets_for_task", fake_create_growth_assets_for_task)
 
-    response = run(task_routes.complete_task(
+    response = run(task_routes.accept_task_completion(
         task_id="task_123",
-        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="done"),
         db=None,
-        x_agent_id="agent://a2ahub/worker",
+        x_agent_id="agent://a2ahub/employer",
     ))
 
     assert response["status"] == "completed"
     assert response["growth_assets"] is None
-    assert response["message"] == "Task completed and payment released"
+    assert response["message"] == "Task accepted and payment released"
 
 
-def test_complete_endpoint_does_not_advance_when_release_fails(monkeypatch):
-    recorded = {"completed": False}
+def test_accept_completion_endpoint_does_not_advance_when_release_fails(monkeypatch):
+    recorded = {"accepted": False}
 
     async def fake_get_task(db, task_id):
         return DummyTask(
@@ -638,7 +637,7 @@ def test_complete_endpoint_does_not_advance_when_release_fails(monkeypatch):
             employer_aid="agent://a2ahub/employer",
             worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
-            status="in_progress",
+            status="submitted",
         )
 
     async def fake_release_escrow(escrow_id, actor_aid):
@@ -646,29 +645,34 @@ def test_complete_endpoint_does_not_advance_when_release_fails(monkeypatch):
         response = task_routes.httpx.Response(400, request=request, text="release failed")
         raise task_routes.httpx.HTTPStatusError("release failed", request=request, response=response)
 
-    async def fake_complete_task(db, task_id, worker_aid):
-        recorded["completed"] = True
-        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="completed")
+    async def fake_accept_task_completion(db, task_id, actor_aid):
+        recorded["accepted"] = True
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="completed",
+        )
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
     monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
-    monkeypatch.setattr(task_routes.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(task_routes.TaskService, "accept_task_completion", fake_accept_task_completion)
 
     with pytest.raises(task_routes.HTTPException) as exc_info:
-        run(task_routes.complete_task(
+        run(task_routes.accept_task_completion(
             task_id="task_123",
-            complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="done"),
             db=None,
-            x_agent_id="agent://a2ahub/worker",
+            x_agent_id="agent://a2ahub/employer",
         ))
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "release failed"
-    assert recorded["completed"] is False
+    assert recorded["accepted"] is False
 
 
-def test_complete_endpoint_rejects_wrong_worker_before_release(monkeypatch):
-    recorded = {"released": False}
+def test_complete_endpoint_rejects_wrong_worker_before_submission(monkeypatch):
+    recorded = {"submitted": False}
 
     async def fake_get_task(db, task_id):
         return DummyTask(
@@ -679,12 +683,12 @@ def test_complete_endpoint_rejects_wrong_worker_before_release(monkeypatch):
             status="in_progress",
         )
 
-    async def fake_release_escrow(escrow_id, actor_aid):
-        recorded["released"] = True
-        return {"message": "ok"}
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = True
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
 
     with pytest.raises(task_routes.HTTPException) as exc_info:
         run(task_routes.complete_task(
@@ -696,11 +700,11 @@ def test_complete_endpoint_rejects_wrong_worker_before_release(monkeypatch):
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Only assigned worker can complete the task"
-    assert recorded["released"] is False
+    assert recorded["submitted"] is False
 
 
-def test_complete_endpoint_rejects_duplicate_complete_without_release(monkeypatch):
-    recorded = {"released": False}
+def test_complete_endpoint_rejects_duplicate_complete_without_submission(monkeypatch):
+    recorded = {"submitted": False}
 
     async def fake_get_task(db, task_id):
         return DummyTask(
@@ -712,12 +716,12 @@ def test_complete_endpoint_rejects_duplicate_complete_without_release(monkeypatc
             completed_at="now",
         )
 
-    async def fake_release_escrow(escrow_id, actor_aid):
-        recorded["released"] = True
-        return {"message": "ok"}
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = True
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
 
     with pytest.raises(task_routes.HTTPException) as exc_info:
         run(task_routes.complete_task(
@@ -729,11 +733,11 @@ def test_complete_endpoint_rejects_duplicate_complete_without_release(monkeypatc
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Task is already completed"
-    assert recorded["released"] is False
+    assert recorded["submitted"] is False
 
 
-def test_complete_endpoint_rejects_cancelled_task_without_release(monkeypatch):
-    recorded = {"released": False}
+def test_complete_endpoint_rejects_cancelled_task_without_submission(monkeypatch):
+    recorded = {"submitted": False}
 
     async def fake_get_task(db, task_id):
         return DummyTask(
@@ -745,12 +749,12 @@ def test_complete_endpoint_rejects_cancelled_task_without_release(monkeypatch):
             cancelled_at="now",
         )
 
-    async def fake_release_escrow(escrow_id, actor_aid):
-        recorded["released"] = True
-        return {"message": "ok"}
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = True
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
 
     with pytest.raises(task_routes.HTTPException) as exc_info:
         run(task_routes.complete_task(
@@ -762,7 +766,7 @@ def test_complete_endpoint_rejects_cancelled_task_without_release(monkeypatch):
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == "Cancelled task cannot be completed"
-    assert recorded["released"] is False
+    assert recorded["submitted"] is False
 
 
 def test_diagnose_task_consistency_returns_summary_and_examples(monkeypatch):
@@ -823,11 +827,12 @@ def test_assign_endpoint_rejects_non_open_task_before_creating_escrow(monkeypatc
     [
         ("completed", "Task is already completed"),
         ("cancelled", "Cancelled task cannot be completed"),
+        ("submitted", "Task is already awaiting employer acceptance"),
         ("open", "Task is not in progress"),
     ],
 )
 def test_complete_endpoint_preserves_status_conflict_messages(monkeypatch, status, expected_detail):
-    recorded = {"released": False}
+    recorded = {"submitted": False}
 
     async def fake_get_task(db, task_id):
         return DummyTask(
@@ -840,12 +845,12 @@ def test_complete_endpoint_preserves_status_conflict_messages(monkeypatch, statu
             cancelled_at="now" if status == "cancelled" else None,
         )
 
-    async def fake_release_escrow(escrow_id, actor_aid):
-        recorded["released"] = True
-        return {"message": "ok"}
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = True
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
 
     monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
 
     with pytest.raises(task_routes.HTTPException) as exc_info:
         run(task_routes.complete_task(
@@ -857,7 +862,93 @@ def test_complete_endpoint_preserves_status_conflict_messages(monkeypatch, statu
 
     assert exc_info.value.status_code == 409
     assert exc_info.value.detail == expected_detail
-    assert recorded["released"] is False
+    assert recorded["submitted"] is False
+
+
+def test_task_service_assign_requires_existing_application():
+    async def scenario():
+        async with create_test_db_session() as db:
+            db.add(Task(
+                task_id="task_assign_gate",
+                employer_aid="agent://a2ahub/employer",
+                title="assign gate",
+                description="assign gate",
+                reward=Decimal("10"),
+                status="open",
+            ))
+            await db.commit()
+
+            with pytest.raises(ValueError) as exc_info:
+                await TaskService.assign_task(db, "task_assign_gate", "agent://a2ahub/worker", "escrow_123")
+
+            assert str(exc_info.value) == "Assigned worker must have an application for this task"
+            assert getattr(exc_info.value, "status_code") == 400
+
+    run(scenario())
+
+
+def test_task_service_assign_updates_application_statuses():
+    async def scenario():
+        async with create_test_db_session() as db:
+            db.add(Task(
+                task_id="task_assign_statuses",
+                employer_aid="agent://a2ahub/employer",
+                title="assign statuses",
+                description="assign statuses",
+                reward=Decimal("10"),
+                status="open",
+            ))
+            db.add_all([
+                TaskApplication(task_id="task_assign_statuses", applicant_aid="agent://a2ahub/worker-a", proposal="A"),
+                TaskApplication(task_id="task_assign_statuses", applicant_aid="agent://a2ahub/worker-b", proposal="B"),
+            ])
+            await db.commit()
+
+            task = await TaskService.assign_task(db, "task_assign_statuses", "agent://a2ahub/worker-b", "escrow_123")
+            applications = await TaskService.get_applications(
+                db,
+                "task_assign_statuses",
+                viewer_aid="agent://a2ahub/employer",
+            )
+
+            assert task.status == "in_progress"
+            assert task.worker_aid == "agent://a2ahub/worker-b"
+            assert {application.applicant_aid: application.status for application in applications} == {
+                "agent://a2ahub/worker-a": "rejected",
+                "agent://a2ahub/worker-b": "accepted",
+            }
+
+    run(scenario())
+
+
+def test_task_service_get_applications_scopes_to_viewer():
+    async def scenario():
+        async with create_test_db_session() as db:
+            db.add(Task(
+                task_id="task_visibility",
+                employer_aid="agent://a2ahub/employer",
+                title="visibility",
+                description="visibility",
+                reward=Decimal("10"),
+                status="open",
+            ))
+            db.add_all([
+                TaskApplication(task_id="task_visibility", applicant_aid="agent://a2ahub/worker-a", proposal="A"),
+                TaskApplication(task_id="task_visibility", applicant_aid="agent://a2ahub/worker-b", proposal="B"),
+            ])
+            await db.commit()
+
+            employer_view = await TaskService.get_applications(db, "task_visibility", viewer_aid="agent://a2ahub/employer")
+            applicant_view = await TaskService.get_applications(db, "task_visibility", viewer_aid="agent://a2ahub/worker-a")
+
+            assert len(employer_view) == 2
+            assert len(applicant_view) == 1
+            assert applicant_view[0].applicant_aid == "agent://a2ahub/worker-a"
+
+            with pytest.raises(PermissionError, match="Only employer or applicant can view task applications"):
+                await TaskService.get_applications(db, "task_visibility", viewer_aid="agent://a2ahub/observer")
+
+    run(scenario())
 
 
 def test_diagnose_task_consistency_aggregates_all_issue_categories():

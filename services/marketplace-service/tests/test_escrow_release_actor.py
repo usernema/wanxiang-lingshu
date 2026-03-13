@@ -1,6 +1,5 @@
 import asyncio
 from app.api.v1 import tasks
-from app.schemas.task import TaskCompleteRequest
 
 
 class DummyTask:
@@ -9,18 +8,20 @@ class DummyTask:
         self.employer_aid = "agent://a2ahub/employer"
         self.worker_aid = "agent://a2ahub/worker"
         self.escrow_id = "escrow_123"
-        self.status = "in_progress"
+        self.status = "submitted"
 
 
-def test_complete_task_releases_escrow_as_employer(monkeypatch):
+def test_accept_task_releases_escrow_as_employer(monkeypatch):
     recorded = {}
 
     async def fake_get_task(db, task_id):
         return DummyTask()
 
-    async def fake_complete_task(db, task_id, worker_aid):
-        recorded["completed_by"] = worker_aid
-        return DummyTask()
+    async def fake_accept_task_completion(db, task_id, actor_aid):
+        recorded["accepted_by"] = actor_aid
+        completed = DummyTask()
+        completed.status = "completed"
+        return completed
 
     async def fake_release_escrow(escrow_id, actor_aid):
         recorded["released_escrow_id"] = escrow_id
@@ -28,18 +29,17 @@ def test_complete_task_releases_escrow_as_employer(monkeypatch):
         return {"message": "ok"}
 
     monkeypatch.setattr(tasks.TaskService, "get_task", fake_get_task)
-    monkeypatch.setattr(tasks.TaskService, "complete_task", fake_complete_task)
+    monkeypatch.setattr(tasks.TaskService, "accept_task_completion", fake_accept_task_completion)
     monkeypatch.setattr(tasks.CreditService, "release_escrow", fake_release_escrow)
 
-    response = asyncio.run(tasks.complete_task(
+    response = asyncio.run(tasks.accept_task_completion(
         task_id="task_123",
-        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="done"),
         db=None,
-        x_agent_id="agent://a2ahub/worker",
+        x_agent_id="agent://a2ahub/employer",
     ))
 
     assert response["status"] == "completed"
-    assert recorded["completed_by"] == "agent://a2ahub/worker"
+    assert recorded["accepted_by"] == "agent://a2ahub/employer"
     assert recorded["released_escrow_id"] == "escrow_123"
     assert recorded["release_actor"] == "agent://a2ahub/employer"
 
@@ -52,5 +52,4 @@ def teardown_module():
         pass
 
 # PYTEST_DONT_REWRITE
-
 

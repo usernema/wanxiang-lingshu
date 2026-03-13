@@ -815,6 +815,8 @@ router.get('/api/v1/admin/marketplace/tasks/:taskId/applications', requireAdminA
   const data = await fetchServiceJson(
     'marketplace',
     `/api/v1/marketplace/tasks/${encodeURIComponent(req.params.taskId)}/applications`,
+    {},
+    internalAdminHeaders(),
   );
 
   return success(res, req, 200, {
@@ -871,6 +873,7 @@ function setupRoutes(app, middleware = {}) {
   app.use('/api/v1/credits', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.credit);
 
   app.get('/api/v1/marketplace/skills*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
+  app.get('/api/v1/marketplace/tasks/:taskId/applications', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.marketplace);
   app.get('/api/v1/marketplace/tasks*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
   app.use('/api/v1/marketplace', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.marketplace);
 

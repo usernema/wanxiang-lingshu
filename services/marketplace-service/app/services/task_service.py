@@ -65,8 +65,8 @@ class TaskService:
     def _build_issue(task: Task) -> Optional[str]:
         if task.status == "open" and (task.worker_aid or task.escrow_id):
             return "open task should not have worker_aid or escrow_id"
-        if task.status == "in_progress" and (not task.worker_aid or not task.escrow_id):
-            return "in_progress task must have worker_aid and escrow_id"
+        if task.status in {"in_progress", "submitted"} and (not task.worker_aid or not task.escrow_id):
+            return f"{task.status} task must have worker_aid and escrow_id"
         if task.status == "completed" and not task.completed_at:
             return "completed task must have completed_at"
         if task.status == "cancelled" and not task.cancelled_at:
@@ -79,7 +79,7 @@ class TaskService:
             select(Task).where(
                 or_(
                     (Task.status == "open") & (or_(Task.worker_aid.is_not(None), Task.escrow_id.is_not(None))),
-                    (Task.status == "in_progress") & (or_(Task.worker_aid.is_(None), Task.escrow_id.is_(None))),
+                    (Task.status.in_(("in_progress", "submitted"))) & (or_(Task.worker_aid.is_(None), Task.escrow_id.is_(None))),
                     (Task.status == "completed") & (Task.completed_at.is_(None)),
                     (Task.status == "cancelled") & (Task.cancelled_at.is_(None)),
                 )
@@ -103,7 +103,7 @@ class TaskService:
             summary.total_issues += 1
             if task.status == "open":
                 summary.open_with_lifecycle_fields += 1
-            elif task.status == "in_progress":
+            elif task.status in {"in_progress", "submitted"}:
                 summary.in_progress_missing_assignment += 1
             elif task.status == "completed":
                 summary.completed_missing_completed_at += 1
@@ -168,6 +168,8 @@ class TaskService:
             raise ValueError("Task not found")
         if task.status != "open":
             raise ValueError("Task is not open for applications")
+        if task.employer_aid == application_data.applicant_aid:
+            raise ValueError("Employer cannot apply to own task")
 
         application = TaskApplication(task_id=task_id, **application_data.model_dump())
         db.add(application)
@@ -188,6 +190,22 @@ class TaskService:
         if task.worker_aid or task.escrow_id:
             raise TaskService._conflict_error("Task is already assigned")
 
+        applications_result = await db.execute(
+            select(TaskApplication)
+            .where(TaskApplication.task_id == task_id)
+            .order_by(TaskApplication.created_at.asc())
+        )
+        applications = applications_result.scalars().all()
+        selected_application = next(
+            (application for application in applications if application.applicant_aid == worker_aid),
+            None,
+        )
+        if not selected_application:
+            raise TaskService._validation_error("Assigned worker must have an application for this task")
+
+        for application in applications:
+            application.status = "accepted" if application.applicant_aid == worker_aid else "rejected"
+
         task.worker_aid = worker_aid
         task.escrow_id = escrow_id
         task.status = "in_progress"
@@ -196,7 +214,7 @@ class TaskService:
         return task
 
     @staticmethod
-    async def complete_task(db: AsyncSession, task_id: str, worker_aid: str) -> Optional[Task]:
+    async def submit_task_completion(db: AsyncSession, task_id: str, worker_aid: str) -> Optional[Task]:
         result = await db.execute(select(Task).where(Task.task_id == task_id))
         task = result.scalar_one_or_none()
         if not task:
@@ -206,14 +224,58 @@ class TaskService:
                 raise TaskService._conflict_error("Task is already completed")
             if task.status == "cancelled":
                 raise TaskService._conflict_error("Cancelled task cannot be completed")
+            if task.status == "submitted":
+                raise TaskService._conflict_error("Task is already awaiting employer acceptance")
             raise TaskService._conflict_error("Task is not in progress")
         if task.worker_aid != worker_aid:
             raise TaskService._validation_error("Only assigned worker can complete the task")
+        if not task.escrow_id:
+            raise TaskService._validation_error("Task has no escrow to submit for acceptance")
+
+        task.status = "submitted"
+        await db.commit()
+        await db.refresh(task)
+        return task
+
+    @staticmethod
+    async def accept_task_completion(db: AsyncSession, task_id: str, actor_aid: str) -> Optional[Task]:
+        result = await db.execute(select(Task).where(Task.task_id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            return None
+        if task.employer_aid != actor_aid:
+            raise PermissionError("Only employer can accept task completion")
+        if task.status != "submitted":
+            if task.status == "completed":
+                raise TaskService._conflict_error("Task is already completed")
+            if task.status == "cancelled":
+                raise TaskService._conflict_error("Cancelled task cannot be accepted")
+            raise TaskService._conflict_error("Task is not awaiting employer acceptance")
         if not task.escrow_id:
             raise TaskService._validation_error("Task has no escrow to release")
 
         task.status = "completed"
         task.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(task)
+        return task
+
+    @staticmethod
+    async def request_task_revision(db: AsyncSession, task_id: str, actor_aid: str) -> Optional[Task]:
+        result = await db.execute(select(Task).where(Task.task_id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            return None
+        if task.employer_aid != actor_aid:
+            raise PermissionError("Only employer can request revision")
+        if task.status != "submitted":
+            if task.status == "completed":
+                raise TaskService._conflict_error("Completed task cannot be reopened for revision")
+            if task.status == "cancelled":
+                raise TaskService._conflict_error("Cancelled task cannot be revised")
+            raise TaskService._conflict_error("Task is not awaiting employer acceptance")
+
+        task.status = "in_progress"
         await db.commit()
         await db.refresh(task)
         return task
@@ -240,8 +302,29 @@ class TaskService:
         return task
 
     @staticmethod
-    async def get_applications(db: AsyncSession, task_id: str) -> List[TaskApplication]:
-        result = await db.execute(
-            select(TaskApplication).where(TaskApplication.task_id == task_id).order_by(TaskApplication.created_at.desc())
-        )
-        return result.scalars().all()
+    async def get_applications(
+        db: AsyncSession,
+        task_id: str,
+        *,
+        viewer_aid: Optional[str] = None,
+        allow_all: bool = False,
+    ) -> List[TaskApplication]:
+        task_result = await db.execute(select(Task).where(Task.task_id == task_id))
+        task = task_result.scalar_one_or_none()
+        if not task:
+            raise ValueError("Task not found")
+
+        query = select(TaskApplication).where(TaskApplication.task_id == task_id).order_by(TaskApplication.created_at.desc())
+        if allow_all or viewer_aid == task.employer_aid:
+            result = await db.execute(query)
+            return result.scalars().all()
+
+        if not viewer_aid:
+            raise PermissionError("Only employer or applicant can view task applications")
+
+        result = await db.execute(query.where(TaskApplication.applicant_aid == viewer_aid))
+        applications = result.scalars().all()
+        if applications:
+            return applications
+
+        raise PermissionError("Only employer or applicant can view task applications")
