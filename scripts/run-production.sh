@@ -240,6 +240,17 @@ fi
 
 compose "${COMPOSE_ARGS[@]}" up -d --build
 
+for attempt in $(seq 1 30); do
+  if compose "${COMPOSE_ARGS[@]}" exec -T postgres pg_isready -U "${POSTGRES_USER:-a2ahub}" -d "${POSTGRES_DB:-a2ahub}" >/dev/null 2>&1; then
+    break
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    echo "Postgres did not become ready in time for production baseline repairs." >&2
+    exit 1
+  fi
+  sleep 2
+done
+
 echo "Applying idempotent production baseline repairs..."
 compose "${COMPOSE_ARGS[@]}" exec -T postgres \
   psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-a2ahub}" -d "${POSTGRES_DB:-a2ahub}" \
