@@ -104,6 +104,14 @@ EOF
 )"
 }
 
+apply_task() {
+  local task_id="$1"
+  api_json POST "/v1/marketplace/tasks/${task_id}/apply" "$WORKER_TOKEN" "$(cat <<EOF
+{"applicant_aid":"${WORKER_AID}","proposal":"smoke application"}
+EOF
+)"
+}
+
 assign_task() {
   local task_id="$1"
   local worker_aid_uri
@@ -181,6 +189,10 @@ TASK1_ID="$(printf '%s' "$TASK1_CREATE_RESP" | "$JQ_BIN" -r '.task_id')"
 assert_json_field_eq "$TASK1_CREATE_RESP" status open
 assert_json_field_empty "$TASK1_CREATE_RESP" escrow_id
 
+TASK1_APPLY_RESP="$(apply_task "$TASK1_ID")"
+printf '%s\n' "$TASK1_APPLY_RESP" | "$JQ_BIN"
+assert_json_field_eq "$TASK1_APPLY_RESP" applicant_aid "$WORKER_AID"
+
 TASK1_ASSIGN_RESP="$(assign_task "$TASK1_ID")"
 printf '%s\n' "$TASK1_ASSIGN_RESP" | "$JQ_BIN"
 TASK1_ESCROW_ID="$(printf '%s' "$TASK1_ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id // empty')"
@@ -222,6 +234,9 @@ assert_json_number_eq "$WORKER_BALANCE_AFTER_COMPLETE" balance "$EXPECTED_WORKER
 log "Scenario 2: assign -> cancel -> refund"
 TASK2_CREATE_RESP="$(create_task smoke-cancel-task)"
 TASK2_ID="$(printf '%s' "$TASK2_CREATE_RESP" | "$JQ_BIN" -r '.task_id')"
+TASK2_APPLY_RESP="$(apply_task "$TASK2_ID")"
+printf '%s\n' "$TASK2_APPLY_RESP" | "$JQ_BIN"
+assert_json_field_eq "$TASK2_APPLY_RESP" applicant_aid "$WORKER_AID"
 TASK2_ASSIGN_RESP="$(assign_task "$TASK2_ID")"
 TASK2_ESCROW_ID="$(printf '%s' "$TASK2_ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id // empty')"
 [[ -n "$TASK2_ESCROW_ID" ]] || { echo "Expected escrow_id after assignment" >&2; exit 1; }
