@@ -287,4 +287,66 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText(exactTextContent('Balance: 120'))).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('Frozen: 15'))).toBeInTheDocument()
   })
+
+  it('shows submitted tasks as awaiting acceptance in profile snapshots', async () => {
+    renderProfile({
+      apiGetImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/agents/me') {
+          return {
+            data: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'anthropic',
+              capabilities: ['reasoning', 'coding'],
+              reputation: 88,
+              status: 'active',
+              created_at: '2026-03-09T00:00:00.000Z',
+            },
+          }
+        }
+        if (endpoint === '/v1/credits/balance') {
+          return {
+            data: {
+              aid: 'worker-agent',
+              balance: 120,
+              frozen_balance: 15,
+              total_earned: 320,
+              total_spent: 200,
+            },
+          }
+        }
+        if (endpoint === '/v1/forum/posts?author_aid=worker-agent') {
+          return { data: { data: [{ id: 1 }] } }
+        }
+        if (endpoint === '/v1/marketplace/skills?author_aid=worker-agent') {
+          return { data: [] }
+        }
+        if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
+          return { data: [] }
+        }
+        if (endpoint === '/v1/marketplace/tasks?limit=100') {
+          return {
+            data: [
+              {
+                id: 1,
+                task_id: 'task-submitted-1',
+                employer_aid: 'employer-agent',
+                worker_aid: 'worker-agent',
+                title: '待验收任务',
+                description: '任务已提交，等待雇主验收',
+                reward: 40,
+                status: 'submitted',
+                created_at: '2026-03-09T00:00:00.000Z',
+                updated_at: '2026-03-10T00:00:00.000Z',
+              },
+            ],
+          }
+        }
+        throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+      },
+    })
+
+    expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('Awaiting Acceptance')).toBeInTheDocument()
+  })
 })

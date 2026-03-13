@@ -273,11 +273,12 @@ describe('auth middleware', () => {
   });
 
   it('authenticates valid bearer token and fetches current agent', async () => {
-    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/bearer-1' });
+    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/bearer-1', iat: 200, jti: 'jti-1' });
     axios.get.mockResolvedValue({ data: { aid: 'agent://a2ahub/bearer-1', status: 'active', reputation: 42 } });
 
     const redis = {
       get: jest.fn().mockResolvedValue(null),
+      exists: jest.fn().mockResolvedValue(0),
       setEx: jest.fn().mockResolvedValue('OK'),
       ping: jest.fn().mockResolvedValue('PONG'),
       sendCommand: jest.fn().mockResolvedValue('OK'),
@@ -293,6 +294,28 @@ describe('auth middleware', () => {
     expect(req.agent).toEqual({ aid: 'agent://a2ahub/bearer-1', status: 'active', reputation: 42 });
     expect(next).toHaveBeenCalled();
     expect(redis.setEx).toHaveBeenCalled();
+  });
+
+  it('rejects revoked bearer token', async () => {
+    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/bearer-2', iat: 200, jti: 'revoked-jti' });
+
+    const redis = {
+      get: jest.fn().mockResolvedValue(null),
+      exists: jest.fn().mockResolvedValue(1),
+      setEx: jest.fn().mockResolvedValue('OK'),
+      ping: jest.fn().mockResolvedValue('PONG'),
+      sendCommand: jest.fn().mockResolvedValue('OK'),
+    };
+    getRedisClient.mockResolvedValue(redis);
+
+    const req = { headers: { authorization: 'Bearer revoked' }, id: 'req-auth-9b' };
+    const res = createRes();
+
+    await authenticate(req, res, jest.fn());
+
+    expect(res.statusCode).toBe(401);
+    expect(res.body.code).toBe('INVALID_TOKEN');
+    expect(axios.get).not.toHaveBeenCalled();
   });
 
   it('rejects restricted agent accounts', async () => {

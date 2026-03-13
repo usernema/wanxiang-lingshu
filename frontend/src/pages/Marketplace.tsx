@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
-import { api, getActiveRole, getSession, setActiveRole, switchRole } from '@/lib/api'
+import { api, ensureSession, getActiveRole, getSession, setActiveRole } from '@/lib/api'
 import type {
   MarketplaceTask,
   MarketplaceTaskCompleteResponse,
@@ -528,7 +528,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const publishSkill = useMutation({
     mutationFn: async () => {
-      const session = await switchRole(role)
+      const session = await ensureSession()
       return api.post('/v1/marketplace/skills', {
         name,
         description,
@@ -553,7 +553,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const purchaseSkill = useMutation({
     mutationFn: async (skillId: string) => {
-      const session = await switchRole(role)
+      const session = await ensureSession()
       return api.post(`/v1/marketplace/skills/${skillId}/purchase`, { buyer_aid: session.aid })
     },
     onSuccess: () => {
@@ -569,7 +569,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const createTask = useMutation({
     mutationFn: async () => {
-      const session = await switchRole('employer')
+      const session = await ensureSession()
       return api.post('/v1/marketplace/tasks', {
         title: taskTitle,
         description: taskDescription,
@@ -597,7 +597,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const applyTask = useMutation({
     mutationFn: async (taskId: string) => {
-      const session = await switchRole('worker')
+      const session = await ensureSession()
       return api.post(`/v1/marketplace/tasks/${taskId}/apply`, {
         applicant_aid: session.aid,
         proposal: applicationProposal || undefined,
@@ -617,7 +617,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const assignTask = useMutation({
     mutationFn: async ({ taskId, workerAid }: { taskId: string; workerAid: string }) => {
-      await switchRole('employer')
       return api.post(`/v1/marketplace/tasks/${taskId}/assign?worker_aid=${encodeURIComponent(workerAid)}`)
     },
     onSuccess: async () => {
@@ -633,7 +632,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const completeTask = useMutation({
     mutationFn: async (taskId: string) => {
-      const session = await switchRole('worker')
+      const session = await ensureSession()
       const response = await api.post(`/v1/marketplace/tasks/${taskId}/complete`, {
         worker_aid: session.aid,
         result: 'done',
@@ -641,7 +640,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as MarketplaceTaskCompleteResponse
     },
     onSuccess: async (response) => {
-      setActionMessage(response.message)
+      if (response.status === 'submitted') {
+        setActionMessage('任务已提交验收，等待雇主确认。')
+      } else {
+        setActionMessage(response.message)
+      }
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -653,7 +656,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const acceptTask = useMutation({
     mutationFn: async (taskId: string) => {
-      await switchRole('employer')
       const response = await api.post(`/v1/marketplace/tasks/${taskId}/accept-completion`)
       return response.data as MarketplaceTaskCompleteResponse
     },
@@ -676,7 +678,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const requestRevisionTask = useMutation({
     mutationFn: async (taskId: string) => {
-      await switchRole('employer')
       return api.post(`/v1/marketplace/tasks/${taskId}/request-revision`)
     },
     onSuccess: async () => {
@@ -692,7 +693,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const cancelTask = useMutation({
     mutationFn: async (taskId: string) => {
-      await switchRole('employer')
       return api.post(`/v1/marketplace/tasks/${taskId}/cancel`)
     },
     onSuccess: async () => {

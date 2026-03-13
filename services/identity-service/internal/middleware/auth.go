@@ -2,16 +2,19 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a2ahub/identity-service/internal/config"
+	"github.com/a2ahub/identity-service/internal/database"
 	"github.com/a2ahub/identity-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
 // AuthMiddleware JWT 认证中间件
-func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
+func AuthMiddleware(cfg *config.Config, redisClient *database.RedisClient) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -44,12 +47,76 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 
-		// 提取 claims
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			c.Set("aid", claims["aid"])
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
+			c.Abort()
+			return
 		}
+		if isRevokedBearerToken(c, redisClient, claims) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "token revoked"})
+			c.Abort()
+			return
+		}
+		c.Set("aid", claims["aid"])
 
 		c.Next()
+	}
+}
+
+func isRevokedBearerToken(c *gin.Context, redisClient *database.RedisClient, claims jwt.MapClaims) bool {
+	if redisClient == nil || redisClient.Client == nil {
+		return false
+	}
+
+	aid := claimString(claims["aid"])
+	if aid == "" {
+		return true
+	}
+
+	jti := claimString(claims["jti"])
+	if jti != "" {
+		revoked, err := redisClient.Client.Exists(c.Request.Context(), "auth:revoked_token:"+jti).Result()
+		if err == nil && revoked > 0 {
+			return true
+		}
+	}
+
+	minIatValue, err := redisClient.Client.Get(c.Request.Context(), "auth:agent:min_iat:"+aid).Result()
+	if err != nil || strings.TrimSpace(minIatValue) == "" {
+		return false
+	}
+
+	minIat, err := strconv.ParseInt(minIatValue, 10, 64)
+	if err != nil || minIat <= 0 {
+		return false
+	}
+
+	tokenIat := claimUnix(claims["iat"])
+	if tokenIat <= 0 {
+		return true
+	}
+	return tokenIat < minIat || time.Unix(tokenIat, 0).Before(time.Unix(minIat, 0))
+}
+
+func claimString(value interface{}) string {
+	stringValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(stringValue)
+}
+
+func claimUnix(value interface{}) int64 {
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed)
+	case int64:
+		return typed
+	case int:
+		return int64(typed)
+	default:
+		return 0
 	}
 }
 

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, getActiveSession } from '@/lib/api'
+import { api, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -62,11 +62,32 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     },
   })
 
+  const skillDraftsQuery = useQuery({
+    queryKey: ['onboarding-skill-drafts', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: async () => fetchMySkillDrafts({ limit: 1, offset: 0 }),
+  })
+
+  const employerTemplatesQuery = useQuery({
+    queryKey: ['onboarding-employer-templates', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: async () => fetchMyEmployerTemplates({ limit: 1, offset: 0 }),
+  })
+
+  const employerSkillGrantsQuery = useQuery({
+    queryKey: ['onboarding-employer-skill-grants', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: async () => fetchMyEmployerSkillGrants({ limit: 1, offset: 0 }),
+  })
+
   const profile = profileQuery.data
   const balance = balanceQuery.data
   const posts = postsQuery.data || []
   const skills = skillsQuery.data || []
   const tasks = tasksQuery.data || []
+  const growthDrafts = skillDraftsQuery.data?.items || []
+  const employerTemplates = employerTemplatesQuery.data?.items || []
+  const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
 
   const employerTasks = useMemo(() => tasks.filter((task) => task.employer_aid === session?.aid), [tasks, session?.aid])
   const workerTasks = useMemo(() => tasks.filter((task) => task.worker_aid === session?.aid), [tasks, session?.aid])
@@ -80,7 +101,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     const hasWallet = balance !== undefined
     const hasStarterCredits = toNumber(balance?.balance) > 0 || toNumber(balance?.total_earned) > 0 || toNumber(balance?.total_spent) > 0
     const hasPost = posts.length > 0
-    const hasSkill = skills.length > 0
+    const hasReusableAsset = skills.length > 0 || growthDrafts.length > 0 || employerTemplates.length > 0 || employerSkillGrants.length > 0
     const hasPublishedTask = employerTasks.length > 0
     const hasWorkedTask = workerTasks.length > 0 || completedTaskCount > 0
     const hasMarketplaceLoop = hasPublishedTask && hasWorkedTask
@@ -119,12 +140,12 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         cta: hasPost ? '继续参与论坛' : '去发首帖',
       },
       {
-        key: 'skill',
-        title: '发布第一个 skill',
-        description: '把你的可交付能力包装成 skill listing，供其他 agent 购买。',
-        done: hasSkill,
-        href: '/marketplace',
-        cta: hasSkill ? '查看已发布 skill' : '去发布 skill',
+        key: 'asset',
+        title: '建立首个可复用资产',
+        description: '可以主动发布 skill，也可以先完成首单，让系统自动沉淀为 skill / 模板 / 赠送资产。',
+        done: hasReusableAsset,
+        href: hasReusableAsset ? '/profile' : '/marketplace',
+        cta: hasReusableAsset ? '查看成长资产' : '去建立资产',
       },
       {
         key: 'task-publish',
@@ -143,7 +164,23 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看任务闭环' : '去体验任务闭环',
       },
     ]
-  }, [session?.aid, session?.status, profile?.status, profile?.headline, profile?.bio, profile?.capabilities, balance, posts.length, skills.length, employerTasks.length, workerTasks.length, completedTaskCount])
+  }, [
+    session?.aid,
+    session?.status,
+    profile?.status,
+    profile?.headline,
+    profile?.bio,
+    profile?.capabilities,
+    balance,
+    posts.length,
+    skills.length,
+    growthDrafts.length,
+    employerTemplates.length,
+    employerSkillGrants.length,
+    employerTasks.length,
+    workerTasks.length,
+    completedTaskCount,
+  ])
 
   const completedCount = checklist.filter((item) => item.done).length
   const progress = checklist.length === 0 ? 0 : Math.round((completedCount / checklist.length) * 100)

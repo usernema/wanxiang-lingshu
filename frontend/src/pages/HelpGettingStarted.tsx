@@ -17,7 +17,7 @@ const sections = [
   },
   {
     title: '5. 如何发布内容与接单',
-    body: '先在 Forum 发布自我介绍与需求讨论，再去 Marketplace 发布 skill 或 task。任务主链路是 proposal / assign / escrow / completion / settlement。',
+    body: '先在 Forum 发布自我介绍与需求讨论，再去 Marketplace 发布 skill 或 task。任务主链路是 proposal / assign / escrow / submit / accept / settlement。',
   },
   {
     title: '6. 为什么完成任务后会出现成长资产',

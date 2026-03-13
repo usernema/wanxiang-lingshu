@@ -120,16 +120,17 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const recentGrowthDrafts = growthDrafts.slice(0, 3)
   const recentEmployerTemplates = employerTemplates.slice(0, 3)
   const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
+  const reusableAssetCount = skills.length + growthDrafts.length + employerTemplates.length + employerSkillGrants.length
   const profileStrength = useMemo(
     () => calculateProfileStrength({
       headline: profile?.headline,
       bio: profile?.bio,
       capabilities,
       postsCount: posts.length,
-      skillsCount: skills.length,
+      reusableAssetCount,
       taskCount: employerTasks.length + workerTasks.length,
     }),
-    [profile?.headline, profile?.bio, capabilities, posts.length, skills.length, employerTasks.length, workerTasks.length],
+    [profile?.headline, profile?.bio, capabilities, posts.length, reusableAssetCount, employerTasks.length, workerTasks.length],
   )
 
   useEffect(() => {
@@ -316,7 +317,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <MetricCard label="发布任务" value={employerTasks.length} />
             <MetricCard label="参与任务" value={workerTasks.length} />
             <MetricCard label="已完成任务" value={taskSummary.completed} />
-            <MetricCard label="进行中任务" value={taskSummary.in_progress} />
+            <MetricCard label="待交付任务" value={taskSummary.in_progress} />
+            <MetricCard label="待验收任务" value={taskSummary.submitted} />
           </div>
         </div>
       </section>
@@ -510,7 +512,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
         <ActivitySection
           title="Published skills"
-          emptyText="当前还没有 skill listing。建议先发布一个可购买 skill。"
+          emptyText="当前还没有公开 skill listing。你可以先接首单，等系统自动沉淀首个 skill，也可以主动发布一个可购买 skill。"
           items={recentSkills.map((skill) => ({
             id: skill.skill_id,
             title: skill.name,
@@ -619,11 +621,12 @@ function summarizeTaskStatuses(tasks: MarketplaceTask[]) {
     (summary, task) => {
       if (task.status === 'open') summary.open += 1
       else if (task.status === 'in_progress') summary.in_progress += 1
+      else if (task.status === 'submitted') summary.submitted += 1
       else if (task.status === 'completed') summary.completed += 1
       else if (task.status === 'cancelled') summary.cancelled += 1
       return summary
     },
-    { open: 0, in_progress: 0, completed: 0, cancelled: 0 },
+    { open: 0, in_progress: 0, submitted: 0, completed: 0, cancelled: 0 },
   )
 }
 
@@ -632,7 +635,7 @@ function calculateProfileStrength(input: {
   bio?: string
   capabilities: string[]
   postsCount: number
-  skillsCount: number
+  reusableAssetCount: number
   taskCount: number
 }) {
   const items = [
@@ -640,7 +643,7 @@ function calculateProfileStrength(input: {
     { label: 'Bio', done: Boolean(input.bio?.trim()) },
     { label: 'Capabilities', done: input.capabilities.length > 0 },
     { label: 'Forum activity', done: input.postsCount > 0 },
-    { label: 'Published skills', done: input.skillsCount > 0 },
+    { label: 'Reusable assets', done: input.reusableAssetCount > 0 },
     { label: 'Task history', done: input.taskCount > 0 },
   ]
   const completed = items.filter((item) => item.done).length
@@ -665,6 +668,8 @@ function getTaskStatusTone(status: string) {
       return 'bg-blue-100 text-blue-800'
     case 'in_progress':
       return 'bg-amber-100 text-amber-800'
+    case 'submitted':
+      return 'bg-orange-100 text-orange-700'
     case 'completed':
       return 'bg-green-100 text-green-800'
     case 'cancelled':
@@ -680,6 +685,8 @@ function formatTaskStatusLabel(status: string) {
       return 'Open'
     case 'in_progress':
       return 'In Progress'
+    case 'submitted':
+      return 'Awaiting Acceptance'
     case 'completed':
       return 'Completed'
     case 'cancelled':

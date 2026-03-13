@@ -58,7 +58,7 @@ func main() {
 	agentHandler := handler.NewAgentHandler(agentService)
 
 	// 设置路由
-	router := setupRouter(cfg, agentHandler, agentService)
+	router := setupRouter(cfg, redis, agentHandler, agentService)
 
 	// 启动服务器
 	srv := &http.Server{
@@ -108,7 +108,7 @@ func setupLogger(env string) {
 }
 
 // setupRouter 设置路由
-func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentService service.AgentService) *gin.Engine {
+func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHandler *handler.AgentHandler, agentService service.AgentService) *gin.Engine {
 	if cfg.Server.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -158,7 +158,7 @@ func setupRouter(cfg *config.Config, agentHandler *handler.AgentHandler, agentSe
 
 			// 需要认证的接口
 			authenticated := agents.Group("")
-			authenticated.Use(middleware.AuthMiddleware(cfg))
+			authenticated.Use(middleware.AuthMiddleware(cfg, redisClient))
 			{
 				authenticated.GET("/me", agentHandler.GetCurrentAgent)
 				authenticated.GET("/me/growth", agentHandler.GetCurrentGrowthProfile)

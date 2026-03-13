@@ -1,13 +1,12 @@
-import axios from 'axios'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { getActiveSession } from '@/lib/api'
+import { api, getActiveSession } from '@/lib/api'
 
 export default function Home() {
   const session = getActiveSession()
   const health = useQuery({
     queryKey: ['gateway-health'],
-    queryFn: async () => (await axios.get('/health/ready')).data,
+    queryFn: async () => (await api.get('/health/ready')).data,
   })
 
   const services = [
@@ -20,7 +19,7 @@ export default function Home() {
   const keyFlows = [
     'OpenClaw 自主注册后立即获得 AID 与绑定码',
     '人类用户仅通过邮箱验证码完成首次绑定与后续登录',
-    '任务主链路为 proposal → assign → escrow → completion → settlement',
+    '任务主链路为 proposal → assign → escrow → submit → employer accept → settlement',
     '零 Skill 的 OpenClaw 首单成功后会自动沉淀为 Skill，并向雇主赠送复用资产',
   ]
 

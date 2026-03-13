@@ -15,6 +15,7 @@ import (
 	"github.com/a2ahub/identity-service/internal/repository"
 	"github.com/a2ahub/identity-service/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -222,6 +223,12 @@ var allowedAdminAgentStatuses = map[string]struct{}{
 	"suspended": {},
 	"banned":    {},
 }
+
+const (
+	revokedTokenKeyPrefix     = "auth:revoked_token:"
+	agentMinIssuedAtKeyPrefix = "auth:agent:min_iat:"
+	gatewayAgentCachePrefix   = "agent:"
+)
 
 type DevBootstrapSession struct {
 	Role      string        `json:"role"`
@@ -510,7 +517,7 @@ func (s *agentService) Logout(ctx context.Context, token string) error {
 	if token == "" {
 		return fmt.Errorf("missing token")
 	}
-	return nil
+	return s.revokeToken(ctx, token)
 }
 
 // GetAgent 获取 Agent 信息
@@ -565,6 +572,11 @@ func (s *agentService) UpdateAgentStatus(ctx context.Context, aid, status string
 	updatedAgent, err := s.repo.GetByAID(ctx, aid)
 	if err != nil {
 		return nil, err
+	}
+	if status == "active" {
+		s.clearGatewayAgentCacheBestEffort(ctx, aid)
+	} else {
+		s.revokeAgentSessionsBestEffort(ctx, aid, time.Now().Unix()+1)
 	}
 	s.syncGrowthProfileBestEffort(ctx, aid, "agent_status_updated")
 
@@ -792,12 +804,14 @@ func (s *agentService) parseToken(tokenString string) (*jwt.Token, error) {
 
 // generateJWT 生成 JWT Token
 func (s *agentService) generateJWT(aid string) (string, time.Time, error) {
-	expiresAt := time.Now().Add(s.config.JWT.Expiration)
+	issuedAt := time.Now()
+	expiresAt := issuedAt.Add(s.config.JWT.Expiration)
 
 	claims := jwt.MapClaims{
 		"aid": aid,
 		"exp": expiresAt.Unix(),
-		"iat": time.Now().Unix(),
+		"iat": issuedAt.Unix(),
+		"jti": uuid.NewString(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -807,4 +821,127 @@ func (s *agentService) generateJWT(aid string) (string, time.Time, error) {
 	}
 
 	return tokenString, expiresAt, nil
+}
+
+func revokedTokenKey(jti string) string {
+	return revokedTokenKeyPrefix + strings.TrimSpace(jti)
+}
+
+func agentMinIssuedAtKey(aid string) string {
+	return agentMinIssuedAtKeyPrefix + strings.TrimSpace(aid)
+}
+
+func gatewayAgentCacheKey(aid string) string {
+	return gatewayAgentCachePrefix + strings.TrimSpace(aid)
+}
+
+func claimString(claims jwt.MapClaims, key string) string {
+	value, ok := claims[key]
+	if !ok {
+		return ""
+	}
+	stringValue, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(stringValue)
+}
+
+func claimUnix(claims jwt.MapClaims, key string) int64 {
+	value, ok := claims[key]
+	if !ok {
+		return 0
+	}
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed)
+	case int64:
+		return typed
+	case int:
+		return int64(typed)
+	case json.Number:
+		parsed, _ := typed.Int64()
+		return parsed
+	default:
+		return 0
+	}
+}
+
+func (s *agentService) parseTokenClaims(tokenString string) (jwt.MapClaims, error) {
+	token, err := s.parseToken(tokenString)
+	if err != nil || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return nil, fmt.Errorf("invalid token claims")
+	}
+	return claims, nil
+}
+
+func (s *agentService) revokeToken(ctx context.Context, tokenString string) error {
+	if s.redis == nil || s.redis.Client == nil {
+		return nil
+	}
+
+	claims, err := s.parseTokenClaims(tokenString)
+	if err != nil {
+		return err
+	}
+
+	aid := claimString(claims, "aid")
+	expUnix := claimUnix(claims, "exp")
+	issuedAtUnix := claimUnix(claims, "iat")
+	jti := claimString(claims, "jti")
+	if aid == "" || expUnix == 0 {
+		return fmt.Errorf("invalid token claims")
+	}
+
+	now := time.Now()
+	expiresAt := time.Unix(expUnix, 0)
+	if !expiresAt.After(now) {
+		s.clearGatewayAgentCacheBestEffort(ctx, aid)
+		return nil
+	}
+
+	tokenTTL := time.Until(expiresAt)
+	sessionTTL := s.config.JWT.Expiration
+	if sessionTTL <= 0 {
+		sessionTTL = tokenTTL
+	}
+
+	pipeline := s.redis.Client.TxPipeline()
+	if jti != "" {
+		pipeline.Set(ctx, revokedTokenKey(jti), "1", tokenTTL)
+	}
+	if issuedAtUnix > 0 {
+		pipeline.Set(ctx, agentMinIssuedAtKey(aid), strconv.FormatInt(issuedAtUnix+1, 10), sessionTTL)
+	}
+	pipeline.Del(ctx, gatewayAgentCacheKey(aid))
+	if _, err := pipeline.Exec(ctx); err != nil {
+		return fmt.Errorf("failed to revoke token: %w", err)
+	}
+	return nil
+}
+
+func (s *agentService) clearGatewayAgentCacheBestEffort(ctx context.Context, aid string) {
+	if s.redis == nil || s.redis.Client == nil || strings.TrimSpace(aid) == "" {
+		return
+	}
+	_ = s.redis.Client.Del(ctx, gatewayAgentCacheKey(aid)).Err()
+}
+
+func (s *agentService) revokeAgentSessionsBestEffort(ctx context.Context, aid string, minIssuedAt int64) {
+	if s.redis == nil || s.redis.Client == nil || strings.TrimSpace(aid) == "" || minIssuedAt <= 0 {
+		return
+	}
+	sessionTTL := s.config.JWT.Expiration
+	if sessionTTL <= 0 {
+		sessionTTL = 24 * time.Hour
+	}
+	pipeline := s.redis.Client.TxPipeline()
+	pipeline.Set(ctx, agentMinIssuedAtKey(aid), strconv.FormatInt(minIssuedAt, 10), sessionTTL)
+	pipeline.Del(ctx, gatewayAgentCacheKey(aid))
+	_, _ = pipeline.Exec(ctx)
 }

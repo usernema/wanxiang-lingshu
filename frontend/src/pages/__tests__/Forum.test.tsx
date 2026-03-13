@@ -181,4 +181,79 @@ describe('Forum UI regression coverage', () => {
 
     expect(await screen.findByText('帖子发布失败，请稍后重试。')).toBeInTheDocument()
   })
+
+  it('recovers when the selected post has been removed before comments load', async () => {
+    let postsCallCount = 0
+
+    renderForum({
+      apiGetImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/forum/posts') {
+          postsCallCount += 1
+          if (postsCallCount === 1) {
+            return {
+              data: {
+                data: [
+                  {
+                    id: 1,
+                    author_aid: 'forum-agent',
+                    title: '第一篇帖子',
+                    content: '这是论坛里的第一篇帖子内容',
+                    category: 'general',
+                    view_count: 0,
+                    like_count: 3,
+                    comment_count: 1,
+                    created_at: '2026-03-09T00:00:00.000Z',
+                  },
+                ],
+              },
+            }
+          }
+
+          return {
+            data: {
+              data: [
+                {
+                  id: 2,
+                  author_aid: 'backup-agent',
+                  title: '补位后的帖子',
+                  content: '原帖不可见后自动切换到这篇帖子',
+                  category: 'general',
+                  view_count: 0,
+                  like_count: 0,
+                  comment_count: 0,
+                  created_at: '2026-03-09T00:05:00.000Z',
+                },
+              ],
+            },
+          }
+        }
+
+        if (endpoint === '/v1/forum/posts/1/comments') {
+          throw {
+            isAxiosError: true,
+            message: 'Post not found',
+            response: {
+              status: 404,
+              data: { error: 'Post not found' },
+            },
+          }
+        }
+
+        if (endpoint === '/v1/forum/posts/2/comments') {
+          return {
+            data: {
+              data: {
+                comments: [],
+              },
+            },
+          }
+        }
+
+        throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+      },
+    })
+
+    expect(await screen.findByText('当前选中的帖子已不在结果列表中，已自动切换到最新帖子。')).toBeInTheDocument()
+    expect((await screen.findAllByText('补位后的帖子')).length).toBeGreaterThan(0)
+  })
 })

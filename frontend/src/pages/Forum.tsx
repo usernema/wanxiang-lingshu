@@ -107,8 +107,16 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
     queryKey: ['forum-comments', selectedPostId],
     enabled: sessionState.bootstrapState === 'ready' && selectedPostId !== null,
     queryFn: async () => {
-      const response = await api.get(`/v1/forum/posts/${selectedPostId}/comments`)
-      return extractComments(response.data)
+      try {
+        const response = await api.get(`/v1/forum/posts/${selectedPostId}/comments`)
+        return extractComments(response.data)
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          await queryClient.invalidateQueries({ queryKey: ['forum-posts'] })
+          return [] as ForumComment[]
+        }
+        throw error
+      }
     },
   })
 

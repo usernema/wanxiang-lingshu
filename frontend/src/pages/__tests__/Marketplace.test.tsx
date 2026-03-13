@@ -31,6 +31,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...actual,
     getActiveRole: () => mockGetActiveRole(),
     getSession: (role?: SessionRole) => mockGetSession(role),
+    ensureSession: async () => {
+      const session = mockGetSession()
+      if (!session) {
+        throw new actual.ApiSessionError('No session is available', 'UNAUTHORIZED')
+      }
+      return session
+    },
     setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
     switchRole: (role: SessionRole) => mockSwitchRole(role),
     api: {
@@ -157,6 +164,9 @@ describe('Marketplace UI regression coverage', () => {
 
   it('shows disabled hints for self-apply and missing escrow completion', async () => {
     renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-self-apply',
@@ -181,7 +191,7 @@ describe('Marketplace UI regression coverage', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: /缺少托管任务/i }))
 
-    expect((await screen.findAllByText('当前任务缺少 escrow，无法释放托管。')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('当前任务缺少 escrow，无法提交验收。')).length).toBeGreaterThan(0)
   })
 
   it('shows assign disabled hint when escrow already exists', async () => {
@@ -243,12 +253,15 @@ describe('Marketplace UI regression coverage', () => {
 
     expect(await screen.findByText('状态机说明')).toBeInTheDocument()
     expect(
-      await screen.findByText('当前任务处于 in_progress：只有被分配的 worker 可以 complete，employer 可以 cancel。'),
+      await screen.findByText('当前任务处于 in_progress：只有被分配的 worker 可以提交验收，employer 可以 cancel。'),
     ).toBeInTheDocument()
   })
 
   it('maps backend complete-task escrow error into product copy', async () => {
     renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-complete',
@@ -260,25 +273,28 @@ describe('Marketplace UI regression coverage', () => {
       ],
       apiPostImpl: async (endpoint: string) => {
         if (endpoint === '/v1/marketplace/tasks/task-complete/complete') {
-          throw makeAxiosError(400, { detail: 'Task has no escrow to release' })
+          throw makeAxiosError(400, { detail: 'Task has no escrow to submit for acceptance' })
         }
         return { data: {} }
       },
     })
 
     const user = userEvent.setup()
-    const completeButton = await screen.findByRole('button', { name: '以 Worker 身份完成任务' })
+    const completeButton = await screen.findByRole('button', { name: '以 Worker 身份提交验收' })
 
     await waitFor(() => expect(completeButton).toBeEnabled())
     await user.click(completeButton)
 
     expect(
-      await screen.findByText('当前任务缺少 escrow，无法完成。请先检查分配与 credit 托管状态。'),
+      await screen.findByText('当前任务缺少 escrow，无法提交验收。请先检查分配与 credit 托管状态。'),
     ).toBeInTheDocument()
   })
 
-  it('shows auto-publish and employer-gift success copy after completion', async () => {
+  it('shows submit-for-acceptance success copy after worker completion', async () => {
     renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-complete-success',
@@ -293,8 +309,8 @@ describe('Marketplace UI regression coverage', () => {
           return {
             data: {
               task_id: 'task-complete-success',
-              status: 'completed',
-              message: 'Task completed',
+              status: 'submitted',
+              message: 'Task submitted for employer acceptance',
               growth_assets: {
                 skill_draft_id: 'draft_1',
                 employer_template_id: 'tmpl_1',
@@ -310,13 +326,16 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Worker 身份完成任务' }))
+    await user.click(await screen.findByRole('button', { name: '以 Worker 身份提交验收' }))
 
-    expect(await screen.findByText('任务已完成，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')).toBeInTheDocument()
+    expect(await screen.findByText('任务已提交验收，等待雇主确认。')).toBeInTheDocument()
   })
 
   it('maps 401 errors into session-expired product copy', async () => {
     renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [buildMarketplaceTask({ task_id: 'task-apply-401', title: '401 申请任务', status: 'open' })],
       apiPostImpl: async (endpoint: string) => {
         if (endpoint === '/v1/marketplace/tasks/task-apply-401/apply') {
@@ -334,6 +353,9 @@ describe('Marketplace UI regression coverage', () => {
 
   it('maps 403 worker mismatch errors into product copy', async () => {
     renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-complete-403',
@@ -352,7 +374,7 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Worker 身份完成任务' }))
+    await user.click(await screen.findByRole('button', { name: '以 Worker 身份提交验收' }))
 
     expect(await screen.findByText('当前 worker 身份与请求中的执行者不匹配。')).toBeInTheDocument()
   })
@@ -426,6 +448,9 @@ describe('Marketplace UI regression coverage', () => {
   it('surfaces recommended apply action for open tasks in worker view', async () => {
     renderMarketplace({
       activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-recommended-apply',
@@ -443,6 +468,9 @@ describe('Marketplace UI regression coverage', () => {
   it('surfaces recommended complete action for assigned in-progress tasks in worker view', async () => {
     renderMarketplace({
       activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
       tasks: [
         buildMarketplaceTask({
           task_id: 'task-recommended-complete',
@@ -454,7 +482,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐立即完成任务')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '完成任务' })).toBeInTheDocument()
+    expect(await screen.findByText('推荐先提交验收')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交验收' })).toBeInTheDocument()
   })
 })

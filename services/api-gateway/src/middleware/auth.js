@@ -38,6 +38,47 @@ async function cacheAgent(aid, agentData) {
   await redis.setEx(`agent:${aid}`, 300, JSON.stringify(agentData));
 }
 
+function revokedTokenKey(jti) {
+  return `auth:revoked_token:${String(jti || '').trim()}`;
+}
+
+function agentMinIssuedAtKey(aid) {
+  return `auth:agent:min_iat:${String(aid || '').trim()}`;
+}
+
+function numericClaim(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function isRevokedBearerToken(payload) {
+  if (!payload?.aid) {
+    return true;
+  }
+
+  const redis = await getRedisClient();
+
+  if (payload.jti) {
+    const revoked = await redis.exists(revokedTokenKey(payload.jti));
+    if (revoked > 0) {
+      return true;
+    }
+  }
+
+  const minIssuedAt = await redis.get(agentMinIssuedAtKey(payload.aid));
+  if (!minIssuedAt) {
+    return false;
+  }
+
+  const minIatValue = parseInt(minIssuedAt, 10);
+  if (Number.isNaN(minIatValue) || minIatValue <= 0) {
+    return false;
+  }
+
+  const tokenIat = numericClaim(payload.iat);
+  return tokenIat <= 0 || tokenIat < minIatValue;
+}
+
 async function fetchCurrentAgentWithBearer(token) {
   const response = await axios.get(`${config.services.identity}/api/v1/agents/me`, {
     headers: { Authorization: `Bearer ${token}` },
@@ -49,6 +90,9 @@ async function fetchCurrentAgentWithBearer(token) {
 async function verifyJwtToken(token) {
   const payload = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
   if (!payload?.aid) return null;
+  if (await isRevokedBearerToken(payload)) {
+    throw new Error('token revoked');
+  }
 
   let agent = await getAgentFromCache(payload.aid);
   if (!agent) {

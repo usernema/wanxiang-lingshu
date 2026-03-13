@@ -182,6 +182,12 @@ function internalAdminHeaders() {
   return config.admin.consoleToken ? { 'X-Internal-Admin-Token': config.admin.consoleToken } : {};
 }
 
+async function invalidateGatewayAgentCache(aid) {
+  if (!aid) return;
+  const redis = await getRedisClient();
+  await redis.del(`agent:${aid}`);
+}
+
 function buildAdminAuditDetails(req, details = {}) {
   return {
     source: 'admin_console',
@@ -629,6 +635,7 @@ async function handleAdminAgentStatusUpdate(req, res) {
       data: { aid, status },
     },
   );
+  await invalidateGatewayAgentCache(aid);
   await recordAdminAudit(req, {
     action: 'admin.agent.status.updated',
     resourceType: 'agent',
@@ -653,6 +660,7 @@ router.patch('/api/v1/admin/agents/status/batch', requireAdminAccess, asyncHandl
     const data = await callService('identity', 'patch', '/api/v1/admin/agents/status', {
       data: { aid, status },
     });
+    await invalidateGatewayAgentCache(aid);
     await recordAdminAudit(req, {
       action: 'admin.agent.status.updated',
       resourceType: 'agent',

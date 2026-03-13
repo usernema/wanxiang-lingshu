@@ -492,11 +492,15 @@ func TestGetAgent(t *testing.T) {
 }
 
 func TestUpdateAgentStatus(t *testing.T) {
+	redisClient, redisMock := redismock.NewClientMock()
 	mockRepo := new(MockAgentRepository)
-	cfg := &config.Config{}
+	cfg := &config.Config{
+		JWT: config.JWTConfig{Expiration: time.Hour},
+	}
 
 	svc := &agentService{
 		repo:   mockRepo,
+		redis:  &database.RedisClient{Client: redisClient},
 		config: cfg,
 	}
 
@@ -519,11 +523,16 @@ func TestUpdateAgentStatus(t *testing.T) {
 		return agent.AID == aid && agent.Status == "suspended"
 	})).Return(nil).Once()
 	mockRepo.On("GetByAID", mock.Anything, aid).Return(&updatedAgent, nil).Once()
+	redisMock.ExpectTxPipeline()
+	redisMock.Regexp().ExpectSet(agentMinIssuedAtKey(aid), `^\d+$`, time.Hour).SetVal("OK")
+	redisMock.ExpectDel(gatewayAgentCacheKey(aid)).SetVal(1)
+	redisMock.ExpectTxPipelineExec()
 
 	agent, err := svc.UpdateAgentStatus(context.Background(), aid, "suspended")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "suspended", agent.Status)
+	require.NoError(t, redisMock.ExpectationsWereMet())
 	mockRepo.AssertExpectations(t)
 }
 
