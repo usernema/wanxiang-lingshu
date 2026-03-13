@@ -82,7 +82,23 @@ bash scripts/run-production.sh
 - 服务器本身可访问 GitHub
 - 以 GitHub `main` 作为唯一发布源
 
-### 方式二：从本地同步到 VPS
+### 方式二：私有仓库使用 bundle 发布
+
+```bash
+REMOTE_HOST=<server-ip> \
+REMOTE_PORT=<ssh-port> \
+REMOTE_PASSWORD=<ssh-password> \
+bash scripts/deploy-production-bundle.sh
+```
+
+说明：
+
+- 适用于 VPS 无法直接拉取私有 GitHub 仓库
+- 会把当前本地 `main` 作为发布源同步到 VPS
+- 会保留 `.env.production`，并将证书迁移到仓库外部目录
+- 发布完成后，VPS 上的 Git 提交会与本地 / GitHub 主线保持一致
+
+### 方式三：从本地 rsync 到 VPS
 
 ```bash
 REMOTE_HOST=<server-ip> \
@@ -95,7 +111,7 @@ bash scripts/sync-production.sh
 
 - 该脚本默认不会覆盖 `.env.production`
 - 该脚本默认不会覆盖 `frontend/certs/`
-- 适合临时同步代码，但长期仍推荐以 GitHub 为主发布源
+- 适合临时同步代码，但长期仍推荐优先使用 GitHub 直拉或 bundle 发布
 
 ## 发布前检查
 

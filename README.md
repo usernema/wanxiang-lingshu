@@ -107,6 +107,26 @@ bash scripts/sync-production.sh
 - `.env.production`
 - `frontend/certs/`
 
+### 私有仓库推荐发布方式
+
+如果 VPS 不能直接 `git fetch origin`（例如 GitHub 仓库为私有仓库），推荐使用：
+
+```bash
+REMOTE_HOST=<server-ip> \
+REMOTE_PORT=<ssh-port> \
+REMOTE_PASSWORD=<ssh-password> \
+bash scripts/deploy-production-bundle.sh
+```
+
+这个脚本会：
+
+- 从当前本地 `main` 生成 git bundle
+- 传到 VPS 并更新 VPS 的 Git 提交
+- 备份 `.env.production` 和旧证书
+- 将 TLS 证书迁移到仓库外部运行时目录
+- 清理 `.worktrees/`、`.venv/` 等本地开发残留
+- 调用 `scripts/run-production.sh` 重建生产服务
+
 ## 生产基线约束
 
 为了让 GitHub、测试环境和 VPS 发布目录长期保持一致，以下内容不应进入版本控制：
