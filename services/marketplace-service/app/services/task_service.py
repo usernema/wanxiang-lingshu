@@ -127,13 +127,16 @@ class TaskService:
         skip: int = 0,
         limit: int = 20,
         status: Optional[str] = None,
-        employer_aid: Optional[str] = None
+        employer_aid: Optional[str] = None,
+        worker_aid: Optional[str] = None,
     ) -> List[Task]:
         query = select(Task)
         if status:
             query = query.where(Task.status == status)
         if employer_aid:
             query = query.where(Task.employer_aid == employer_aid)
+        if worker_aid:
+            query = query.where(Task.worker_aid == worker_aid)
         query = query.offset(skip).limit(limit).order_by(Task.created_at.desc())
         result = await db.execute(query)
         return result.scalars().all()

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import axios from 'axios'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, fetchCurrentAgentGrowth, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, updateCurrentProfile } from '@/lib/api'
+import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, updateCurrentProfile } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -15,6 +16,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     capabilities: '',
   })
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
+  const [assetMessage, setAssetMessage] = useState<string | null>(null)
+  const [assetError, setAssetError] = useState<string | null>(null)
+  const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null)
   const [savingProfile, setSavingProfile] = useState(false)
 
   const profileQuery = useQuery({
@@ -66,9 +70,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     queryKey: ['profile-worker-tasks', session?.aid],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
     queryFn: async () => {
-      const response = await api.get('/v1/marketplace/tasks?limit=100')
-      const tasks = response.data as MarketplaceTask[]
-      return tasks.filter((task) => task.worker_aid === session!.aid)
+      const response = await api.get(`/v1/marketplace/tasks?worker_aid=${encodeURIComponent(session!.aid)}`)
+      return response.data as MarketplaceTask[]
     },
   })
 
@@ -107,6 +110,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const growthDrafts = skillDraftsQuery.data?.items || []
   const employerTemplates = employerTemplatesQuery.data?.items || []
   const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
+  const growthDraftCount = skillDraftsQuery.data?.total ?? growthDrafts.length
+  const employerTemplateCount = employerTemplatesQuery.data?.total ?? employerTemplates.length
+  const employerSkillGrantCount = employerSkillGrantsQuery.data?.total ?? employerSkillGrants.length
   const profileFocus = useMemo(() => new URLSearchParams(location.search).get('focus'), [location.search])
   const showCreditVerificationFocus = profileFocus === 'credit-verification'
   const initial = profile?.model?.slice(0, 1).toUpperCase() || 'A'
@@ -120,7 +126,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const recentGrowthDrafts = growthDrafts.slice(0, 3)
   const recentEmployerTemplates = employerTemplates.slice(0, 3)
   const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
-  const reusableAssetCount = skills.length + growthDrafts.length + employerTemplates.length + employerSkillGrants.length
+  const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
   const profileStrength = useMemo(
     () => calculateProfileStrength({
       headline: profile?.headline,
@@ -159,6 +165,29 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       setProfileMessage(error instanceof Error ? error.message : '保存个人资料失败')
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  const handleCreateTaskFromTemplate = async (templateId: string, templateTitle: string) => {
+    setCreatingTemplateId(templateId)
+    setAssetMessage(null)
+    setAssetError(null)
+    try {
+      const task = await createTaskFromEmployerTemplate(templateId) as MarketplaceTask
+      await Promise.all([
+        employerTasksQuery.refetch(),
+        employerTemplatesQuery.refetch(),
+        growthQuery.refetch(),
+      ])
+      setAssetMessage(`已根据模板“${templateTitle}”创建任务 ${task.title}，可前往 Marketplace 继续分配执行者。`)
+    } catch (error) {
+      if (axios.isAxiosError<{ detail?: string; error?: string; message?: string }>(error)) {
+        setAssetError(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.message || '根据模板创建任务失败')
+      } else {
+        setAssetError(error instanceof Error ? error.message : '根据模板创建任务失败')
+      }
+    } finally {
+      setCreatingTemplateId(null)
     }
   }
 
@@ -410,9 +439,16 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <p className="mt-1 text-sm text-gray-600">成功任务会沉淀为 Skill 草稿和雇主私有模板，帮助复用与复雇。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
-              草稿 {growthDrafts.length} · 赠送 {employerSkillGrants.length} · 模板 {employerTemplates.length}
+              草稿 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 模板 {employerTemplateCount}
             </span>
           </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link to="/marketplace" className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              前往 Marketplace
+            </Link>
+          </div>
+          {assetMessage && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{assetMessage}</div>}
+          {assetError && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{assetError}</div>}
           <div className="mt-4 space-y-4">
             <div>
               <div className="mb-2 text-sm font-medium text-gray-700">Recent growth skill drafts</div>
@@ -467,6 +503,18 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                     <p className="mt-2 text-sm text-gray-600">{template.summary}</p>
                     <p className="mt-2 text-xs text-gray-500">复用次数：{template.reuse_count} · 来源任务：{template.source_task_id}</p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        aria-label={`用模板 ${template.template_id} 创建任务`}
+                        onClick={() => handleCreateTaskFromTemplate(template.template_id, template.title)}
+                        disabled={creatingTemplateId !== null || template.status !== 'active'}
+                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+                      >
+                        {creatingTemplateId === template.template_id ? '创建中...' : '用模板创建任务'}
+                      </button>
+                      {template.status !== 'active' && <span className="text-xs text-amber-700">当前模板不是 active，暂不可复用。</span>}
+                    </div>
                   </div>
                 )) : (
                   <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有雇主私有模板。作为雇主完成一单后，这里会自动沉淀可复用模板。</div>

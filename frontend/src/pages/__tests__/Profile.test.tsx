@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import Profile from '@/pages/Profile'
@@ -16,6 +16,7 @@ const mockFetchCurrentAgentGrowth = vi.fn()
 const mockFetchMySkillDrafts = vi.fn()
 const mockFetchMyEmployerTemplates = vi.fn()
 const mockFetchMyEmployerSkillGrants = vi.fn()
+const mockCreateTaskFromEmployerTemplate = vi.fn()
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -27,6 +28,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     fetchMySkillDrafts: (...args: unknown[]) => mockFetchMySkillDrafts(...args),
     fetchMyEmployerTemplates: (...args: unknown[]) => mockFetchMyEmployerTemplates(...args),
     fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
+    createTaskFromEmployerTemplate: (...args: unknown[]) => mockCreateTaskFromEmployerTemplate(...args),
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
     },
@@ -53,6 +55,12 @@ function renderProfile(options?: {
   session?: Session | null
   apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
   initialEntries?: string[]
+  employerTemplatesResponse?: {
+    items: Array<Record<string, unknown>>
+    total: number
+    limit: number
+    offset: number
+  }
 }) {
   applyProfileApiMocks('worker' as SessionRole, options && 'session' in options ? options.session ?? null : activeSession)
   mockFetchCurrentAgentGrowth.mockResolvedValue({
@@ -91,8 +99,22 @@ function renderProfile(options?: {
     ],
   })
   mockFetchMySkillDrafts.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
-  mockFetchMyEmployerTemplates.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
+  mockFetchMyEmployerTemplates.mockResolvedValue(options?.employerTemplatesResponse ?? { items: [], total: 0, limit: 10, offset: 0 })
   mockFetchMyEmployerSkillGrants.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
+  mockCreateTaskFromEmployerTemplate.mockResolvedValue({
+    id: 100,
+    task_id: 'task_from_template',
+    employer_aid: 'worker-agent',
+    worker_aid: null,
+    title: '复用模板任务',
+    description: '从模板生成',
+    reward: 25,
+    status: 'open',
+    created_at: '2026-03-10T00:00:00.000Z',
+    updated_at: null,
+    completed_at: null,
+    cancelled_at: null,
+  })
   mockApiGet.mockImplementation(
     options?.apiGetImpl ??
       (async (endpoint: string) => {
@@ -129,7 +151,7 @@ function renderProfile(options?: {
         if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
           return { data: [] }
         }
-        if (endpoint === '/v1/marketplace/tasks?limit=100') {
+        if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
           return { data: [] }
         }
         throw new Error(`Unhandled GET endpoint: ${endpoint}`)
@@ -197,7 +219,7 @@ describe('Profile UI regression coverage', () => {
         if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
           return { data: [] }
         }
-        if (endpoint === '/v1/marketplace/tasks?limit=100') {
+        if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
           return { data: [] }
         }
         throw new Error(`Unhandled GET endpoint: ${endpoint}`)
@@ -259,7 +281,7 @@ describe('Profile UI regression coverage', () => {
         if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
           return { data: [] }
         }
-        if (endpoint === '/v1/marketplace/tasks?limit=100') {
+        if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
           return { data: [] }
         }
         throw new Error(`Unhandled GET endpoint: ${endpoint}`)
@@ -324,7 +346,7 @@ describe('Profile UI regression coverage', () => {
         if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
           return { data: [] }
         }
-        if (endpoint === '/v1/marketplace/tasks?limit=100') {
+        if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
           return {
             data: [
               {
@@ -348,5 +370,39 @@ describe('Profile UI regression coverage', () => {
 
     expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Awaiting Acceptance')).toBeInTheDocument()
+  })
+
+  it('creates a task directly from an employer template', async () => {
+    renderProfile({
+      employerTemplatesResponse: {
+        items: [
+          {
+            id: 1,
+            template_id: 'tmpl-1',
+            owner_aid: 'worker-agent',
+            worker_aid: null,
+            source_task_id: 'task-source-1',
+            title: '复用模板',
+            summary: '可以直接生成新任务',
+            template_json: {},
+            status: 'active',
+            reuse_count: 2,
+            created_at: '2026-03-10T00:00:00.000Z',
+            updated_at: null,
+          },
+        ],
+        total: 11,
+        limit: 10,
+        offset: 0,
+      },
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: '用模板 tmpl-1 创建任务' }))
+
+    await waitFor(() => {
+      expect(mockCreateTaskFromEmployerTemplate).toHaveBeenCalledWith('tmpl-1')
+    })
+    expect(await screen.findByText('已根据模板“复用模板”创建任务 复用模板任务，可前往 Marketplace 继续分配执行者。')).toBeInTheDocument()
+    expect(screen.getByText('草稿 0 · 赠送 0 · 模板 11')).toBeInTheDocument()
   })
 })

@@ -50,10 +50,11 @@ async def get_tasks(
     limit: int = Query(20, ge=1, le=100),
     status: Optional[str] = None,
     employer_aid: Optional[str] = None,
+    worker_aid: Optional[str] = None,
     db: AsyncSession = Depends(get_db)
 ):
     """获取任务列表"""
-    return await TaskService.get_tasks(db, skip, limit, status, employer_aid)
+    return await TaskService.get_tasks(db, skip, limit, status, employer_aid, worker_aid)
 
 
 @router.get("/tasks/match")

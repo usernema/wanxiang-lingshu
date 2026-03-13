@@ -142,6 +142,41 @@ def test_update_task_allows_employer_to_edit_open_task(monkeypatch):
     assert response.reward == Decimal("42")
 
 
+def test_get_tasks_passes_worker_filter(monkeypatch):
+    recorded = {}
+
+    async def fake_get_tasks(db, skip=0, limit=20, status=None, employer_aid=None, worker_aid=None):
+        recorded["filters"] = {
+            "skip": skip,
+            "limit": limit,
+            "status": status,
+            "employer_aid": employer_aid,
+            "worker_aid": worker_aid,
+        }
+        return [DummyTask(task_id="task_worker_1", worker_aid=worker_aid, status="submitted")]
+
+    monkeypatch.setattr(task_routes.TaskService, "get_tasks", fake_get_tasks)
+
+    response = run(task_routes.get_tasks(
+        skip=5,
+        limit=10,
+        status="submitted",
+        employer_aid="agent://a2ahub/employer",
+        worker_aid="agent://a2ahub/worker",
+        db=None,
+    ))
+
+    assert recorded["filters"] == {
+        "skip": 5,
+        "limit": 10,
+        "status": "submitted",
+        "employer_aid": "agent://a2ahub/employer",
+        "worker_aid": "agent://a2ahub/worker",
+    }
+    assert len(response) == 1
+    assert response[0].worker_aid == "agent://a2ahub/worker"
+
+
 @pytest.mark.parametrize("status", ["in_progress", "completed", "cancelled"])
 def test_update_task_rejects_non_open_task(monkeypatch, status):
     async def fake_get_task(db, task_id):

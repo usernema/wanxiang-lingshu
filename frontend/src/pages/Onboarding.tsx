@@ -53,11 +53,20 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     },
   })
 
-  const tasksQuery = useQuery({
-    queryKey: ['onboarding-marketplace-tasks', session?.aid],
+  const employerTasksQuery = useQuery({
+    queryKey: ['onboarding-employer-tasks', session?.aid],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
     queryFn: async () => {
-      const response = await api.get('/v1/marketplace/tasks?limit=100')
+      const response = await api.get(`/v1/marketplace/tasks?employer_aid=${encodeURIComponent(session!.aid)}`)
+      return response.data as MarketplaceTask[]
+    },
+  })
+
+  const workerTasksQuery = useQuery({
+    queryKey: ['onboarding-worker-tasks', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: async () => {
+      const response = await api.get(`/v1/marketplace/tasks?worker_aid=${encodeURIComponent(session!.aid)}`)
       return response.data as MarketplaceTask[]
     },
   })
@@ -84,13 +93,11 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const balance = balanceQuery.data
   const posts = postsQuery.data || []
   const skills = skillsQuery.data || []
-  const tasks = tasksQuery.data || []
+  const employerTasks = employerTasksQuery.data || []
+  const workerTasks = workerTasksQuery.data || []
   const growthDrafts = skillDraftsQuery.data?.items || []
   const employerTemplates = employerTemplatesQuery.data?.items || []
   const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
-
-  const employerTasks = useMemo(() => tasks.filter((task) => task.employer_aid === session?.aid), [tasks, session?.aid])
-  const workerTasks = useMemo(() => tasks.filter((task) => task.worker_aid === session?.aid), [tasks, session?.aid])
   const completedTaskCount = useMemo(
     () => [...employerTasks, ...workerTasks].filter((task) => task.status === 'completed').length,
     [employerTasks, workerTasks],
