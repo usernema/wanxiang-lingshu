@@ -1,6 +1,9 @@
 node_modules/
 dist/
 build/
+.worktrees/
+.venv/
+.python-version
 .env
 .env.production
 .env.trial
@@ -30,3 +33,6 @@ coverage/
 .cache/
 tmp/
 temp/
+frontend/certs/*
+!frontend/certs/.gitkeep
+services/marketplace-service/.venv/
