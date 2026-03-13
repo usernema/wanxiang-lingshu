@@ -425,6 +425,8 @@ export default function Admin() {
   const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null)
   const [selectedGrowthProfile, setSelectedGrowthProfile] = useState<AdminAgentGrowthProfile | null>(null)
   const [selectedGrowthDraft, setSelectedGrowthDraft] = useState<AdminAgentGrowthSkillDraft | null>(null)
+  const [selectedEmployerTemplate, setSelectedEmployerTemplate] = useState<AdminEmployerTemplate | null>(null)
+  const [selectedEmployerSkillGrant, setSelectedEmployerSkillGrant] = useState<AdminEmployerSkillGrant | null>(null)
   const [selectedPost, setSelectedPost] = useState<AdminForumPost | null>(null)
   const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null)
   const [selectedAuditLog, setSelectedAuditLog] = useState<AdminAuditLog | null>(null)
@@ -645,6 +647,8 @@ export default function Admin() {
     setSelectedAgent(null)
     setSelectedGrowthProfile(null)
     setSelectedGrowthDraft(null)
+    setSelectedEmployerTemplate(null)
+    setSelectedEmployerSkillGrant(null)
     setSelectedPost(null)
     setSelectedTask(null)
     setSelectedAuditLog(null)
@@ -698,6 +702,22 @@ export default function Admin() {
 
   const closeGrowthDraftDetail = () => {
     setSelectedGrowthDraft(null)
+  }
+
+  const openEmployerTemplateDetail = (template: AdminEmployerTemplate) => {
+    setSelectedEmployerTemplate(template)
+  }
+
+  const closeEmployerTemplateDetail = () => {
+    setSelectedEmployerTemplate(null)
+  }
+
+  const openEmployerSkillGrantDetail = (grant: AdminEmployerSkillGrant) => {
+    setSelectedEmployerSkillGrant(grant)
+  }
+
+  const closeEmployerSkillGrantDetail = () => {
+    setSelectedEmployerSkillGrant(null)
   }
 
   const openAuditLogDetail = (log: AdminAuditLog) => {
@@ -787,6 +807,8 @@ export default function Admin() {
     setSelectedAgent(null)
     setSelectedGrowthProfile(null)
     setSelectedGrowthDraft(null)
+    setSelectedEmployerTemplate(null)
+    setSelectedEmployerSkillGrant(null)
     setSelectedPost(null)
     setSelectedTask(null)
     setSelectedAuditLog(null)
@@ -1314,6 +1336,16 @@ export default function Admin() {
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{summarizeText(template.summary, 120)}</p>
                   <p className="mt-2 text-xs text-slate-500">来源任务：{template.source_task_id} · 执行 Agent：{template.worker_aid || '—'} · 复用 {template.reuse_count}</p>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      aria-label={`查看雇主模板 ${template.title} 详情`}
+                      onClick={() => openEmployerTemplateDetail(template)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      查看详情
+                    </button>
+                  </div>
                 </div>
               ))}
               {!employerTemplatesQuery.isLoading && employerTemplateItems.length === 0 && (
@@ -1343,6 +1375,16 @@ export default function Admin() {
                   </div>
                   <p className="mt-2 text-sm text-slate-600">{summarizeText(grant.summary, 120)}</p>
                   <p className="mt-2 text-xs text-slate-500">来源任务：{grant.source_task_id} · 执行 Agent：{grant.worker_aid} · Skill：{grant.skill_id}</p>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      aria-label={`查看获赠 Skill ${grant.title} 详情`}
+                      onClick={() => openEmployerSkillGrantDetail(grant)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      查看详情
+                    </button>
+                  </div>
                 </div>
               ))}
               {!employerSkillGrantsQuery.isLoading && employerSkillGrantItems.length === 0 && (
@@ -2022,6 +2064,96 @@ export default function Admin() {
             </div>
 
             <StructuredDataPanel title="审计详情" value={selectedAuditLog.details} />
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="雇主模板详情"
+        subtitle={selectedEmployerTemplate?.title}
+        isOpen={Boolean(selectedEmployerTemplate)}
+        onClose={closeEmployerTemplateDetail}
+      >
+        {selectedEmployerTemplate && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">{selectedEmployerTemplate.status}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">复用 {selectedEmployerTemplate.reuse_count}</span>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">模板归属</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>模板 ID：<span className="font-medium text-slate-900">{selectedEmployerTemplate.template_id}</span></p>
+                  <p>雇主：<span className="font-medium text-slate-900">{selectedEmployerTemplate.owner_aid}</span></p>
+                  <p>执行 Agent：<span className="font-medium text-slate-900">{selectedEmployerTemplate.worker_aid || '—'}</span></p>
+                  <p>来源任务：<span className="font-medium text-slate-900">{selectedEmployerTemplate.source_task_id}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">沉淀状态</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerTemplate.created_at)}</span></p>
+                  <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerTemplate.updated_at)}</span></p>
+                  <p>当前状态：<span className="font-medium text-slate-900">{selectedEmployerTemplate.status}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">模板摘要</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedEmployerTemplate.summary || '暂无模板摘要'}</p>
+            </div>
+
+            <StructuredDataPanel title="模板结构" value={selectedEmployerTemplate.template_json} />
+          </>
+        )}
+      </DetailDrawer>
+
+      <DetailDrawer
+        title="获赠 Skill 详情"
+        subtitle={selectedEmployerSkillGrant?.title}
+        isOpen={Boolean(selectedEmployerSkillGrant)}
+        onClose={closeEmployerSkillGrantDetail}
+      >
+        {selectedEmployerSkillGrant && (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">{selectedEmployerSkillGrant.status}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">Skill {selectedEmployerSkillGrant.skill_id}</span>
+              {selectedEmployerSkillGrant.category && (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{selectedEmployerSkillGrant.category}</span>
+              )}
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">赠送关系</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>赠送 ID：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.grant_id}</span></p>
+                  <p>雇主：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.employer_aid}</span></p>
+                  <p>执行 Agent：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.worker_aid}</span></p>
+                  <p>来源任务：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.source_task_id}</span></p>
+                  <p>来源 Draft：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.source_draft_id || '—'}</span></p>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-4">
+                <p className="text-sm font-semibold text-slate-900">交付状态</p>
+                <div className="mt-3 space-y-2 text-sm text-slate-600">
+                  <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerSkillGrant.created_at)}</span></p>
+                  <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerSkillGrant.updated_at)}</span></p>
+                  <p>当前状态：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.status}</span></p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 p-4">
+              <p className="text-sm font-semibold text-slate-900">赠送摘要</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedEmployerSkillGrant.summary || '暂无赠送摘要'}</p>
+            </div>
+
+            <StructuredDataPanel title="赠送载荷" value={selectedEmployerSkillGrant.grant_payload} />
           </>
         )}
       </DetailDrawer>

@@ -475,6 +475,20 @@ describe('Admin page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '关闭 Skill Draft 详情' }))
 
+    fireEvent.click(screen.getByRole('button', { name: '查看雇主模板 检查生产健康 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: '雇主模板详情' })).toBeInTheDocument()
+    expect(screen.getByText('模板结构')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 雇主模板详情' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '查看获赠 Skill 检查生产健康 · Growth Skill 详情' }))
+
+    expect(await screen.findByRole('dialog', { name: '获赠 Skill 详情' })).toBeInTheDocument()
+    expect(screen.getByText('赠送载荷')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 获赠 Skill 详情' }))
+
     fireEvent.click(screen.getByRole('tab', { name: 'Agent' }))
 
     expect(await screen.findByText('Agent 运营')).toBeInTheDocument()
