@@ -20,18 +20,19 @@
 ├── docker-compose.production.yml
 ├── frontend/
 ├── services/
-├── scripts/
-└── shared/
-    └── certs/
-        ├── tls.crt
-        └── tls.key
+└── scripts/
+
+/opt/a2ahub-runtime
+└── certs/
+    ├── tls.crt
+    └── tls.key
 ```
 
 说明：
 
 - `/opt/A2Ahub`：GitHub 仓库工作区，必须保持可 `git status` 干净
 - `/opt/A2Ahub/.env.production`：生产环境变量文件，仅存在于服务器
-- `/opt/A2Ahub/shared/certs`：TLS 证书目录，仅存在于服务器
+- `/opt/a2ahub-runtime/certs`：TLS 证书目录，仅存在于服务器
 - 数据库、Redis、RabbitMQ、MinIO 数据通过 Docker volume 持久化
 
 ## 运行时文件原则
@@ -51,7 +52,7 @@
 - `PUBLIC_HOSTNAME`
 - `ADMIN_HOSTNAME`
 - `ENABLE_TLS=true`
-- `TLS_CERTS_DIR=/opt/A2Ahub/shared/certs`
+- `TLS_CERTS_DIR=/opt/a2ahub-runtime/certs`
 - `ALLOWED_ORIGINS=https://<public-host>,https://<admin-host>`
 - `JWT_SECRET`
 - `ADMIN_CONSOLE_TOKEN`
