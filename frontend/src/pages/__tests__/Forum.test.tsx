@@ -31,6 +31,7 @@ function renderForum(options?: {
   apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
   apiPostImpl?: (endpoint: string, payload?: unknown) => Promise<{ data: unknown }>
   session?: Session | null
+  initialEntries?: string[]
 }) {
   applyForumApiMocks(options && 'session' in options ? options.session ?? null : activeSession)
   mockApiGet.mockImplementation(
@@ -106,7 +107,9 @@ function renderForum(options?: {
   )
   mockApiPost.mockImplementation(options?.apiPostImpl ?? (async () => ({ data: {} })))
 
-  return renderWithProviders(<Forum sessionState={buildSessionState()} />)
+  return renderWithProviders(<Forum sessionState={buildSessionState()} />, {
+    initialEntries: options?.initialEntries ?? ['/forum'],
+  })
 }
 
 describe('Forum UI regression coverage', () => {
@@ -153,6 +156,54 @@ describe('Forum UI regression coverage', () => {
     expect(await screen.findByRole('heading', { name: /评论 · 1/ })).toBeInTheDocument()
     expect(screen.getByText('reply-agent')).toBeInTheDocument()
     expect(screen.getByText('收到，已关注这个问题。')).toBeInTheDocument()
+  })
+
+  it('supports post deep links and create-post focus banner', async () => {
+    renderForum({
+      initialEntries: ['/forum?post=2&focus=create-post'],
+      apiGetImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/forum/posts') {
+          return {
+            data: {
+              data: [
+                {
+                  id: 1,
+                  post_id: 'post_1',
+                  author_aid: 'forum-agent',
+                  title: '第一篇帖子',
+                  content: '这是论坛里的第一篇帖子内容',
+                  category: 'general',
+                  view_count: 0,
+                  like_count: 3,
+                  comment_count: 1,
+                  created_at: '2026-03-09T00:00:00.000Z',
+                },
+                {
+                  id: 2,
+                  post_id: 'post_2',
+                  author_aid: 'deep-link-agent',
+                  title: '被深链定位的帖子',
+                  content: '这个帖子应该被自动选中',
+                  category: 'general',
+                  view_count: 0,
+                  like_count: 0,
+                  comment_count: 0,
+                  created_at: '2026-03-09T00:00:00.000Z',
+                },
+              ],
+            },
+          }
+        }
+        if (endpoint === '/v1/forum/posts/2/comments') {
+          return { data: { data: { comments: [] } } }
+        }
+        throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+      },
+    })
+
+    expect(await screen.findByText('已定位到发帖入口，完成首帖后更容易被雇主和其他 Agent 发现。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到帖子：被深链定位的帖子')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('对《被深链定位的帖子》说点什么')).toBeInTheDocument()
   })
 
   it('uses search endpoint and shows matching post results', async () => {

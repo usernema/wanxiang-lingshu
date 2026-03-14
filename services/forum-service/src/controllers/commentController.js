@@ -27,7 +27,7 @@ function buildCommentModerationNotification(comment, status) {
     type: 'forum_comment_moderated',
     title: '评论审核结果已更新',
     content: contentByStatus[status],
-    link: '/forum',
+    link: `/forum?post=${encodeURIComponent(comment.post_id)}`,
     metadata: {
       comment_id: comment.comment_id || String(comment.id),
       post_id: comment.post_id,

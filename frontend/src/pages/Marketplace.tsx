@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -385,20 +385,36 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const createTaskRef = useRef<HTMLDivElement | null>(null)
+  const publishSkillRef = useRef<HTMLFormElement | null>(null)
+  const taskWorkspaceRef = useRef<HTMLDivElement | null>(null)
   const marketplaceSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const requestedTab = marketplaceSearchParams.get('tab')
+  const focusedTaskId = marketplaceSearchParams.get('task')
+  const focusedMarketplaceFocus = marketplaceSearchParams.get('focus')
   const focusedSkillId = marketplaceSearchParams.get('skill_id')
   const focusedSkillSource = marketplaceSearchParams.get('source')
+  const shouldSyncTaskParam = marketplaceSearchParams.has('task')
 
   useEffect(() => {
     setActiveRole(role)
   }, [role])
 
   useEffect(() => {
+    if (focusedMarketplaceFocus === 'create-task' || focusedMarketplaceFocus === 'task-workspace') {
+      setMarketTab('tasks')
+      return
+    }
+
+    if (focusedMarketplaceFocus === 'publish-skill') {
+      setMarketTab('skills')
+      return
+    }
+
     if (requestedTab === 'tasks' || requestedTab === 'skills') {
       setMarketTab(requestedTab)
     }
-  }, [requestedTab])
+  }, [focusedMarketplaceFocus, requestedTab])
 
   const currentSession = getSession('default')
   const employerSession = currentSession
@@ -438,6 +454,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     () => tasksQuery.data?.find((task) => task.task_id === selectedTaskId) ?? null,
     [tasksQuery.data, selectedTaskId],
   )
+  const requestedTask = useMemo(
+    () => (focusedTaskId ? tasksQuery.data?.find((task) => task.task_id === focusedTaskId) ?? null : null),
+    [focusedTaskId, tasksQuery.data],
+  )
   const focusedSkill = useMemo(
     () => skillsQuery.data?.find((skill) => skill.skill_id === focusedSkillId) ?? null,
     [skillsQuery.data, focusedSkillId],
@@ -449,6 +469,16 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return
     }
 
+    if (focusedTaskId) {
+      const focusedTask = tasksQuery.data.find((task) => task.task_id === focusedTaskId)
+      if (focusedTask) {
+        if (selectedTaskId !== focusedTask.task_id) {
+          setSelectedTaskId(focusedTask.task_id)
+        }
+        return
+      }
+    }
+
     if (!selectedTaskId) {
       setSelectedTaskId(tasksQuery.data[0].task_id)
       return
@@ -457,7 +487,33 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     if (!tasksQuery.data.some((task) => task.task_id === selectedTaskId)) {
       setSelectedTaskId(tasksQuery.data[0].task_id)
     }
-  }, [tasksQuery.data, selectedTaskId])
+  }, [focusedTaskId, selectedTaskId, tasksQuery.data])
+
+  useEffect(() => {
+    if (!(shouldSyncTaskParam && requestedTask)) return
+
+    const nextSearchParams = new URLSearchParams(location.search)
+    if (marketTab !== 'tasks' || !selectedTaskId || nextSearchParams.get('task') === selectedTaskId) return
+
+    nextSearchParams.set('task', selectedTaskId)
+
+    const nextSearch = nextSearchParams.toString()
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true },
+    )
+  }, [
+    location.pathname,
+    location.search,
+    marketTab,
+    navigate,
+    requestedTask,
+    selectedTaskId,
+    shouldSyncTaskParam,
+  ])
 
   const applicationsQuery = useQuery({
     queryKey: ['task-applications', selectedTaskId, currentSession?.aid],
@@ -763,6 +819,22 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     }
   }
 
+  useEffect(() => {
+    const target =
+      focusedMarketplaceFocus === 'create-task'
+        ? createTaskRef.current
+        : focusedMarketplaceFocus === 'publish-skill'
+          ? publishSkillRef.current
+          : focusedMarketplaceFocus === 'task-workspace' || focusedTaskId
+            ? taskWorkspaceRef.current
+            : null
+
+    if (!target) return
+    if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [focusedMarketplaceFocus, focusedTaskId, marketTab, selectedTaskId])
+
   if (sessionState.bootstrapState === 'loading') {
     return <PageStateCard message="正在恢复市场访问所需会话..." />
   }
@@ -787,6 +859,23 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         </div>
         {actionMessage && <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">{actionMessage}</div>}
         {errorMessage && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
+        {focusedMarketplaceFocus === 'create-task' && marketTab === 'tasks' && (
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+            已定位到发布任务区，可直接创建新的真实任务。
+          </div>
+        )}
+        {focusedMarketplaceFocus === 'publish-skill' && marketTab === 'skills' && (
+          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+            已定位到发布技能区，可直接沉淀并上架你的能力资产。
+          </div>
+        )}
+        {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && marketTab === 'tasks' && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {requestedTask
+              ? `已定位到任务工作台：${requestedTask.title}`
+              : '正在定位指定任务；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -877,7 +966,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               </div>
             </div>
 
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold">发布任务</h2>
               <form onSubmit={submitTask} className="space-y-3">
                 <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="任务标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
@@ -892,7 +981,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           </div>
 
           <div className="space-y-6">
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div ref={taskWorkspaceRef} className="rounded-2xl bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold">任务详情</h2>
               {selectedTask ? (
                 <div className="space-y-4 text-sm text-gray-700">
@@ -1113,7 +1202,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             </div>
           </div>
 
-          <form onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
+          <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
             <h2 className="mb-4 text-xl font-semibold">发布技能</h2>
             <div className="space-y-3">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="技能名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />

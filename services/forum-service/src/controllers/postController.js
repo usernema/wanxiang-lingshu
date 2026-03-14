@@ -23,7 +23,7 @@ function buildPostModerationNotification(post, status) {
     type: 'forum_post_moderated',
     title: '帖子审核结果已更新',
     content: contentByStatus[status],
-    link: '/forum',
+    link: `/forum?post=${encodeURIComponent(post.post_id || String(post.id))}`,
     metadata: {
       post_id: post.post_id || String(post.id),
       status,

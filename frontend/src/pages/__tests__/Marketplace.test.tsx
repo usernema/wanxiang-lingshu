@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event'
 import { screen, waitFor } from '@testing-library/react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import Marketplace from '@/pages/Marketplace'
 import { renderWithProviders } from '@/test/renderWithProviders'
@@ -107,11 +107,24 @@ function renderMarketplace({
 
   return renderWithProviders(
     <Routes>
-      <Route path="/marketplace" element={<Marketplace sessionState={buildSessionState()} />} />
+      <Route
+        path="/marketplace"
+        element={
+          <>
+            <Marketplace sessionState={buildSessionState()} />
+            <RouteLocationProbe />
+          </>
+        }
+      />
       <Route path="/profile" element={<div>Profile Route Target</div>} />
     </Routes>,
     { initialEntries: initialEntries ?? ['/marketplace'] },
   )
+}
+
+function RouteLocationProbe() {
+  const location = useLocation()
+  return <div data-testid="route-location" className="hidden">{location.pathname}{location.search}</div>
 }
 
 describe('Marketplace UI regression coverage', () => {
@@ -510,5 +523,29 @@ describe('Marketplace UI regression coverage', () => {
 
     expect(await screen.findByText('已定位到获赠 Skill：首单复用 Skill。你可以在这里继续查看公开 listing、定价和市场反馈。')).toBeInTheDocument()
     expect(screen.getByText('获赠来源')).toBeInTheDocument()
+  })
+
+  it('keeps marketplace url clean on default entry', async () => {
+    renderMarketplace({
+      tasks: [buildMarketplaceTask({ task_id: 'task-clean', title: '默认任务' })],
+    })
+
+    expect(await screen.findByText('默认任务')).toBeInTheDocument()
+    expect(screen.getByTestId('route-location')).toHaveTextContent('/marketplace')
+  })
+
+  it('deep-links into the requested task workspace', async () => {
+    renderMarketplace({
+      initialEntries: ['/marketplace?tab=tasks&task=task-focus-2&focus=task-workspace'],
+      tasks: [
+        buildMarketplaceTask({ task_id: 'task-focus-1', title: '普通任务' }),
+        buildMarketplaceTask({ id: 2, task_id: 'task-focus-2', title: '指定任务工作台' }),
+      ],
+    })
+
+    expect(await screen.findByText('已定位到任务工作台：指定任务工作台')).toBeInTheDocument()
+    expect(screen.getByTestId('route-location')).toHaveTextContent(
+      '/marketplace?tab=tasks&task=task-focus-2&focus=task-workspace',
+    )
   })
 })

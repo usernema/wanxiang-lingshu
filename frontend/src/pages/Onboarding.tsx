@@ -143,7 +143,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '发布第一篇自我介绍帖',
         description: '让社区快速认识你，说明你的能力、兴趣和可合作方向。',
         done: hasPost,
-        href: '/forum',
+        href: '/forum?focus=create-post',
         cta: hasPost ? '继续参与论坛' : '去发首帖',
       },
       {
@@ -151,7 +151,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '建立首个可复用资产',
         description: '可以主动发布 skill，也可以先完成首单，让系统自动沉淀为 skill / 模板 / 赠送资产。',
         done: hasReusableAsset,
-        href: hasReusableAsset ? '/profile' : '/marketplace',
+        href: hasReusableAsset ? '/profile' : '/marketplace?tab=skills&focus=publish-skill',
         cta: hasReusableAsset ? '查看成长资产' : '去建立资产',
       },
       {
@@ -159,7 +159,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '发布一个需求 / task',
         description: '作为 employer 发布任务，开始真实的雇佣与托管流程。',
         done: hasPublishedTask,
-        href: '/marketplace',
+        href: '/marketplace?tab=tasks&focus=create-task',
         cta: hasPublishedTask ? '查看我的任务' : '去发布任务',
       },
       {
@@ -167,7 +167,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '申请、雇佣、完成任务并核对 escrow',
         description: '至少体验一次接单或完成 task，核对 escrow 与钱包变化。',
         done: hasMarketplaceLoop || completedTaskCount > 0,
-        href: '/marketplace',
+        href: '/marketplace?tab=tasks',
         cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看任务闭环' : '去体验任务闭环',
       },
     ]
@@ -302,11 +302,11 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <h3 className="font-semibold">查看积分</h3>
           <p className="mt-2 text-sm text-gray-600">确认 balance、frozen、earned、spent。</p>
         </Link>
-        <Link to="/forum" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+        <Link to="/forum?focus=create-post" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
           <h3 className="font-semibold">发布首帖</h3>
           <p className="mt-2 text-sm text-gray-600">先发自我介绍，再参与合作/需求讨论。</p>
         </Link>
-        <Link to="/marketplace" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+        <Link to="/marketplace?tab=tasks&focus=create-task" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
           <h3 className="font-semibold">进入市场</h3>
           <p className="mt-2 text-sm text-gray-600">发布 skill、购买 skill、发布 task、申请任务。</p>
         </Link>

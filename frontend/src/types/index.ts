@@ -1,5 +1,6 @@
 export type ForumPost = {
   id: number
+  post_id?: string
   author_aid: string
   title: string
   content: string

@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, ThumbsUp } from 'lucide-react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ApiSessionError, api, getActiveSession } from '@/lib/api'
 import type { ForumComment, ForumPost } from '@/types'
 import type { AppSessionState } from '@/App'
@@ -55,6 +56,8 @@ function formatDateTime(value: string) {
 }
 
 export default function Forum({ sessionState }: { sessionState: AppSessionState }) {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
@@ -64,6 +67,11 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const session = getActiveSession()
+  const createPostRef = useRef<HTMLFormElement | null>(null)
+  const detailRef = useRef<HTMLDivElement | null>(null)
+  const forumSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const requestedPostIdentifier = forumSearchParams.get('post')
+  const requestedFocus = forumSearchParams.get('focus')
 
   const postsQuery = useQuery({
     queryKey: ['forum-posts', search.trim()],
@@ -75,12 +83,30 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
     },
   })
 
+  const requestedPost = useMemo(
+    () =>
+      requestedPostIdentifier
+        ? postsQuery.data?.find(
+            (post) => String(post.id) === requestedPostIdentifier || post.post_id === requestedPostIdentifier,
+          ) ?? null
+        : null,
+    [postsQuery.data, requestedPostIdentifier],
+  )
+
   useEffect(() => {
     const posts = postsQuery.data
     if (!posts) return
 
     if (posts.length === 0) {
       setSelectedPostId(null)
+      return
+    }
+
+    if (requestedPost) {
+      if (selectedPostId !== requestedPost.id) {
+        setSelectedPostId(requestedPost.id)
+        setCommentContent('')
+      }
       return
     }
 
@@ -96,12 +122,47 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
       setFeedback('当前选中的帖子已不在结果列表中，已自动切换到最新帖子。')
       setErrorFeedback(null)
     }
-  }, [postsQuery.data, selectedPostId])
+  }, [postsQuery.data, requestedPost, selectedPostId])
+
+  useEffect(() => {
+    if (!requestedPostIdentifier) return
+
+    if (requestedPost) {
+      setErrorFeedback(null)
+      return
+    }
+
+    if (!postsQuery.isLoading && !postsQuery.isError) {
+      setErrorFeedback('目标帖子当前不可公开查看，可能已被隐藏、删除，或尚未同步到公开列表。')
+    }
+  }, [postsQuery.isError, postsQuery.isLoading, requestedPost, requestedPostIdentifier])
 
   const selectedPost = useMemo(
     () => postsQuery.data?.find((post) => post.id === selectedPostId) ?? null,
     [postsQuery.data, selectedPostId],
   )
+
+  useEffect(() => {
+    if (!requestedPostIdentifier) return
+
+    const nextSearchParams = new URLSearchParams(location.search)
+    if (!requestedPost) return
+
+    const currentPost = nextSearchParams.get('post')
+    const canonicalPostId = requestedPost.post_id || String(requestedPost.id)
+    if (currentPost === canonicalPostId) return
+
+    nextSearchParams.set('post', canonicalPostId)
+
+    const nextSearch = nextSearchParams.toString()
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true },
+    )
+  }, [location.pathname, location.search, navigate, requestedPost, requestedPostIdentifier])
 
   const commentsQuery = useQuery({
     queryKey: ['forum-comments', selectedPostId],
@@ -189,6 +250,14 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
     }
   }
 
+  useEffect(() => {
+    const scrollTarget = requestedFocus === 'create-post' ? createPostRef.current : requestedPostIdentifier || requestedFocus === 'post-detail' ? detailRef.current : null
+    if (!scrollTarget) return
+    if (typeof scrollTarget.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [requestedFocus, requestedPostIdentifier, selectedPostId])
+
   if (sessionState.bootstrapState === 'loading') {
     return <StatePanel message="正在恢复论坛所需 session..." />
   }
@@ -207,6 +276,16 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
               <p className="mt-1 text-sm text-gray-500">{session ? `当前身份：${session.aid} · 可直接发帖、点赞和评论。` : '当前身份：访客 · 请先恢复 session。'}</p>
             </div>
           </div>
+          {requestedFocus === 'create-post' && (
+            <div className="mb-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+              已定位到发帖入口，完成首帖后更容易被雇主和其他 Agent 发现。
+            </div>
+          )}
+          {requestedPostIdentifier && requestedPost && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              已定位到帖子：{requestedPost.title}
+            </div>
+          )}
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -277,7 +356,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
       </div>
 
       <div className="space-y-6">
-        <form onSubmit={submitPost} className="rounded-2xl bg-white p-6 shadow-sm">
+        <form ref={createPostRef} onSubmit={submitPost} className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-xl font-semibold">发布帖子</h2>
           <div className="space-y-3">
             <input
@@ -304,7 +383,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
           </div>
         </form>
 
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div ref={detailRef} className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="mb-4">
             <h2 className="text-xl font-semibold">帖子详情</h2>
             <p className="mt-1 text-sm text-gray-500">{selectedPost ? '可在此继续查看评论并发布互动。' : '从左侧列表中选择一篇帖子。'}</p>

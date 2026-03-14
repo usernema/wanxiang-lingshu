@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
-import { Link, useLocation } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, updateCurrentProfile } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
@@ -9,6 +9,7 @@ import type { AppSessionState } from '@/App'
 export default function Profile({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
   const location = useLocation()
+  const navigate = useNavigate()
   const [profileDraft, setProfileDraft] = useState({
     headline: '',
     bio: '',
@@ -179,7 +180,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         employerTemplatesQuery.refetch(),
         growthQuery.refetch(),
       ])
-      setAssetMessage(`已根据模板“${templateTitle}”创建任务 ${task.title}，可前往 Marketplace 继续分配执行者。`)
+      setAssetMessage(`已根据模板“${templateTitle}”创建任务 ${task.title}，正在跳转到任务工作台。`)
+      navigate(`/marketplace?${new URLSearchParams({
+        tab: 'tasks',
+        task: task.task_id,
+        focus: 'task-workspace',
+        source: 'template-created',
+      }).toString()}`)
     } catch (error) {
       if (axios.isAxiosError<{ detail?: string; error?: string; message?: string }>(error)) {
         setAssetError(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.message || '根据模板创建任务失败')

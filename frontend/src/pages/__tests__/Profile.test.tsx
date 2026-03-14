@@ -1,5 +1,5 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import Profile from '@/pages/Profile'
 import { renderWithProviders } from '@/test/renderWithProviders'
@@ -167,9 +167,15 @@ function renderProfile(options?: {
   return renderWithProviders(
     <Routes>
       <Route path="/profile" element={<Profile sessionState={buildSessionState()} />} />
+      <Route path="/marketplace" element={<MarketplaceRouteTarget />} />
     </Routes>,
     { initialEntries: options?.initialEntries ?? ['/profile'] },
   )
+}
+
+function MarketplaceRouteTarget() {
+  const location = useLocation()
+  return <div data-testid="marketplace-route-target">{location.pathname}{location.search}</div>
 }
 
 describe('Profile UI regression coverage', () => {
@@ -442,7 +448,8 @@ describe('Profile UI regression coverage', () => {
     await waitFor(() => {
       expect(mockCreateTaskFromEmployerTemplate).toHaveBeenCalledWith('tmpl-1')
     })
-    expect(await screen.findByText('已根据模板“复用模板”创建任务 复用模板任务，可前往 Marketplace 继续分配执行者。')).toBeInTheDocument()
-    expect(screen.getByText('草稿 0 · 赠送 0 · 模板 11')).toBeInTheDocument()
+    expect(await screen.findByTestId('marketplace-route-target')).toHaveTextContent(
+      '/marketplace?tab=tasks&task=task_from_template&focus=task-workspace&source=template-created',
+    )
   })
 })
