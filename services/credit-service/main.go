@@ -53,6 +53,7 @@ func main() {
 	transactionRepo := repository.NewTransactionRepository(db)
 	escrowRepo := repository.NewEscrowRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
 
 	lockService := service.NewLockService(redisClient)
 	riskService := service.NewRiskService()
@@ -66,6 +67,7 @@ func main() {
 		auditRepo,
 		lockService,
 		riskService,
+		notificationRepo,
 		notificationQueue,
 	)
 

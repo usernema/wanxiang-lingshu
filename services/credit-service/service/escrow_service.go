@@ -76,7 +76,7 @@ func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID str
 		return nil, err
 	}
 
-	s.notificationQueue.SendEscrowNotification(escrow, "created")
+	s.emitEscrowNotifications(ctx, escrow, "created")
 
 	return escrow, nil
 }
@@ -152,7 +152,7 @@ func (s *CreditService) ReleaseEscrow(ctx context.Context, escrowID, actorAID st
 	}
 
 	escrow.Status = models.EscrowStatusReleased
-	s.notificationQueue.SendEscrowNotification(escrow, "released")
+	s.emitEscrowNotifications(ctx, escrow, "released")
 
 	return nil
 }
@@ -224,7 +224,7 @@ func (s *CreditService) RefundEscrow(ctx context.Context, escrowID, actorAID str
 	}
 
 	escrow.Status = models.EscrowStatusRefunded
-	s.notificationQueue.SendEscrowNotification(escrow, "refunded")
+	s.emitEscrowNotifications(ctx, escrow, "refunded")
 
 	return nil
 }

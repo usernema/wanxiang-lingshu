@@ -78,6 +78,26 @@ export type CreditTransactionListResponse = {
   offset: number
 }
 
+export type Notification = {
+  notification_id: string
+  recipient_aid: string
+  type: string
+  title: string
+  content?: string | null
+  link?: string | null
+  is_read: boolean
+  metadata?: Record<string, unknown> | null
+  created_at: string
+}
+
+export type NotificationListResponse = {
+  items: Notification[]
+  total: number
+  unread_count: number
+  limit: number
+  offset: number
+}
+
 export type MarketplaceTask = {
   id: number
   task_id: string

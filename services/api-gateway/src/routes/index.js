@@ -47,6 +47,12 @@ function normalizeQueryText(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
+function normalizeBooleanQuery(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value !== 'string') return false;
+  return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+}
+
 function normalizeBatchItems(items) {
   if (!Array.isArray(items)) return [];
 
@@ -301,6 +307,84 @@ async function listAdminAuditLogs(filters = {}) {
     total: countResult.rows?.[0]?.total || 0,
     limit,
     offset,
+  };
+}
+
+async function listNotifications(aid, filters = {}) {
+  const conditions = ['recipient_aid = $1'];
+  const params = [aid];
+  const limit = normalizeLimit(filters.limit);
+  const offset = normalizeOffset(filters.offset);
+  const unreadOnly = normalizeBooleanQuery(filters.unreadOnly);
+  const type = normalizeQueryText(filters.type);
+
+  if (unreadOnly) {
+    conditions.push('is_read = FALSE');
+  }
+
+  if (type) {
+    params.push(type);
+    conditions.push(`type = $${params.length}`);
+  }
+
+  const whereClause = `WHERE ${conditions.join(' AND ')}`;
+  const countParams = [...params];
+  params.push(limit);
+  params.push(offset);
+
+  const [itemsResult, countResult, unreadResult] = await Promise.all([
+    query(
+      `SELECT notification_id, recipient_aid, type, title, content, link, is_read, metadata, created_at
+       FROM notifications
+       ${whereClause}
+       ORDER BY is_read ASC, created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params,
+    ),
+    query(`SELECT COUNT(*)::int AS total FROM notifications ${whereClause}`, countParams),
+    query(
+      `SELECT COUNT(*)::int AS unread_count
+       FROM notifications
+       WHERE recipient_aid = $1 AND is_read = FALSE`,
+      [aid],
+    ),
+  ]);
+
+  return {
+    items: itemsResult.rows || [],
+    total: countResult.rows?.[0]?.total || 0,
+    unread_count: unreadResult.rows?.[0]?.unread_count || 0,
+    limit,
+    offset,
+  };
+}
+
+async function markNotificationAsRead(aid, notificationId) {
+  const result = await query(
+    `UPDATE notifications
+     SET is_read = TRUE
+     WHERE notification_id = $1 AND recipient_aid = $2
+     RETURNING notification_id, recipient_aid, type, title, content, link, is_read, metadata, created_at`,
+    [notificationId, aid],
+  );
+
+  if (!result.rows?.length) {
+    throw createHttpError(404, 'NOTIFICATION_NOT_FOUND', 'Notification not found');
+  }
+
+  return result.rows[0];
+}
+
+async function markAllNotificationsAsRead(aid) {
+  const result = await query(
+    `UPDATE notifications
+     SET is_read = TRUE
+     WHERE recipient_aid = $1 AND is_read = FALSE`,
+    [aid],
+  );
+
+  return {
+    updated: result.rowCount || 0,
   };
 }
 
@@ -833,6 +917,27 @@ router.get('/api/v1/admin/marketplace/tasks/:taskId/applications', requireAdminA
   });
 }));
 
+router.get('/api/v1/notifications', authenticate, asyncHandler(async (req, res) => {
+  const data = await listNotifications(req.agent.aid, {
+    limit: req.query.limit,
+    offset: req.query.offset,
+    unreadOnly: req.query.unread_only,
+    type: req.query.type,
+  });
+
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/notifications/read-all', authenticate, asyncHandler(async (req, res) => {
+  const data = await markAllNotificationsAsRead(req.agent.aid);
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/notifications/:notificationId/read', authenticate, asyncHandler(async (req, res) => {
+  const data = await markNotificationAsRead(req.agent.aid, req.params.notificationId);
+  return success(res, req, 200, { success: true, data });
+}));
+
 function setupRoutes(app, middleware = {}) {
   const proxies = createRouteProxies();
   const {
@@ -904,7 +1009,11 @@ module.exports = {
   insertAdminAuditLog,
   isReady,
   listAdminAuditLogs,
+  listNotifications,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
   normalizeLimit,
+  normalizeBooleanQuery,
   normalizeOffset,
   normalizeBatchItems,
   normalizeQueryText,

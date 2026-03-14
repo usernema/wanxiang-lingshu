@@ -118,6 +118,27 @@ func (m *MockRiskService) CheckTransaction(ctx context.Context, aid string, amou
 	return args.Error(0)
 }
 
+type MockNotificationRepository struct {
+	mock.Mock
+}
+
+func (m *MockNotificationRepository) Upsert(ctx context.Context, notification *models.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
+type MockNotificationPublisher struct {
+	mock.Mock
+}
+
+func (m *MockNotificationPublisher) SendTransactionNotification(transaction *models.Transaction) {
+	m.Called(transaction)
+}
+
+func (m *MockNotificationPublisher) SendEscrowNotification(escrow *models.Escrow, action string) {
+	m.Called(escrow, action)
+}
+
 func TestValidateTransfer(t *testing.T) {
 	cfg := &config.Config{
 		Credit: config.CreditConfig{
@@ -304,4 +325,69 @@ func TestGetBalanceUsesReservedInitialBalance(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedAccount, account)
 	mockAccountRepo.AssertExpectations(t)
+}
+
+func TestEmitTransactionNotificationsPersistsSenderAndReceiver(t *testing.T) {
+	mockNotificationRepo := new(MockNotificationRepository)
+	mockNotificationPublisher := new(MockNotificationPublisher)
+	service := &CreditService{
+		notificationRepo:  mockNotificationRepo,
+		notificationQueue: mockNotificationPublisher,
+	}
+
+	transaction := &models.Transaction{
+		TransactionID: "tx_123",
+		Type:          models.TransactionTypeCreditTransfer,
+		FromAID:       "agent://a2ahub/employer-1",
+		ToAID:         "agent://a2ahub/worker-1",
+		Amount:        decimal.NewFromInt(8),
+		Status:        models.TransactionStatusCompleted,
+		UpdatedAt:     time.Now(),
+	}
+
+	mockNotificationPublisher.On("SendTransactionNotification", transaction).Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_tx_123_sender" &&
+			notification.RecipientAID == transaction.FromAID &&
+			notification.Type == "credit_out"
+	})).Return(nil).Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_tx_123_receiver" &&
+			notification.RecipientAID == transaction.ToAID &&
+			notification.Type == "credit_in"
+	})).Return(nil).Once()
+
+	service.emitTransactionNotifications(context.Background(), transaction)
+
+	mockNotificationPublisher.AssertExpectations(t)
+	mockNotificationRepo.AssertExpectations(t)
+}
+
+func TestEmitEscrowNotificationsSkipsReservedPayeeOnRefund(t *testing.T) {
+	mockNotificationRepo := new(MockNotificationRepository)
+	mockNotificationPublisher := new(MockNotificationPublisher)
+	service := &CreditService{
+		notificationRepo:  mockNotificationRepo,
+		notificationQueue: mockNotificationPublisher,
+	}
+
+	escrow := &models.Escrow{
+		EscrowID: "escrow_123",
+		PayerAID: "agent://a2ahub/employer-1",
+		PayeeAID: "agent://a2ahub/platform-treasury",
+		Amount:   decimal.NewFromInt(12),
+		UpdatedAt: time.Now(),
+	}
+
+	mockNotificationPublisher.On("SendEscrowNotification", escrow, "refunded").Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_escrow_123_refunded_payer" &&
+			notification.RecipientAID == escrow.PayerAID &&
+			notification.Type == "escrow_refunded"
+	})).Return(nil).Once()
+
+	service.emitEscrowNotifications(context.Background(), escrow, "refunded")
+
+	mockNotificationPublisher.AssertExpectations(t)
+	mockNotificationRepo.AssertExpectations(t)
 }

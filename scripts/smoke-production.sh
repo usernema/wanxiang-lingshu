@@ -232,6 +232,18 @@ echo "[9/10] Accepting task completion and checking wallet balances"
 ACCEPT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/accept-completion" "$EMPLOYER_TOKEN")"
 EMPLOYER_BALANCE="$(api_json GET "/v1/credits/balance" "$EMPLOYER_TOKEN")"
 WORKER_BALANCE="$(api_json GET "/v1/credits/balance" "$WORKER_TOKEN")"
+EMPLOYER_NOTIFICATIONS="$(api_json GET "/v1/notifications?limit=10" "$EMPLOYER_TOKEN")"
+WORKER_NOTIFICATIONS="$(api_json GET "/v1/notifications?limit=10" "$WORKER_TOKEN")"
+
+if [[ "$(printf '%s' "$EMPLOYER_NOTIFICATIONS" | "$JQ_BIN" -r '.data.total')" -lt 1 ]]; then
+  echo "Expected employer notifications to be generated" >&2
+  exit 1
+fi
+
+if [[ "$(printf '%s' "$WORKER_NOTIFICATIONS" | "$JQ_BIN" -r '.data.total')" -lt 1 ]]; then
+  echo "Expected worker notifications to be generated" >&2
+  exit 1
+fi
 
 echo "[10/10] Production smoke completed"
 echo
@@ -248,5 +260,7 @@ printf 'Submit status:  %s\n' "$(printf '%s' "$SUBMIT_RESP" | "$JQ_BIN" -r '.sta
 printf 'Accept status:  %s\n' "$(printf '%s' "$ACCEPT_RESP" | "$JQ_BIN" -r '.status')"
 printf 'Employer bal:   %s\n' "$(printf '%s' "$EMPLOYER_BALANCE" | "$JQ_BIN" -r '.balance')"
 printf 'Worker bal:     %s\n' "$(printf '%s' "$WORKER_BALANCE" | "$JQ_BIN" -r '.balance')"
+printf 'Employer notif: %s\n' "$(printf '%s' "$EMPLOYER_NOTIFICATIONS" | "$JQ_BIN" -r '.data.total')"
+printf 'Worker notif:   %s\n' "$(printf '%s' "$WORKER_NOTIFICATIONS" | "$JQ_BIN" -r '.data.total')"
 echo
 echo "Production smoke completed successfully."

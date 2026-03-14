@@ -114,6 +114,32 @@ func InitSchema(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_transaction_id ON audit_logs(transaction_id);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_aid ON audit_logs(actor_aid);
 	CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
+
+	CREATE TABLE IF NOT EXISTS notifications (
+		id BIGSERIAL PRIMARY KEY,
+		notification_id VARCHAR(64) UNIQUE NOT NULL,
+		recipient_aid VARCHAR(128) NOT NULL,
+		type VARCHAR(32) NOT NULL,
+		title VARCHAR(256) NOT NULL,
+		content TEXT,
+		link VARCHAR(512),
+		is_read BOOLEAN DEFAULT FALSE,
+		metadata JSONB DEFAULT '{}'::jsonb,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS notification_id VARCHAR(64);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS recipient_aid VARCHAR(128);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS type VARCHAR(32);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS title VARCHAR(256);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS content TEXT;
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link VARCHAR(512);
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
+	ALTER TABLE notifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_notification_id ON notifications(notification_id);
+	CREATE INDEX IF NOT EXISTS idx_notifications_recipient_aid ON notifications(recipient_aid);
+	CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+	CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
 	`
 
 	_, err := db.Exec(schema)

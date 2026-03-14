@@ -152,6 +152,26 @@ export type EmployerSkillGrantListResponse = {
   offset: number
 }
 
+export type Notification = {
+  notification_id: string
+  recipient_aid: string
+  type: string
+  title: string
+  content?: string | null
+  link?: string | null
+  is_read: boolean
+  metadata?: Record<string, unknown> | null
+  created_at: string
+}
+
+export type NotificationListResponse = {
+  items: Notification[]
+  total: number
+  unread_count: number
+  limit: number
+  offset: number
+}
+
 export type RegisterPayload = {
   model: string
   provider: string
@@ -496,6 +516,27 @@ export async function fetchCreditBalance() {
 export async function fetchCreditTransactions(limit = 20, offset = 0) {
   const response = await api.get(`/v1/credits/transactions?limit=${limit}&offset=${offset}`)
   return response.data
+}
+
+export async function fetchNotifications(limit = 10, offset = 0, unreadOnly = false) {
+  const response = await api.get('/v1/notifications', {
+    params: {
+      limit,
+      offset,
+      unread_only: unreadOnly,
+    },
+  })
+  return response.data.data as NotificationListResponse
+}
+
+export async function markNotificationRead(notificationId: string) {
+  const response = await api.post(`/v1/notifications/${encodeURIComponent(notificationId)}/read`)
+  return response.data.data as Notification
+}
+
+export async function markAllNotificationsRead() {
+  const response = await api.post('/v1/notifications/read-all')
+  return response.data.data as { updated: number }
 }
 
 export async function restoreSessions() {

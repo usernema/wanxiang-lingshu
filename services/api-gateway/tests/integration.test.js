@@ -12,7 +12,9 @@ jest.mock('../src/utils/redis', () => ({
   createRedisClient: jest.fn().mockResolvedValue({
     ping: jest.fn().mockResolvedValue('PONG'),
     get: jest.fn().mockResolvedValue(null),
+    exists: jest.fn().mockResolvedValue(0),
     setEx: jest.fn().mockResolvedValue('OK'),
+    del: jest.fn().mockResolvedValue(1),
     sendCommand: jest.fn().mockResolvedValue('OK'),
     quit: jest.fn().mockResolvedValue('OK'),
   }),
@@ -20,7 +22,9 @@ jest.mock('../src/utils/redis', () => ({
   getRedisClient: jest.fn().mockResolvedValue({
     ping: jest.fn().mockResolvedValue('PONG'),
     get: jest.fn().mockResolvedValue(null),
+    exists: jest.fn().mockResolvedValue(0),
     setEx: jest.fn().mockResolvedValue('OK'),
+    del: jest.fn().mockResolvedValue(1),
     sendCommand: jest.fn().mockResolvedValue('OK'),
     quit: jest.fn().mockResolvedValue('OK'),
   }),
@@ -65,6 +69,7 @@ jest.mock('jsonwebtoken', () => ({
 }));
 
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
 const config = require('../src/config');
 const { router, setupRoutes } = require('../src/routes');
 const requestId = require('../src/middleware/requestId');
@@ -159,10 +164,15 @@ describe('API Gateway Integration Tests', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     app = createTestApp();
+    jwt.verify.mockImplementation(() => {
+      throw new Error('invalid token');
+    });
     getRedisClient.mockResolvedValue({
       ping: jest.fn().mockResolvedValue('PONG'),
       get: jest.fn().mockResolvedValue(null),
+      exists: jest.fn().mockResolvedValue(0),
       setEx: jest.fn().mockResolvedValue('OK'),
+      del: jest.fn().mockResolvedValue(1),
       sendCommand: jest.fn().mockResolvedValue('OK'),
       quit: jest.fn().mockResolvedValue('OK'),
     });
@@ -270,6 +280,69 @@ describe('API Gateway Integration Tests', () => {
     expect(response.headers['x-limiter-auth']).toBe('true');
     expect(response.headers['x-limiter-auth-burst']).toBe('true');
     expect(response.body.service).toBe('identity');
+  });
+
+  it('returns notifications for the authenticated agent', async () => {
+    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/worker-1', iat: 200, jti: 'jwt-notif-1' });
+    axios.get.mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-1', status: 'active', reputation: 42 } });
+    query
+      .mockResolvedValueOnce({
+        rows: [{
+          notification_id: 'notif_1',
+          recipient_aid: 'agent://a2ahub/worker-1',
+          type: 'escrow_released',
+          title: '托管已释放',
+          content: '你的托管已完成放款。',
+          link: '/wallet?focus=notifications',
+          is_read: false,
+          metadata: { escrow_id: 'escrow_1' },
+          created_at: '2026-03-14T00:00:00.000Z',
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [{ total: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ unread_count: 1 }] });
+
+    const response = await request(app)
+      .get('/api/v1/notifications?limit=10')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+
+    expect(response.body.data.total).toBe(1);
+    expect(response.body.data.unread_count).toBe(1);
+    expect(response.body.data.items[0]).toMatchObject({
+      notification_id: 'notif_1',
+      type: 'escrow_released',
+      is_read: false,
+    });
+  });
+
+  it('marks a notification as read for the authenticated agent', async () => {
+    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/worker-1', iat: 200, jti: 'jwt-notif-2' });
+    axios.get.mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-1', status: 'active', reputation: 42 } });
+    query.mockResolvedValueOnce({
+      rows: [{
+        notification_id: 'notif_1',
+        recipient_aid: 'agent://a2ahub/worker-1',
+        type: 'escrow_released',
+        title: '托管已释放',
+        content: '你的托管已完成放款。',
+        link: '/wallet?focus=notifications',
+        is_read: true,
+        metadata: { escrow_id: 'escrow_1' },
+        created_at: '2026-03-14T00:00:00.000Z',
+      }],
+      rowCount: 1,
+    });
+
+    const response = await request(app)
+      .post('/api/v1/notifications/notif_1/read')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      notification_id: 'notif_1',
+      is_read: true,
+    });
   });
 
   it('rejects admin routes without a token', async () => {

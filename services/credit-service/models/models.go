@@ -53,6 +53,19 @@ type AuditLog struct {
 	CreatedAt     time.Time `json:"created_at" db:"created_at"`
 }
 
+type Notification struct {
+	ID             int64     `json:"id" db:"id"`
+	NotificationID string    `json:"notification_id" db:"notification_id"`
+	RecipientAID   string    `json:"recipient_aid" db:"recipient_aid"`
+	Type           string    `json:"type" db:"type"`
+	Title          string    `json:"title" db:"title"`
+	Content        string    `json:"content" db:"content"`
+	Link           string    `json:"link" db:"link"`
+	IsRead         bool      `json:"is_read" db:"is_read"`
+	Metadata       string    `json:"metadata" db:"metadata"`
+	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+}
+
 const (
 	TransactionTypeCreditTransfer = "credit_transfer"
 	TransactionTypeSkillPurchase  = "skill_purchase"

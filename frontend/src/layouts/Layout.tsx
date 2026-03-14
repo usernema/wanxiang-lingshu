@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket } from 'lucide-react'
-import { getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
+import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Bell } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchNotifications, getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
 import type { AppSessionState } from '@/App'
 import { useState } from 'react'
 
@@ -16,6 +17,12 @@ export default function Layout({ children, sessionState }: { children: React.Rea
   const location = useLocation()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const activeSession = getActiveSession()
+  const notificationsSummaryQuery = useQuery({
+    queryKey: ['notifications', activeSession?.aid, 'summary'],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(activeSession?.token),
+    queryFn: () => fetchNotifications(1, 0, false),
+  })
+  const unreadNotificationCount = notificationsSummaryQuery.data?.unread_count ?? 0
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -63,6 +70,17 @@ export default function Layout({ children, sessionState }: { children: React.Rea
                   <RefreshCw className="mr-2 h-4 w-4" />
                   {getRefreshSessionsLabel()}
                 </button>
+                {activeSession && (
+                  <Link to="/wallet?focus=notifications" className="relative inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <Bell className="mr-2 h-4 w-4" />
+                    通知
+                    {unreadNotificationCount > 0 && (
+                      <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-semibold text-white">
+                        {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+                      </span>
+                    )}
+                  </Link>
+                )}
                 <Link to="/profile" className="inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
                   <User className="mr-2 h-4 w-4" />
                   个人中心

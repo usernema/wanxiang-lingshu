@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/a2ahub/credit-service/config"
@@ -183,6 +184,10 @@ type AuditRepository interface {
 	Create(ctx context.Context, auditLog *models.AuditLog) error
 }
 
+type NotificationRepository interface {
+	Upsert(ctx context.Context, notification *models.Notification) error
+}
+
 type LockManager interface {
 	Lock(ctx context.Context, key string, ttl time.Duration) error
 	Unlock(ctx context.Context, key string) error
@@ -216,6 +221,7 @@ type CreditService struct {
 	auditRepo         AuditRepository
 	lockService       LockManager
 	riskService       RiskChecker
+	notificationRepo  NotificationRepository
 	notificationQueue NotificationPublisher
 }
 
@@ -228,6 +234,7 @@ func NewCreditService(
 	auditRepo AuditRepository,
 	lockService LockManager,
 	riskService RiskChecker,
+	notificationRepo NotificationRepository,
 	notificationQueue NotificationPublisher,
 ) *CreditService {
 	return &CreditService{
@@ -239,6 +246,7 @@ func NewCreditService(
 		auditRepo:         auditRepo,
 		lockService:       lockService,
 		riskService:       riskService,
+		notificationRepo:  notificationRepo,
 		notificationQueue: notificationQueue,
 	}
 }
@@ -324,9 +332,198 @@ func (s *CreditService) Transfer(ctx context.Context, fromAID, toAID string, amo
 		return nil, err
 	}
 
-	s.notificationQueue.SendTransactionNotification(transaction)
+	s.emitTransactionNotifications(ctx, transaction)
 
 	return transaction, nil
+}
+
+func (s *CreditService) emitTransactionNotifications(ctx context.Context, transaction *models.Transaction) {
+	if transaction == nil {
+		return
+	}
+
+	if s.notificationQueue != nil {
+		s.notificationQueue.SendTransactionNotification(transaction)
+	}
+
+	if s.notificationRepo == nil {
+		return
+	}
+
+	for _, notification := range buildTransactionNotifications(transaction) {
+		if err := s.notificationRepo.Upsert(ctx, notification); err != nil {
+			log.Printf("Failed to persist transaction notification %s: %v", notification.NotificationID, err)
+		}
+	}
+}
+
+func (s *CreditService) emitEscrowNotifications(ctx context.Context, escrow *models.Escrow, action string) {
+	if escrow == nil {
+		return
+	}
+
+	if s.notificationQueue != nil {
+		s.notificationQueue.SendEscrowNotification(escrow, action)
+	}
+
+	if s.notificationRepo == nil {
+		return
+	}
+
+	for _, notification := range buildEscrowNotifications(escrow, action) {
+		if err := s.notificationRepo.Upsert(ctx, notification); err != nil {
+			log.Printf("Failed to persist escrow notification %s: %v", notification.NotificationID, err)
+		}
+	}
+}
+
+func buildTransactionNotifications(transaction *models.Transaction) []*models.Notification {
+	if transaction == nil {
+		return nil
+	}
+
+	notifications := make([]*models.Notification, 0, 2)
+	amount := transaction.Amount.String()
+
+	if shouldDeliverUserNotification(transaction.FromAID) {
+		notifications = append(notifications, &models.Notification{
+			NotificationID: fmt.Sprintf("notif_%s_sender", transaction.TransactionID),
+			RecipientAID:   transaction.FromAID,
+			Type:           "credit_out",
+			Title:          "积分转出成功",
+			Content:        fmt.Sprintf("你已向 %s 转出 %s 积分。", transaction.ToAID, amount),
+			Link:           "/wallet?focus=notifications",
+			IsRead:         false,
+			Metadata:       mustJSON(map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "outgoing", "type": transaction.Type}),
+			CreatedAt:      transaction.UpdatedAt,
+		})
+	}
+
+	if shouldDeliverUserNotification(transaction.ToAID) && transaction.ToAID != transaction.FromAID {
+		notifications = append(notifications, &models.Notification{
+			NotificationID: fmt.Sprintf("notif_%s_receiver", transaction.TransactionID),
+			RecipientAID:   transaction.ToAID,
+			Type:           "credit_in",
+			Title:          "收到积分",
+			Content:        fmt.Sprintf("你收到了来自 %s 的 %s 积分。", transaction.FromAID, amount),
+			Link:           "/wallet?focus=notifications",
+			IsRead:         false,
+			Metadata:       mustJSON(map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "incoming", "type": transaction.Type}),
+			CreatedAt:      transaction.UpdatedAt,
+		})
+	}
+
+	return notifications
+}
+
+func buildEscrowNotifications(escrow *models.Escrow, action string) []*models.Notification {
+	if escrow == nil {
+		return nil
+	}
+
+	notifications := make([]*models.Notification, 0, 2)
+	amount := escrow.Amount.String()
+	createdAt := escrow.UpdatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now()
+	}
+
+	if shouldDeliverUserNotification(escrow.PayerAID) {
+		notifications = append(notifications, &models.Notification{
+			NotificationID: fmt.Sprintf("notif_%s_%s_payer", escrow.EscrowID, action),
+			RecipientAID:   escrow.PayerAID,
+			Type:           notificationTypeForEscrowAction(action),
+			Title:          escrowPayerTitle(action),
+			Content:        escrowPayerContent(action, escrow.PayeeAID, amount),
+			Link:           "/wallet?focus=notifications",
+			IsRead:         false,
+			Metadata:       mustJSON(map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payer"}),
+			CreatedAt:      createdAt,
+		})
+	}
+
+	if shouldDeliverUserNotification(escrow.PayeeAID) && action != "refunded" {
+		notifications = append(notifications, &models.Notification{
+			NotificationID: fmt.Sprintf("notif_%s_%s_payee", escrow.EscrowID, action),
+			RecipientAID:   escrow.PayeeAID,
+			Type:           notificationTypeForEscrowAction(action),
+			Title:          escrowPayeeTitle(action),
+			Content:        escrowPayeeContent(action, escrow.PayerAID, amount),
+			Link:           "/wallet?focus=notifications",
+			IsRead:         false,
+			Metadata:       mustJSON(map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payee"}),
+			CreatedAt:      createdAt,
+		})
+	}
+
+	return notifications
+}
+
+func shouldDeliverUserNotification(aid string) bool {
+	if aid == "" {
+		return false
+	}
+	_, reserved := reservedAccountCredits[aid]
+	return !reserved
+}
+
+func notificationTypeForEscrowAction(action string) string {
+	switch action {
+	case "released":
+		return "escrow_released"
+	case "refunded":
+		return "escrow_refunded"
+	default:
+		return "escrow_created"
+	}
+}
+
+func escrowPayerTitle(action string) string {
+	switch action {
+	case "released":
+		return "托管已放款"
+	case "refunded":
+		return "托管已退款"
+	default:
+		return "托管已创建"
+	}
+}
+
+func escrowPayeeTitle(action string) string {
+	switch action {
+	case "released":
+		return "托管已释放"
+	default:
+		return "收到托管通知"
+	}
+}
+
+func escrowPayerContent(action, counterpartyAID, amount string) string {
+	switch action {
+	case "released":
+		return fmt.Sprintf("你为 %s 锁定的 %s 积分托管已完成放款。", counterpartyAID, amount)
+	case "refunded":
+		return fmt.Sprintf("该笔托管中的 %s 积分已退回你的钱包。", amount)
+	default:
+		return fmt.Sprintf("你已为 %s 创建 %s 积分托管，资金暂时处于冻结状态。", counterpartyAID, amount)
+	}
+}
+
+func escrowPayeeContent(action, counterpartyAID, amount string) string {
+	switch action {
+	case "released":
+		return fmt.Sprintf("来自 %s 的 %s 积分托管已释放到你的钱包。", counterpartyAID, amount)
+	default:
+		return fmt.Sprintf("%s 已为你创建 %s 积分托管，等待后续验收放款。", counterpartyAID, amount)
+	}
+}
+
+func mustJSON(value map[string]interface{}) string {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return "{}"
+	}
+	return string(body)
 }
 
 func (s *CreditService) validateTransfer(ctx context.Context, fromAID, toAID string, amount decimal.Decimal) error {
