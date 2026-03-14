@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api, fetchNotifications, getActiveSession } from '@/lib/api'
+import { api, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
 import type { AppSessionState } from '@/App'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 
@@ -22,9 +22,18 @@ type RoadmapItem = {
   cta: string
 }
 
+type HomeWorkRole = 'employer' | 'worker'
+
 export default function Home({ sessionState }: { sessionState?: AppSessionState }) {
   const session = getActiveSession()
+  const [workRole, setWorkRole] = useState<HomeWorkRole>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
   const dashboardEnabled = Boolean(session?.aid) && (sessionState ? sessionState.bootstrapState === 'ready' : true)
+
+  useEffect(() => {
+    if (!session?.aid) return
+    setActiveRole(workRole)
+  }, [workRole, session?.aid])
+
   const health = useQuery({
     queryKey: ['gateway-health'],
     queryFn: async () => (await api.get('/health/ready')).data,
@@ -104,22 +113,42 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const workerTasks = workerTasksQuery.data || []
   const unreadCount = notificationsQuery.data?.unread_count || 0
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
-  const activeTask = useMemo(() => getPriorityTask([...workerTasks, ...employerTasks]), [workerTasks, employerTasks])
+  const employerActiveTask = useMemo(() => getPriorityTask(employerTasks), [employerTasks])
+  const workerActiveTask = useMemo(() => getPriorityTask(workerTasks), [workerTasks])
   const latestCompletedTask = useMemo(
     () => getLatestTask([...workerTasks, ...employerTasks].filter((task) => task.status === 'completed')),
     [workerTasks, employerTasks],
   )
-  const openLoopCount = useMemo(
-    () => [...workerTasks, ...employerTasks].filter((task) => ['open', 'assigned', 'in_progress', 'submitted'].includes(task.status)).length,
-    [workerTasks, employerTasks],
+  const employerCompletedTask = useMemo(
+    () => getLatestTask(employerTasks.filter((task) => task.status === 'completed')),
+    [employerTasks],
+  )
+  const workerCompletedTask = useMemo(
+    () => getLatestTask(workerTasks.filter((task) => task.status === 'completed')),
+    [workerTasks],
   )
   const completedTaskCount = useMemo(
     () => [...workerTasks, ...employerTasks].filter((task) => task.status === 'completed').length,
     [workerTasks, employerTasks],
   )
+  const employerOpenLoopCount = useMemo(
+    () => employerTasks.filter((task) => ['open', 'assigned', 'in_progress', 'submitted'].includes(task.status)).length,
+    [employerTasks],
+  )
+  const workerOpenLoopCount = useMemo(
+    () => workerTasks.filter((task) => ['assigned', 'in_progress', 'submitted'].includes(task.status)).length,
+    [workerTasks],
+  )
+  const employerCompletedCount = useMemo(
+    () => employerTasks.filter((task) => task.status === 'completed').length,
+    [employerTasks],
+  )
+  const workerCompletedCount = useMemo(
+    () => workerTasks.filter((task) => task.status === 'completed').length,
+    [workerTasks],
+  )
   const hasProfileBasics = Boolean(profile?.headline?.trim()) && Boolean(profile?.bio?.trim()) && Boolean(profile?.capabilities?.length)
   const hasMarketplaceExperience = employerTasks.length > 0 || workerTasks.length > 0
-  const hasSettlementProgress = [...workerTasks, ...employerTasks].some((task) => ['in_progress', 'submitted', 'completed'].includes(task.status))
   const hasWalletFootprint =
     balance !== undefined &&
     (toNumber(balance.balance) > 0 ||
@@ -128,7 +157,15 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       toNumber(balance.total_spent) > 0 ||
       unreadCount > 0)
   const hasPublishedSkill = skills.length > 0
-  const taskWorkspaceHref = buildTaskWorkspaceHref(activeTask || latestCompletedTask, 'home')
+  const employerTaskWorkspaceHref = buildTaskWorkspaceHref(employerActiveTask || employerCompletedTask, 'home-employer')
+  const workerTaskWorkspaceHref = buildTaskWorkspaceHref(workerActiveTask || workerCompletedTask, 'home-worker')
+  const roleLabel = workRole === 'worker' ? '执行者视角' : '雇主视角'
+  const roleDescription = workRole === 'worker'
+    ? '首页优先推荐接单、交付、验收与 Skill 沉淀动作。'
+    : '首页优先推荐发任务、控托管、验收与复购动作。'
+  const roleOpenCount = workRole === 'worker' ? workerOpenLoopCount : employerOpenLoopCount
+  const roleCompletedCount = workRole === 'worker' ? workerCompletedCount : employerCompletedCount
+  const rolePrimaryTask = workRole === 'worker' ? workerActiveTask || workerCompletedTask : employerActiveTask || employerCompletedTask
   const dashboardLoading = dashboardEnabled && [
     profileQuery.isLoading,
     balanceQuery.isLoading,
@@ -146,14 +183,46 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       }
     }
 
-    if (activeTask) {
-      pushItem({
-        key: 'active-task',
-        title: '继续当前任务流转',
-        description: `你当前还有 ${openLoopCount} 个待推进任务，优先回到工作台处理 proposal、托管、验收或结算。`,
-        href: taskWorkspaceHref,
-        cta: '回到任务工作台',
-      })
+    if (workRole === 'employer') {
+      if (employerActiveTask) {
+        pushItem({
+          key: 'employer-active-task',
+          title: '继续雇主任务流转',
+          description: getEmployerRecommendationText(employerActiveTask, employerOpenLoopCount),
+          href: employerTaskWorkspaceHref,
+          cta: '回到雇主工作台',
+        })
+      }
+
+      if (employerTasks.length === 0) {
+        pushItem({
+          key: 'employer-create-task',
+          title: '发布第一个真实任务',
+          description: '先把需求变成可指派、可托管、可验收的任务条目，首页之后才有雇主侧闭环可以持续跟进。',
+          href: '/marketplace?tab=tasks&focus=create-task&source=home-employer',
+          cta: '去发布任务',
+        })
+      }
+    } else {
+      if (workerActiveTask) {
+        pushItem({
+          key: 'worker-active-task',
+          title: '继续执行中任务',
+          description: getWorkerRecommendationText(workerActiveTask, workerOpenLoopCount),
+          href: workerTaskWorkspaceHref,
+          cta: '回到执行工作台',
+        })
+      }
+
+      if (workerTasks.length === 0) {
+        pushItem({
+          key: 'worker-browse-task',
+          title: '去任务市场申请首单',
+          description: '先进入任务市场申请真实任务，尽快完成第一次交付与验收，才能开始形成长期可复用资产。',
+          href: '/marketplace?tab=tasks&source=home-worker',
+          cta: '去任务市场接单',
+        })
+      }
     }
 
     if (unreadCount > 0) {
@@ -207,13 +276,23 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     }
 
     if (items.length === 0) {
-      pushItem({
-        key: 'marketplace-expand',
-        title: '继续扩大你的成交面',
-        description: '你已经完成基础闭环，下一步建议继续发布任务、申请任务或扩展公开 Skill，提高复购与复用概率。',
-        href: activeTask ? taskWorkspaceHref : '/marketplace?tab=tasks&source=home',
-        cta: activeTask ? '继续当前任务' : '继续市场流转',
-      })
+      if (workRole === 'employer') {
+        pushItem({
+          key: 'marketplace-expand-employer',
+          title: '继续扩大雇主侧复购',
+          description: '你已经完成基础雇主闭环，下一步建议继续发布新任务、复用流程资产，并持续核对验收与钱包表现。',
+          href: employerActiveTask ? employerTaskWorkspaceHref : '/marketplace?tab=tasks&focus=create-task&source=home-employer',
+          cta: employerActiveTask ? '继续雇主流转' : '继续发布任务',
+        })
+      } else {
+        pushItem({
+          key: 'marketplace-expand-worker',
+          title: '继续扩大执行侧成交面',
+          description: '你已经完成基础执行闭环，下一步建议继续申请新任务、沉淀公开 Skill，并提高复用与复购概率。',
+          href: workerActiveTask ? workerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-worker',
+          cta: workerActiveTask ? '继续执行任务' : '继续接单',
+        })
+      }
       pushItem({
         key: 'wallet-review',
         title: '定期核对钱包与提醒',
@@ -232,15 +311,21 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
 
     return items.slice(0, 3)
   }, [
-    activeTask,
     completedTaskCount,
+    employerActiveTask,
+    employerOpenLoopCount,
+    employerTaskWorkspaceHref,
+    employerTasks.length,
     hasMarketplaceExperience,
     hasProfileBasics,
     hasPublishedSkill,
-    openLoopCount,
     posts.length,
-    taskWorkspaceHref,
     unreadCount,
+    workRole,
+    workerActiveTask,
+    workerOpenLoopCount,
+    workerTaskWorkspaceHref,
+    workerTasks.length,
   ])
   const roadmap = useMemo<RoadmapItem[]>(() => [
     {
@@ -269,19 +354,34 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     },
     {
       day: 'Day 4',
-      title: '发布或参与第一个任务',
-      description: '尽快进入真实市场流转，而不是停留在注册完成这一层。',
-      done: hasMarketplaceExperience,
-      href: hasMarketplaceExperience ? taskWorkspaceHref : '/marketplace?tab=tasks&focus=create-task&source=home',
-      cta: hasMarketplaceExperience ? '回到市场工作台' : '去市场开始',
+      title: workRole === 'worker' ? '申请第一个任务' : '发布第一个任务',
+      description: workRole === 'worker'
+        ? '尽快进入真实任务申请与交付，而不是停留在注册完成这一层。'
+        : '尽快发布一个可指派、可托管、可验收的任务，把需求转成真实流转。',
+      done: workRole === 'worker' ? workerTasks.length > 0 : employerTasks.length > 0,
+      href: workRole === 'worker'
+        ? (workerTasks.length > 0 ? workerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-worker')
+        : (employerTasks.length > 0 ? employerTaskWorkspaceHref : '/marketplace?tab=tasks&focus=create-task&source=home-employer'),
+      cta: workRole === 'worker'
+        ? (workerTasks.length > 0 ? '回到执行工作台' : '去任务市场接单')
+        : (employerTasks.length > 0 ? '回到雇主工作台' : '去发布任务'),
     },
     {
       day: 'Day 5',
-      title: '推进托管与验收',
-      description: '让任务真正进入 escrow、提交、验收与结算，而不是停在 open 状态。',
-      done: hasSettlementProgress,
-      href: taskWorkspaceHref,
-      cta: hasSettlementProgress ? '查看当前进度' : '去推进任务',
+      title: workRole === 'worker' ? '提交交付并等待验收' : '推进托管并完成验收',
+      description: workRole === 'worker'
+        ? '让任务真正进入执行、提交与验收，而不是只停在浏览市场。'
+        : '让任务真正进入指派、托管、验收与结算，而不是一直停在 open 状态。'
+      ,
+      done: workRole === 'worker'
+        ? workerTasks.some((task) => ['in_progress', 'submitted', 'completed'].includes(task.status))
+        : employerTasks.some((task) => ['assigned', 'in_progress', 'submitted', 'completed'].includes(task.status)),
+      href: workRole === 'worker' ? workerTaskWorkspaceHref : employerTaskWorkspaceHref,
+      cta: (workRole === 'worker'
+        ? workerTasks.some((task) => ['in_progress', 'submitted', 'completed'].includes(task.status))
+        : employerTasks.some((task) => ['assigned', 'in_progress', 'submitted', 'completed'].includes(task.status)))
+        ? '查看当前进度'
+        : '去推进任务',
     },
     {
       day: 'Day 6',
@@ -300,15 +400,17 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       cta: hasPublishedSkill ? '查看公开 Skill' : '去发布 Skill',
     },
   ], [
-    hasMarketplaceExperience,
+    employerTaskWorkspaceHref,
+    employerTasks,
     hasProfileBasics,
     hasPublishedSkill,
-    hasSettlementProgress,
     hasWalletFootprint,
     latestPost,
     posts.length,
     session?.aid,
-    taskWorkspaceHref,
+    workRole,
+    workerTaskWorkspaceHref,
+    workerTasks,
   ])
   const topRecommendation = recommendations[0]
 
@@ -341,6 +443,33 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             <div className="text-sm font-medium text-primary-700">本周建议优先做</div>
             <div className="mt-1 text-lg font-semibold text-primary-900">{topRecommendation.title}</div>
             <p className="mt-2 text-sm text-primary-800">{topRecommendation.description}</p>
+          </div>
+        )}
+        {session && (
+          <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-sm font-medium text-slate-700">首页工作视角</div>
+                <div className="mt-1 text-base font-semibold text-slate-900">{roleLabel}</div>
+                <p className="mt-1 text-sm text-slate-600">{roleDescription}</p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => setWorkRole('employer')}
+                  className={`rounded-lg px-4 py-2 text-sm ${workRole === 'employer' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}
+                >
+                  雇主视角
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkRole('worker')}
+                  className={`rounded-lg px-4 py-2 text-sm ${workRole === 'worker' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'}`}
+                >
+                  执行者视角
+                </button>
+              </div>
+            </div>
           </div>
         )}
         {sessionState?.bootstrapState === 'error' && (
@@ -392,10 +521,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               <section className="rounded-2xl bg-white p-6 shadow-sm">
                 <h2 className="text-xl font-semibold">当前概览</h2>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <SummaryCard label="钱包余额" value={balance?.balance ?? '—'} />
+                  <SummaryCard label="当前视角" value={roleLabel} />
                   <SummaryCard label="未读提醒" value={unreadCount} />
-                  <SummaryCard label="进行中任务" value={openLoopCount} />
-                  <SummaryCard label="已发布 Skill" value={skills.length} />
+                  <SummaryCard label={workRole === 'worker' ? '执行中任务' : '雇主待推进'} value={roleOpenCount} />
+                  <SummaryCard label={workRole === 'worker' ? '已完成交付' : '已完成验收'} value={roleCompletedCount} />
                 </div>
               </section>
 
@@ -404,7 +533,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <div className="mt-4 space-y-3">
                   <MilestoneRow label="Profile" value={profile?.headline || '还没有填写 headline'} />
                   <MilestoneRow label="Forum" value={latestPost?.title || '还没有首帖'} />
-                  <MilestoneRow label="Task" value={activeTask?.title || latestCompletedTask?.title || '还没有任务进展'} />
+                  <MilestoneRow label="Task" value={rolePrimaryTask?.title || latestCompletedTask?.title || '还没有任务进展'} />
                   <MilestoneRow label="Wallet" value={balance ? `balance ${balance.balance}` : '钱包尚未加载'} />
                 </div>
               </section>
@@ -558,6 +687,34 @@ function getTaskPriority(status: string) {
     default:
       return 5
   }
+}
+
+function getEmployerRecommendationText(task: MarketplaceTask, openCount: number) {
+  if (task.status === 'submitted') {
+    return `你当前有 ${openCount} 个雇主侧待推进任务，这一单已等待验收，建议优先核对交付结果并完成结算。`
+  }
+
+  if (task.status === 'in_progress' || task.status === 'assigned') {
+    return `你当前有 ${openCount} 个雇主侧待推进任务，这一单已经进入执行阶段，建议优先盯托管、进度和交付节奏。`
+  }
+
+  if (task.status === 'open') {
+    return `你当前有 ${openCount} 个雇主侧待推进任务，这一单仍在开放中，建议回到工作台查看申请并尽快指派。`
+  }
+
+  return '回到雇主工作台继续处理任务、托管、验收和结算。'
+}
+
+function getWorkerRecommendationText(task: MarketplaceTask, openCount: number) {
+  if (task.status === 'submitted') {
+    return `你当前有 ${openCount} 个执行侧待推进任务，这一单已经提交，建议优先盯验收结果和钱包提醒。`
+  }
+
+  if (task.status === 'in_progress' || task.status === 'assigned') {
+    return `你当前有 ${openCount} 个执行侧待推进任务，这一单正在执行中，建议优先回到工作台补交付并推进验收。`
+  }
+
+  return '回到执行工作台继续推进交付、验收和收入沉淀。'
 }
 
 function getTaskSortTime(task: MarketplaceTask) {
