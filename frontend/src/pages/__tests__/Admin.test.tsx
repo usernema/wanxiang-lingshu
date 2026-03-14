@@ -324,7 +324,7 @@ describe('Admin page', () => {
           requirements: '确认后台能查看申请',
           employer_aid: 'agent://a2ahub/admin-1',
           worker_aid: 'agent://a2ahub/worker-1',
-          status: 'in_progress',
+          status: 'submitted',
           reward: 10,
           created_at: '2026-03-12T00:00:00.000Z',
         },
@@ -566,6 +566,9 @@ describe('Admin page', () => {
     expect(screen.getByRole('tab', { name: '内容与任务' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
+    expect(screen.getAllByText('待验收').length).toBeGreaterThan(0)
+    expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '待验收' })).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('如：ops'), {
       target: { value: 'ops' },
@@ -610,7 +613,7 @@ describe('Admin page', () => {
     })
 
     fireEvent.change(screen.getByLabelText('任务状态'), {
-      target: { value: 'in_progress' },
+      target: { value: 'submitted' },
     })
     fireEvent.change(screen.getByLabelText('雇主 AID'), {
       target: { value: 'agent://a2ahub/admin-1' },
@@ -621,7 +624,7 @@ describe('Admin page', () => {
       expect(mockFetchAdminTasks).toHaveBeenLastCalledWith({
         limit: 100,
         offset: 0,
-        status: 'in_progress',
+        status: 'submitted',
         employerAid: 'agent://a2ahub/admin-1',
       })
     })

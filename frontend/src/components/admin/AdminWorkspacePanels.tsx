@@ -148,7 +148,9 @@ export function AdminOverviewPanel({
             <p className="text-sm font-medium text-slate-900">任务状态</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+              <SummaryChip label="已分配" value={taskStatusSummary.assigned || 0} tone="bg-indigo-100 text-indigo-800" />
               <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="待验收" value={taskStatusSummary.submitted || 0} tone="bg-violet-100 text-violet-800" />
               <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
               <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
             </div>
@@ -858,7 +860,9 @@ export function AdminContentPanel({
               >
                 <option value="all">全部</option>
                 <option value="open">开放中</option>
+                <option value="assigned">已分配待开工</option>
                 <option value="in_progress">进行中</option>
+                <option value="submitted">待验收</option>
                 <option value="completed">已完成</option>
                 <option value="cancelled">已取消</option>
               </select>
@@ -884,7 +888,9 @@ export function AdminContentPanel({
         </form>
         <div className="mb-4 flex flex-wrap gap-2">
           <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+          <SummaryChip label="已分配" value={taskStatusSummary.assigned || 0} tone="bg-indigo-100 text-indigo-800" />
           <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+          <SummaryChip label="待验收" value={taskStatusSummary.submitted || 0} tone="bg-violet-100 text-violet-800" />
           <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
           <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
         </div>
@@ -900,7 +906,7 @@ export function AdminContentPanel({
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <SummaryChip label="open 异常" value={consistencySummary?.open_with_lifecycle_fields || 0} tone="bg-sky-100 text-sky-800" />
-            <SummaryChip label="进行中缺字段" value={consistencySummary?.in_progress_missing_assignment || 0} tone="bg-amber-100 text-amber-800" />
+            <SummaryChip label="执行/待验收缺字段" value={consistencySummary?.in_progress_missing_assignment || 0} tone="bg-amber-100 text-amber-800" />
             <SummaryChip label="完成缺时间" value={consistencySummary?.completed_missing_completed_at || 0} tone="bg-emerald-100 text-emerald-800" />
             <SummaryChip label="取消缺时间" value={consistencySummary?.cancelled_missing_cancelled_at || 0} tone="bg-rose-100 text-rose-800" />
           </div>

@@ -28,7 +28,9 @@ function toneClass(ok: boolean) {
 
 function taskStatusTone(status?: string) {
   if (status === 'open') return 'bg-sky-100 text-sky-800'
+  if (status === 'assigned') return 'bg-indigo-100 text-indigo-800'
   if (status === 'in_progress') return 'bg-amber-100 text-amber-800'
+  if (status === 'submitted') return 'bg-violet-100 text-violet-800'
   if (status === 'completed') return 'bg-emerald-100 text-emerald-800'
   if (status === 'cancelled') return 'bg-rose-100 text-rose-800'
   return 'bg-slate-100 text-slate-700'
@@ -65,7 +67,9 @@ function statusLabel(status?: string) {
 
 function taskStatusLabel(status?: string) {
   if (status === 'open') return '开放中'
+  if (status === 'assigned') return '已分配待开工'
   if (status === 'in_progress') return '进行中'
+  if (status === 'submitted') return '待验收'
   if (status === 'completed') return '已完成'
   if (status === 'cancelled') return '已取消'
   return status || '未知'

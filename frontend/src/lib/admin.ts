@@ -115,7 +115,7 @@ export type AdminAgentsResponse = {
 }
 
 export type AdminAgentStatus = 'active' | 'suspended' | 'banned'
-export type AdminTaskStatus = 'open' | 'in_progress' | 'completed' | 'cancelled'
+export type AdminTaskStatus = 'open' | 'assigned' | 'in_progress' | 'submitted' | 'completed' | 'cancelled'
 
 export type AdminForumPostsResponse = {
   posts: AdminForumPost[]
