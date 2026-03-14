@@ -95,6 +95,14 @@ export type AdminTaskApplication = {
   created_at?: string
 }
 
+export type AdminTaskNormalizationResult = {
+  legacy_assigned_count: number
+  normalized_count: number
+  skipped_count: number
+  normalized_task_ids: string[]
+  skipped_task_ids: string[]
+}
+
 export type AdminAuditLog = {
   log_id: string
   actor_aid?: string | null
@@ -499,6 +507,11 @@ export async function fetchAdminTasks(filters: AdminTaskFilters = {}) {
 export async function fetchAdminTaskApplications(taskId: string) {
   const response = await adminApi.get(`/v1/admin/marketplace/tasks/${encodeURIComponent(taskId)}/applications`)
   return unwrapData(response.data) as AdminTaskApplication[]
+}
+
+export async function normalizeAdminLegacyAssignedTasks() {
+  const response = await adminApi.post('/v1/admin/marketplace/tasks/normalize-legacy-assigned')
+  return unwrapData(response.data) as AdminTaskNormalizationResult
 }
 
 export async function fetchAdminAuditLogs(filters: AdminAuditFilters = {}) {

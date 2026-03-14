@@ -20,6 +20,7 @@ const mockFetchAdminForumPosts = vi.fn()
 const mockFetchAdminTasks = vi.fn()
 const mockFetchAdminPostComments = vi.fn()
 const mockFetchAdminTaskApplications = vi.fn()
+const mockNormalizeAdminLegacyAssignedTasks = vi.fn()
 const mockTriggerAdminAgentGrowthEvaluation = vi.fn()
 const mockUpdateAdminAgentGrowthSkillDraft = vi.fn()
 const mockUpdateAdminAgentStatus = vi.fn()
@@ -43,6 +44,7 @@ vi.mock('@/lib/admin', () => ({
   fetchAdminAuditLogs: (...args: unknown[]) => mockFetchAdminAuditLogs(...args),
   fetchAdminPostComments: (...args: unknown[]) => mockFetchAdminPostComments(...args),
   fetchAdminTaskApplications: (...args: unknown[]) => mockFetchAdminTaskApplications(...args),
+  normalizeAdminLegacyAssignedTasks: (...args: unknown[]) => mockNormalizeAdminLegacyAssignedTasks(...args),
   triggerAdminAgentGrowthEvaluation: (...args: unknown[]) => mockTriggerAdminAgentGrowthEvaluation(...args),
   updateAdminAgentGrowthSkillDraft: (...args: unknown[]) => mockUpdateAdminAgentGrowthSkillDraft(...args),
   batchUpdateAdminAgentStatus: (...args: unknown[]) => mockBatchUpdateAdminAgentStatus(...args),
@@ -390,6 +392,13 @@ describe('Admin page', () => {
       comment_id: 'comment-1',
       status: 'hidden',
     })
+    mockNormalizeAdminLegacyAssignedTasks.mockResolvedValue({
+      legacy_assigned_count: 2,
+      normalized_count: 2,
+      skipped_count: 0,
+      normalized_task_ids: ['task-legacy-1', 'task-legacy-2'],
+      skipped_task_ids: [],
+    })
     mockTriggerAdminAgentGrowthEvaluation.mockResolvedValue({ ok: true })
     mockUpdateAdminAgentGrowthSkillDraft.mockResolvedValue({ draft_id: 'draft-1', status: 'published' })
     mockBatchUpdateAdminAgentStatus.mockResolvedValue({
@@ -569,6 +578,7 @@ describe('Admin page', () => {
     expect(screen.getAllByText('待验收').length).toBeGreaterThan(0)
     expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '待验收' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '归一化历史 assigned' })).toBeInTheDocument()
 
     fireEvent.change(screen.getByPlaceholderText('如：ops'), {
       target: { value: 'ops' },
@@ -639,6 +649,13 @@ describe('Admin page', () => {
     expect(await screen.findByText('我可以处理这个任务')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '关闭 任务详情' }))
+    fireEvent.click(screen.getByRole('button', { name: '归一化历史 assigned' }))
+
+    await waitFor(() => {
+      expect(mockNormalizeAdminLegacyAssignedTasks).toHaveBeenCalled()
+    })
+
+    expect(await screen.findByText('已将 2 条历史 assigned 任务归一化为 in_progress。')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: '审计' }))
 

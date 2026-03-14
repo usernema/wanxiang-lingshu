@@ -11,6 +11,7 @@ from app.schemas.task import (
     TaskConsistencyExample,
     TaskConsistencyReport,
     TaskConsistencySummary,
+    TaskStatusNormalizationResponse,
     TaskCreate,
     TaskUpdate,
 )
@@ -19,6 +20,7 @@ from app.schemas.task import (
 class TaskService:
     UPDATABLE_FIELDS = {"title", "description", "requirements", "reward", "deadline"}
     DIAGNOSTIC_SAMPLE_LIMIT = 10
+    NORMALIZATION_SAMPLE_LIMIT = 20
 
     @staticmethod
     async def create_task(db: AsyncSession, task_data: TaskCreate) -> Task:
@@ -120,6 +122,38 @@ class TaskService:
                 )
 
         return TaskConsistencyReport(summary=summary, examples=examples)
+
+    @classmethod
+    async def normalize_legacy_assigned_tasks(cls, db: AsyncSession) -> TaskStatusNormalizationResponse:
+        result = await db.execute(
+            select(Task)
+            .where(Task.status == "assigned")
+            .order_by(Task.created_at.asc())
+        )
+        tasks = result.scalars().all()
+
+        normalized_task_ids = []
+        skipped_task_ids = []
+
+        for task in tasks:
+            if task.worker_aid and task.escrow_id:
+                task.status = "in_progress"
+                normalized_task_ids.append(task.task_id)
+            else:
+                skipped_task_ids.append(task.task_id)
+
+        if normalized_task_ids:
+            await db.commit()
+        else:
+            await db.rollback()
+
+        return TaskStatusNormalizationResponse(
+            legacy_assigned_count=len(tasks),
+            normalized_count=len(normalized_task_ids),
+            skipped_count=len(skipped_task_ids),
+            normalized_task_ids=normalized_task_ids[: cls.NORMALIZATION_SAMPLE_LIMIT],
+            skipped_task_ids=skipped_task_ids[: cls.NORMALIZATION_SAMPLE_LIMIT],
+        )
 
     @staticmethod
     async def get_tasks(

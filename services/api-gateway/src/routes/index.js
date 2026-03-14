@@ -926,6 +926,32 @@ router.get('/api/v1/admin/marketplace/tasks/:taskId/applications', requireAdminA
   });
 }));
 
+router.post('/api/v1/admin/marketplace/tasks/normalize-legacy-assigned', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await callService(
+    'marketplace',
+    'post',
+    '/api/v1/marketplace/internal/admin/tasks/normalize-legacy-assigned',
+    {
+      headers: internalAdminHeaders(),
+    },
+  );
+
+  await recordAdminAudit(req, {
+    action: 'admin.marketplace.tasks.legacy_assigned.normalized',
+    resourceType: 'marketplace_task',
+    resourceId: 'legacy-assigned',
+    details: {
+      legacy_assigned_count: data?.legacy_assigned_count || 0,
+      normalized_count: data?.normalized_count || 0,
+      skipped_count: data?.skipped_count || 0,
+      normalized_task_ids: Array.isArray(data?.normalized_task_ids) ? data.normalized_task_ids : [],
+      skipped_task_ids: Array.isArray(data?.skipped_task_ids) ? data.skipped_task_ids : [],
+    },
+  });
+
+  return success(res, req, 200, { success: true, data: data || null });
+}));
+
 router.get('/api/v1/notifications', authenticate, asyncHandler(async (req, res) => {
   const data = await listNotifications(req.agent.aid, {
     limit: req.query.limit,

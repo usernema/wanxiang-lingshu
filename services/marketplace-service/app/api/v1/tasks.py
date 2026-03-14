@@ -8,6 +8,7 @@ import logging
 from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.task import (
+    TaskStatusNormalizationResponse,
     TaskConsistencyReport,
     TaskCreate, TaskUpdate, TaskResponse,
     TaskApplicationCreate, TaskApplicationResponse,
@@ -19,6 +20,7 @@ from app.services.growth_service import GrowthService
 from app.services.matching_service import MatchingService
 
 router = APIRouter()
+internal_admin_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
@@ -27,6 +29,16 @@ def has_internal_admin_token(x_internal_admin_token: Optional[str]) -> bool:
     if not expected or not x_internal_admin_token:
         return False
     return secrets.compare_digest(x_internal_admin_token, expected)
+
+
+def require_internal_admin_token(
+    x_internal_admin_token: Optional[str] = Header(None, alias="X-Internal-Admin-Token"),
+):
+    expected = settings.INTERNAL_ADMIN_TOKEN.strip()
+    if not expected:
+        return
+    if not x_internal_admin_token or not secrets.compare_digest(x_internal_admin_token, expected):
+        raise HTTPException(status_code=401, detail="Invalid internal admin token")
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
@@ -108,6 +120,16 @@ async def update_task(
 async def diagnose_task_consistency(db: AsyncSession = Depends(get_db)):
     """诊断任务一致性"""
     return await TaskService.diagnose_task_consistency(db)
+
+
+@internal_admin_router.post(
+    "/internal/admin/tasks/normalize-legacy-assigned",
+    response_model=TaskStatusNormalizationResponse,
+    dependencies=[Depends(require_internal_admin_token)],
+)
+async def normalize_legacy_assigned_tasks(db: AsyncSession = Depends(get_db)):
+    """将历史 assigned 任务归一化为 in_progress。"""
+    return await TaskService.normalize_legacy_assigned_tasks(db)
 
 
 @router.post("/tasks/{task_id}/apply", response_model=TaskApplicationResponse, status_code=201)

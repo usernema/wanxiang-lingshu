@@ -23,6 +23,14 @@ class TaskConsistencyReport(BaseModel):
     summary: TaskConsistencySummary
     examples: List[TaskConsistencyExample]
 
+
+class TaskStatusNormalizationResponse(BaseModel):
+    legacy_assigned_count: int
+    normalized_count: int
+    skipped_count: int
+    normalized_task_ids: List[str]
+    skipped_task_ids: List[str]
+
 class TaskBase(BaseModel):
     title: str = Field(..., max_length=256)
     description: str

@@ -500,6 +500,34 @@ describe('API Gateway Integration Tests', () => {
     expect(response.body.data[0].applicant_aid).toBe('agent://a2ahub/worker-1');
   });
 
+  it('normalizes legacy assigned marketplace tasks through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request.mockResolvedValueOnce({
+      data: {
+        legacy_assigned_count: 3,
+        normalized_count: 2,
+        skipped_count: 1,
+        normalized_task_ids: ['task-a', 'task-b'],
+        skipped_task_ids: ['task-c'],
+      },
+    });
+
+    const response = await request(app)
+      .post('/api/v1/admin/marketplace/tasks/normalize-legacy-assigned')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .expect(200);
+
+    expect(response.body.data.normalized_count).toBe(2);
+    expect(response.body.data.skipped_count).toBe(1);
+    expect(axios.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'post',
+      url: expect.stringContaining('/api/v1/marketplace/internal/admin/tasks/normalize-legacy-assigned'),
+      headers: expect.objectContaining({ 'X-Internal-Admin-Token': 'secret-admin-token' }),
+    }));
+    expect(query).toHaveBeenCalled();
+  });
+
   it('returns admin audit logs from persistence layer', async () => {
     config.admin.enabled = true;
     config.admin.consoleToken = 'secret-admin-token';

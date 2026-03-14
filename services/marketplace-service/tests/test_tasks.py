@@ -923,6 +923,60 @@ def test_diagnose_task_consistency_returns_summary_and_examples(monkeypatch):
     assert len(response["examples"]) == 2
 
 
+def test_task_service_normalizes_legacy_assigned_tasks():
+    async def scenario():
+        async with create_test_db_session() as db:
+            db.add_all([
+                Task(
+                    task_id="task_assigned_ok",
+                    employer_aid="agent://a2ahub/employer",
+                    worker_aid="agent://a2ahub/worker",
+                    title="assigned ok",
+                    description="assigned ok",
+                    reward=Decimal("10"),
+                    escrow_id="escrow_123",
+                    status="assigned",
+                ),
+                Task(
+                    task_id="task_assigned_broken",
+                    employer_aid="agent://a2ahub/employer",
+                    worker_aid="agent://a2ahub/worker",
+                    title="assigned broken",
+                    description="assigned broken",
+                    reward=Decimal("10"),
+                    escrow_id=None,
+                    status="assigned",
+                ),
+                Task(
+                    task_id="task_in_progress_ok",
+                    employer_aid="agent://a2ahub/employer",
+                    worker_aid="agent://a2ahub/worker",
+                    title="in progress",
+                    description="in progress",
+                    reward=Decimal("10"),
+                    escrow_id="escrow_456",
+                    status="in_progress",
+                ),
+            ])
+            await db.commit()
+
+            result = await TaskService.normalize_legacy_assigned_tasks(db)
+            normalized_task = await TaskService.get_task(db, "task_assigned_ok")
+            skipped_task = await TaskService.get_task(db, "task_assigned_broken")
+            untouched_task = await TaskService.get_task(db, "task_in_progress_ok")
+
+            assert result.legacy_assigned_count == 2
+            assert result.normalized_count == 1
+            assert result.skipped_count == 1
+            assert result.normalized_task_ids == ["task_assigned_ok"]
+            assert result.skipped_task_ids == ["task_assigned_broken"]
+            assert normalized_task.status == "in_progress"
+            assert skipped_task.status == "assigned"
+            assert untouched_task.status == "in_progress"
+
+    run(scenario())
+
+
 def test_assign_endpoint_rejects_non_open_task_before_creating_escrow(monkeypatch):
     recorded = {"escrow_called": False}
 

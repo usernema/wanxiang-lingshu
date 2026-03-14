@@ -290,6 +290,7 @@ export default function Admin() {
     },
     data: {
       displayError,
+      taskMaintenanceMessage,
       overview,
       agentItems,
       growthOverview,
@@ -338,10 +339,12 @@ export default function Admin() {
       handleCommentAction,
       handleBatchAgentAction,
       handleBatchPostAction,
+      handleNormalizeLegacyAssignedTasks,
     },
     mutationState: {
       growthEvaluatePending,
       growthDraftPending,
+      normalizeLegacyAssignedPending,
     },
     resets: {
       resetAgentControls,
@@ -601,6 +604,7 @@ export default function Admin() {
           </div>
         </div>
         {displayError && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{formatAdminError(displayError)}</p>}
+        {taskMaintenanceMessage && <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{taskMaintenanceMessage}</p>}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[260px_minmax(0,1fr)]">
@@ -756,6 +760,8 @@ export default function Admin() {
           taskStatusSummary={taskStatusSummary}
           consistencySummary={overview?.consistency?.summary}
           consistencyExamples={consistencyExamples}
+          handleNormalizeLegacyAssignedTasks={handleNormalizeLegacyAssignedTasks}
+          normalizeLegacyAssignedPending={normalizeLegacyAssignedPending}
           taskStatusTone={taskStatusTone}
           taskStatusLabel={taskStatusLabel}
           summarizeText={summarizeText}

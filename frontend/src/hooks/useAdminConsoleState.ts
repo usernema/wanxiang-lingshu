@@ -26,8 +26,10 @@ import {
   fetchAdminTaskApplications,
   fetchAdminTasks,
   getAdminToken,
+  normalizeAdminLegacyAssignedTasks,
   setAdminToken,
   type AdminTask,
+  type AdminTaskNormalizationResult,
   type AdminTaskStatus,
   triggerAdminAgentGrowthEvaluation,
   updateAdminAgentGrowthSkillDraft,
@@ -129,6 +131,7 @@ export function useAdminConsoleState() {
   const [growthKeyword, setGrowthKeyword] = useState('')
   const [growthDraftStatusFilter, setGrowthDraftStatusFilter] = useState<'all' | AdminAgentGrowthSkillDraftStatus>('all')
   const [growthDraftKeyword, setGrowthDraftKeyword] = useState('')
+  const [taskMaintenanceMessage, setTaskMaintenanceMessage] = useState<string | null>(null)
 
   const enabled = activeToken.trim().length > 0
 
@@ -322,6 +325,25 @@ export function useAdminConsoleState() {
     },
   })
 
+  const normalizeLegacyAssignedMutation = useMutation({
+    mutationFn: () => normalizeAdminLegacyAssignedTasks(),
+    onSuccess: async (result: AdminTaskNormalizationResult) => {
+      if (result.normalized_count > 0) {
+        setTaskMaintenanceMessage(
+          result.skipped_count > 0
+            ? `已将 ${result.normalized_count} 条历史 assigned 任务归一化为 in_progress，另有 ${result.skipped_count} 条缺少必要字段未自动修复。`
+            : `已将 ${result.normalized_count} 条历史 assigned 任务归一化为 in_progress。`,
+        )
+      } else if (result.legacy_assigned_count > 0) {
+        setTaskMaintenanceMessage(`检测到 ${result.legacy_assigned_count} 条历史 assigned 任务，但有 ${result.skipped_count} 条缺少必要字段，未自动修复。`)
+      } else {
+        setTaskMaintenanceMessage('当前没有检测到需要归一化的历史 assigned 任务。')
+      }
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
   const closeAllDetails = () => {
     setSelectedAgent(null)
     setSelectedGrowthProfile(null)
@@ -336,7 +358,7 @@ export function useAdminConsoleState() {
   }
 
   const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error
-  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error
+  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error
   const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -351,6 +373,7 @@ export function useAdminConsoleState() {
     clearAdminToken()
     setDraftToken('')
     setActiveToken('')
+    setTaskMaintenanceMessage(null)
     setSelectedAgentAids([])
     setSelectedPostIds([])
     closeAllDetails()
@@ -358,6 +381,11 @@ export function useAdminConsoleState() {
 
   const handleRefresh = async () => {
     await refreshAdminData()
+  }
+
+  const handleNormalizeLegacyAssignedTasks = async () => {
+    if (!window.confirm('确认将历史 assigned 任务归一化为 in_progress 吗？')) return
+    await normalizeLegacyAssignedMutation.mutateAsync()
   }
 
   const openAgentDetail = (agent: AgentProfile) => {
@@ -679,6 +707,7 @@ export function useAdminConsoleState() {
     },
     data: {
       displayError,
+      taskMaintenanceMessage,
       overview,
       agentItems,
       growthOverview,
@@ -730,10 +759,12 @@ export function useAdminConsoleState() {
       handleCommentAction,
       handleBatchAgentAction,
       handleBatchPostAction,
+      handleNormalizeLegacyAssignedTasks,
     },
     mutationState: {
       growthEvaluatePending: growthEvaluateMutation.isPending,
       growthDraftPending: growthDraftMutation.isPending,
+      normalizeLegacyAssignedPending: normalizeLegacyAssignedMutation.isPending,
     },
     resets: {
       resetAgentControls,

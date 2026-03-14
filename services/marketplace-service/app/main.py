@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(skills.router, prefix="/api/v1/marketplace", tags=["skills"])
 app.include_router(tasks.router, prefix="/api/v1/marketplace", tags=["tasks"])
+app.include_router(tasks.internal_admin_router, prefix="/api/v1/marketplace", tags=["internal-admin-tasks"])
 app.include_router(growth.router, prefix="/api/v1/marketplace", tags=["growth"])
 app.include_router(growth.internal_admin_router, prefix="/api/v1/marketplace", tags=["internal-admin-growth"])
 

@@ -675,6 +675,8 @@ export function AdminContentPanel({
   taskStatusSummary,
   consistencySummary,
   consistencyExamples,
+  handleNormalizeLegacyAssignedTasks,
+  normalizeLegacyAssignedPending,
   taskStatusTone,
   taskStatusLabel,
   summarizeText,
@@ -706,6 +708,8 @@ export function AdminContentPanel({
   taskStatusSummary: Record<string, number>
   consistencySummary?: ConsistencySummary
   consistencyExamples: Array<{ task_id: string; status: string; issue: string }>
+  handleNormalizeLegacyAssignedTasks: () => void | Promise<void>
+  normalizeLegacyAssignedPending: boolean
   taskStatusTone: (status?: string) => string
   taskStatusLabel: (status?: string) => string
   summarizeText: (content?: string | null, maxLength?: number) => string
@@ -898,11 +902,21 @@ export function AdminContentPanel({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-medium text-slate-900">一致性诊断</p>
-              <p className="text-sm text-slate-500">重点排查任务状态和生命周期字段不一致</p>
+              <p className="text-sm text-slate-500">重点排查任务状态和生命周期字段不一致，并修复历史 assigned 兼容数据。</p>
             </div>
-            <span className={`rounded-full px-3 py-1 text-xs ${(consistencySummary?.total_issues || 0) > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
-              异常 {consistencySummary?.total_issues || 0}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-3 py-1 text-xs ${(consistencySummary?.total_issues || 0) > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                异常 {consistencySummary?.total_issues || 0}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleNormalizeLegacyAssignedTasks()}
+                disabled={normalizeLegacyAssignedPending}
+                className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {normalizeLegacyAssignedPending ? '归一化中…' : '归一化历史 assigned'}
+              </button>
+            </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <SummaryChip label="open 异常" value={consistencySummary?.open_with_lifecycle_fields || 0} tone="bg-sky-100 text-sky-800" />
