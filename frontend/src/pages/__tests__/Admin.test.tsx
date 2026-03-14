@@ -14,6 +14,10 @@ const mockFetchAdminAgentGrowthExperienceCards = vi.fn()
 const mockFetchAdminAgentGrowthProfiles = vi.fn()
 const mockFetchAdminAgentGrowthRiskMemories = vi.fn()
 const mockFetchAdminAgentGrowthSkillDrafts = vi.fn()
+const mockFetchAdminDojoOverview = vi.fn()
+const mockFetchAdminDojoCoaches = vi.fn()
+const mockFetchAdminDojoBindings = vi.fn()
+const mockAssignAdminDojoCoach = vi.fn()
 const mockFetchAdminEmployerSkillGrants = vi.fn()
 const mockFetchAdminOverview = vi.fn()
 const mockFetchAdminAgents = vi.fn()
@@ -40,6 +44,10 @@ vi.mock('@/lib/admin', () => ({
   fetchAdminAgentGrowthProfiles: (...args: unknown[]) => mockFetchAdminAgentGrowthProfiles(...args),
   fetchAdminAgentGrowthRiskMemories: (...args: unknown[]) => mockFetchAdminAgentGrowthRiskMemories(...args),
   fetchAdminAgentGrowthSkillDrafts: (...args: unknown[]) => mockFetchAdminAgentGrowthSkillDrafts(...args),
+  fetchAdminDojoOverview: () => mockFetchAdminDojoOverview(),
+  fetchAdminDojoCoaches: (...args: unknown[]) => mockFetchAdminDojoCoaches(...args),
+  fetchAdminDojoBindings: (...args: unknown[]) => mockFetchAdminDojoBindings(...args),
+  assignAdminDojoCoach: (...args: unknown[]) => mockAssignAdminDojoCoach(...args),
   fetchAdminEmployerSkillGrants: (...args: unknown[]) => mockFetchAdminEmployerSkillGrants(...args),
   fetchAdminOverview: () => mockFetchAdminOverview(),
   fetchAdminAgents: (...args: unknown[]) => mockFetchAdminAgents(...args),
@@ -67,6 +75,37 @@ describe('Admin page', () => {
     mockFormatAdminError.mockReturnValue('后台加载失败')
     vi.stubGlobal('confirm', vi.fn(() => true))
     vi.stubGlobal('prompt', vi.fn(() => '已核对托管与状态'))
+    mockFetchAdminDojoOverview.mockResolvedValue({
+      total_coaches: 1,
+      active_coach_bindings: 0,
+      diagnostic_stage_agents: 0,
+      practice_stage_agents: 0,
+      arena_ready_agents: 0,
+      active_plans: 0,
+      open_mistakes: 0,
+      high_severity_mistakes: 0,
+      by_school: {},
+      by_stage: {},
+    })
+    mockFetchAdminDojoCoaches.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminDojoBindings.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    })
+    mockAssignAdminDojoCoach.mockResolvedValue({
+      aid: 'agent://a2ahub/admin-1',
+      primary_coach_aid: 'official://dojo/general-coach',
+      school_key: 'generalist',
+      stage: 'diagnostic',
+      status: 'active',
+    })
   })
 
   it('shows token gate when no admin token is present', async () => {

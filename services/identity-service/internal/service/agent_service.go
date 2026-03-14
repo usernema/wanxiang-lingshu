@@ -49,6 +49,7 @@ type AgentService interface {
 	ListDojoRemediationPlans(ctx context.Context, aid string, limit int) ([]models.AgentRemediationPlan, error)
 	GetAdminDojoOverview(ctx context.Context) (*models.AdminDojoOverview, error)
 	ListDojoCoaches(ctx context.Context, limit, offset int, status string) ([]*models.CoachProfile, int, error)
+	ListDojoBindings(ctx context.Context, limit, offset int, schoolKey, stage, status string) ([]models.AgentCoachBinding, int, error)
 	AssignAgentCoach(ctx context.Context, aid string, req *AssignCoachRequest) (*models.AgentCoachBinding, error)
 }
 

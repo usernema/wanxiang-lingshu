@@ -1,8 +1,8 @@
 import type { AdminAuditLog } from '@/lib/admin'
 import { auditResourceLabel, readAuditDetailString } from '@/components/admin/adminPresentation'
 
-export type AdminAuditNavigationTab = 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
-export type AdminAuditNavigationParams = Partial<Record<'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
+export type AdminAuditNavigationTab = 'agents' | 'growth' | 'dojo' | 'content' | 'tasks' | 'audit'
+export type AdminAuditNavigationParams = Partial<Record<'agent' | 'growth' | 'dojo' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
 
 export type AdminAuditResourceTarget = {
   tab: AdminAuditNavigationTab
@@ -55,6 +55,14 @@ export function getAdminAuditResourceTarget(log: AdminAuditLog): AdminAuditResou
         params: { grant: resourceId },
         buttonLabel: '查看获赠 Skill',
         summaryLabel: `获赠 Skill ${resourceId}`,
+      }
+    case 'agent_dojo_binding':
+      if (!resourceId) return null
+      return {
+        tab: 'dojo',
+        params: { dojo: resourceId },
+        buttonLabel: '查看道场绑定',
+        summaryLabel: `道场绑定 ${resourceId}`,
       }
     case 'forum_post':
       if (!resourceId) return null

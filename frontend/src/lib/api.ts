@@ -79,6 +79,114 @@ export type AgentGrowthProfileResponse = {
   pools: AgentGrowthPool[]
 }
 
+export type DojoCoachProfile = {
+  coach_aid: string
+  coach_type: string
+  schools: string[]
+  bio: string
+  pricing: Record<string, unknown>
+  rating: number
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoCoachBinding = {
+  aid: string
+  primary_coach_aid: string
+  shadow_coach_aid?: string
+  school_key: string
+  stage: string
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoTrainingAttempt = {
+  attempt_id: string
+  aid: string
+  set_id: string
+  question_id?: string
+  scene_type: string
+  score: number
+  result_status: string
+  artifact: Record<string, unknown>
+  feedback: Record<string, unknown>
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoMistakeItem = {
+  mistake_id: string
+  aid: string
+  source_type: string
+  source_ref_id: string
+  capability_key: string
+  mistake_type: string
+  severity: string
+  evidence: Record<string, unknown>
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoRemediationPlan = {
+  plan_id: string
+  aid: string
+  coach_aid: string
+  trigger_type: string
+  goal: Record<string, unknown>
+  assigned_set_ids: string[]
+  required_pass_count: number
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoQuestionSet = {
+  set_id: string
+  school_key: string
+  scene_type: string
+  title: string
+  difficulty: string
+  tags: string[]
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type DojoOverview = {
+  aid: string
+  school_key: string
+  stage: string
+  binding?: DojoCoachBinding
+  coach?: DojoCoachProfile
+  active_plan?: DojoRemediationPlan
+  last_diagnostic_attempt?: DojoTrainingAttempt
+  mistake_count: number
+  open_mistake_count: number
+  pending_plan_count: number
+  diagnostic_set_id?: string
+  suggested_next_action: string
+}
+
+export type DojoDiagnosticStartResponse = {
+  overview: DojoOverview
+  plan?: DojoRemediationPlan
+  attempt?: DojoTrainingAttempt
+  question_set?: DojoQuestionSet
+}
+
+export type DojoMistakeListResponse = {
+  items: DojoMistakeItem[]
+  limit: number
+}
+
+export type DojoRemediationPlanListResponse = {
+  items: DojoRemediationPlan[]
+  limit: number
+}
+
 export type AgentSkillDraft = {
   id: number
   draft_id: string
@@ -425,6 +533,30 @@ export async function fetchCurrentAgent() {
 export async function fetchCurrentAgentGrowth() {
   const response = await api.get('/v1/agents/me/growth')
   return response.data as AgentGrowthProfileResponse
+}
+
+export async function fetchCurrentDojoOverview() {
+  const response = await api.get('/v1/dojo/me/overview')
+  return response.data as DojoOverview
+}
+
+export async function startCurrentDojoDiagnostics() {
+  const response = await api.post('/v1/dojo/diagnostics/start')
+  return response.data as DojoDiagnosticStartResponse
+}
+
+export async function fetchCurrentDojoMistakes(limit = 20) {
+  const response = await api.get('/v1/dojo/me/mistakes', {
+    params: { limit },
+  })
+  return response.data as DojoMistakeListResponse
+}
+
+export async function fetchCurrentDojoRemediationPlans(limit = 20) {
+  const response = await api.get('/v1/dojo/me/remediation-plans', {
+    params: { limit },
+  })
+  return response.data as DojoRemediationPlanListResponse
 }
 
 export async function fetchMySkillDrafts(params: {

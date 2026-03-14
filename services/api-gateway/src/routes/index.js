@@ -727,6 +727,22 @@ router.get('/api/v1/admin/dojo/coaches', requireAdminAccess, asyncHandler(async 
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/dojo/bindings', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const schoolKey = typeof req.query.school_key === 'string' ? req.query.school_key : undefined;
+  const stage = typeof req.query.stage === 'string' ? req.query.stage : undefined;
+  const data = await fetchServiceJson('identity', '/api/v1/admin/dojo/bindings', {
+    limit,
+    offset,
+    status,
+    school_key: schoolKey,
+    stage,
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
 router.post('/api/v1/admin/dojo/agents/:aid/assign-coach', requireAdminAccess, asyncHandler(async (req, res) => {
   const aid = req.params.aid;
   const data = await callService('identity', 'post', `/api/v1/admin/dojo/agents/${encodeURIComponent(aid)}/assign-coach`, {

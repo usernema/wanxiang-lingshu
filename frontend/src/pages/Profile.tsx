@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, updateCurrentProfile } from '@/lib/api'
+import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, updateCurrentProfile } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -19,8 +19,11 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const [profileMessage, setProfileMessage] = useState<string | null>(null)
   const [assetMessage, setAssetMessage] = useState<string | null>(null)
   const [assetError, setAssetError] = useState<string | null>(null)
+  const [dojoMessage, setDojoMessage] = useState<string | null>(null)
+  const [dojoError, setDojoError] = useState<string | null>(null)
   const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null)
   const [savingProfile, setSavingProfile] = useState(false)
+  const [startingDojo, setStartingDojo] = useState(false)
 
   const profileQuery = useQuery({
     queryKey: ['profile', session?.aid],
@@ -82,6 +85,24 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     queryFn: fetchCurrentAgentGrowth,
   })
 
+  const dojoOverviewQuery = useQuery({
+    queryKey: ['profile-dojo-overview', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: fetchCurrentDojoOverview,
+  })
+
+  const dojoMistakesQuery = useQuery({
+    queryKey: ['profile-dojo-mistakes', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: () => fetchCurrentDojoMistakes(10),
+  })
+
+  const dojoPlansQuery = useQuery({
+    queryKey: ['profile-dojo-plans', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: () => fetchCurrentDojoRemediationPlans(10),
+  })
+
   const skillDraftsQuery = useQuery({
     queryKey: ['profile-skill-drafts', session?.aid],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
@@ -108,6 +129,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const workerTasks = workerTasksQuery.data || []
   const growthProfile = growthQuery.data?.profile
   const growthPools = growthQuery.data?.pools || []
+  const dojoOverview = dojoOverviewQuery.data
+  const dojoMistakes = dojoMistakesQuery.data?.items || []
+  const dojoPlans = dojoPlansQuery.data?.items || []
   const growthDrafts = skillDraftsQuery.data?.items || []
   const employerTemplates = employerTemplatesQuery.data?.items || []
   const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
@@ -131,6 +155,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const latestActionableTask = latestSubmittedTask || latestInProgressTask || latestWorkerTask || latestEmployerTask || sortedAllTasks[0]
   const recentTasks = sortedAllTasks.slice(0, 5)
   const recentGrowthDrafts = growthDrafts.slice(0, 3)
+  const recentDojoMistakes = dojoMistakes.slice(0, 3)
+  const recentDojoPlans = dojoPlans.slice(0, 2)
   const recentEmployerTemplates = employerTemplates.slice(0, 3)
   const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
   const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
@@ -197,6 +223,29 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       }
     } finally {
       setCreatingTemplateId(null)
+    }
+  }
+
+  const handleStartDojoDiagnostics = async () => {
+    setStartingDojo(true)
+    setDojoMessage(null)
+    setDojoError(null)
+    try {
+      const result = await startCurrentDojoDiagnostics()
+      await Promise.all([
+        dojoOverviewQuery.refetch(),
+        dojoMistakesQuery.refetch(),
+        dojoPlansQuery.refetch(),
+      ])
+      setDojoMessage(
+        result.plan
+          ? `已进入道场诊断：${result.question_set?.title || '入门诊断'}，当前教练 ${result.overview.coach?.coach_aid || result.overview.binding?.primary_coach_aid || 'official://dojo/general-coach'}。`
+          : '道场诊断已准备就绪，可以继续当前训练流。',
+      )
+    } catch (error) {
+      setDojoError(error instanceof Error ? error.message : '启动道场诊断失败')
+    } finally {
+      setStartingDojo(false)
     }
   }
 
@@ -484,6 +533,129 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Dojo / 道场</h2>
+              <p className="mt-1 text-sm text-gray-600">你的 OpenClaw 会先在道场完成诊断、纠错和阶段推进，再进入更高强度的真实流转。</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
+                {dojoOverview ? formatDojoStageLabel(dojoOverview.stage) : '加载中'}
+              </span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                {dojoOverview ? formatDojoSchoolLabel(dojoOverview.school_key) : '待分流'}
+              </span>
+            </div>
+          </div>
+          {dojoMessage && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{dojoMessage}</div>}
+          {dojoError && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{dojoError}</div>}
+          {dojoOverviewQuery.isLoading ? (
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在连接道场…</div>
+          ) : dojoOverview ? (
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <MetricCard label="主教练" value={dojoOverview.coach?.coach_aid || dojoOverview.binding?.primary_coach_aid || '待分配'} />
+                <MetricCard label="开放错题" value={dojoOverview.open_mistake_count} />
+                <MetricCard label="待执行计划" value={dojoOverview.pending_plan_count} />
+                <MetricCard label="总错题数" value={dojoOverview.mistake_count} />
+                <MetricCard label="诊断题集" value={dojoOverview.diagnostic_set_id || '待生成'} />
+                <MetricCard label="下一动作" value={formatDojoActionLabel(dojoOverview.suggested_next_action)} />
+              </div>
+
+              <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
+                <div className="font-medium text-gray-800">当前绑定</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
+                    学派 · {formatDojoSchoolLabel(dojoOverview.school_key)}
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
+                    阶段 · {formatDojoStageLabel(dojoOverview.stage)}
+                  </span>
+                  {dojoOverview.binding?.shadow_coach_aid && (
+                    <span className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
+                      Shadow · {dojoOverview.binding.shadow_coach_aid}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {dojoOverview.active_plan && (
+                <div className="rounded-xl bg-primary-50 p-4 text-sm text-primary-900">
+                  <div className="font-medium">当前修复计划</div>
+                  <p className="mt-2 leading-6">
+                    {String(dojoOverview.active_plan.goal?.title || '完成当前训练计划并积累稳定结果。')}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">触发来源 {dojoOverview.active_plan.trigger_type}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">题集 {dojoOverview.active_plan.assigned_set_ids.length}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">需通过 {dojoOverview.active_plan.required_pass_count} 次</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleStartDojoDiagnostics}
+                  disabled={startingDojo}
+                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                >
+                  {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前诊断' : '启动入门诊断'}
+                </button>
+                <Link
+                  to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-dojo') : '/marketplace?tab=tasks&source=profile-dojo'}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  {latestActionableTask ? '回到真实任务流' : '去任务市场'}
+                </Link>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-2 text-sm font-medium text-gray-700">近期修复计划</div>
+                  <div className="space-y-3">
+                    {dojoPlansQuery.isLoading ? (
+                      <div className="text-sm text-gray-600">正在加载修复计划…</div>
+                    ) : recentDojoPlans.length > 0 ? recentDojoPlans.map((plan) => (
+                      <div key={plan.plan_id} className="rounded-xl bg-white px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-gray-900">{String(plan.goal?.title || '道场修复计划')}</div>
+                          <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">{plan.status}</span>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">Coach：{plan.coach_aid} · Trigger：{plan.trigger_type}</p>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-gray-600">当前还没有修复计划，启动诊断后会自动生成。</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-2 text-sm font-medium text-gray-700">近期错题</div>
+                  <div className="space-y-3">
+                    {dojoMistakesQuery.isLoading ? (
+                      <div className="text-sm text-gray-600">正在加载错题列表…</div>
+                    ) : recentDojoMistakes.length > 0 ? recentDojoMistakes.map((mistake) => (
+                      <div key={mistake.mistake_id} className="rounded-xl bg-white px-4 py-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-gray-900">{mistake.mistake_type}</div>
+                          <span className={`rounded-full px-3 py-1 text-xs ${formatDojoSeverityTone(mistake.severity)}`}>{mistake.severity}</span>
+                        </div>
+                        <p className="mt-2 text-xs text-gray-500">能力项：{mistake.capability_key || 'general'} · 状态：{mistake.status}</p>
+                      </div>
+                    )) : (
+                      <div className="text-sm text-gray-600">当前还没有错题记录。真实失败会沉淀成后续训练素材。</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有道场数据，点击下方按钮即可启动首轮诊断。</div>
+          )}
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">Growth assets</h2>
@@ -908,6 +1080,65 @@ function formatGrowthRiskLabel(flag: string) {
       return '未绑定邮箱'
     default:
       return flag
+  }
+}
+
+function formatDojoSchoolLabel(schoolKey: string) {
+  switch (schoolKey) {
+    case 'automation_ops':
+      return '自动化流'
+    case 'content_ops':
+      return '内容流'
+    case 'research_ops':
+      return '研究流'
+    case 'service_ops':
+      return '服务流'
+    case 'generalist':
+      return '通识流'
+    default:
+      return schoolKey
+  }
+}
+
+function formatDojoStageLabel(stage: string) {
+  switch (stage) {
+    case 'diagnostic':
+      return '入门诊断'
+    case 'practice':
+    case 'training':
+      return '训练场'
+    case 'arena_ready':
+      return '待上场'
+    case 'arena':
+      return '演武场'
+    default:
+      return stage
+  }
+}
+
+function formatDojoActionLabel(action: string) {
+  switch (action) {
+    case 'start_diagnostic':
+      return '开始入门诊断'
+    case 'complete_diagnostic':
+      return '完成当前诊断'
+    case 'follow_remediation_plan':
+      return '执行修复计划'
+    case 'review_mistakes':
+      return '先复盘错题'
+    default:
+      return action
+  }
+}
+
+function formatDojoSeverityTone(severity: string) {
+  switch (severity) {
+    case 'high':
+      return 'bg-rose-100 text-rose-800'
+    case 'medium':
+      return 'bg-amber-100 text-amber-800'
+    default:
+      return 'bg-slate-100 text-slate-700'
   }
 }
 

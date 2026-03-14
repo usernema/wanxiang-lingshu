@@ -1,4 +1,4 @@
-import type { Dispatch, FormEvent, SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 import type {
   AdminAgentGrowthExperienceCard,
   AdminAgentGrowthOverview,
@@ -8,6 +8,9 @@ import type {
   AdminAgentGrowthSkillDraftStatus,
   AdminAuditLog,
   AdminDependency,
+  AdminDojoBinding,
+  AdminDojoCoachProfile,
+  AdminDojoOverview,
   AdminEmployerSkillGrant,
   AdminEmployerTemplate,
   AdminForumPost,
@@ -971,6 +974,408 @@ export function AdminGrowthPanel({
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
         <StatCard title="已产出草稿" value={growthDraftTotal} tone="slate" />
         <StatCard title="已赠送 Skill" value={employerSkillGrantTotal} tone="emerald" />
+      </div>
+    </section>
+  )
+}
+
+export function AdminDojoPanel({
+  dojoOverview,
+  dojoCoachItems,
+  dojoBindingItems,
+  visibleDojoCoaches,
+  visibleDojoBindings,
+  visibleDojoAgents,
+  dojoDraftFilters,
+  setDojoDraftFilters,
+  applyDojoFilters,
+  resetDojoFilters,
+  openGrowthProfileDetail,
+  handleAssignDojoCoach,
+  dojoAssignPending,
+  isOverviewLoading,
+  isCoachesLoading,
+  isBindingsLoading,
+  dojoSchoolLabel,
+  dojoStageLabel,
+  dojoStageTone,
+  growthPoolLabel,
+  growthDomainLabel,
+  highlightAid,
+}: {
+  dojoOverview?: AdminDojoOverview
+  dojoCoachItems: AdminDojoCoachProfile[]
+  dojoBindingItems: AdminDojoBinding[]
+  visibleDojoCoaches: AdminDojoCoachProfile[]
+  visibleDojoBindings: AdminDojoBinding[]
+  visibleDojoAgents: AdminAgentGrowthProfile[]
+  dojoDraftFilters: {
+    keyword: string
+    stage: string
+    schoolKey: string
+  }
+  setDojoDraftFilters: Dispatch<SetStateAction<{
+    keyword: string
+    stage: string
+    schoolKey: string
+  }>>
+  applyDojoFilters: (event: FormEvent<HTMLFormElement>) => void
+  resetDojoFilters: () => void
+  openGrowthProfileDetail: (profile: AdminAgentGrowthProfile) => void
+  handleAssignDojoCoach: (payload: {
+    aid: string
+    primaryCoachAid?: string
+    shadowCoachAid?: string
+    schoolKey?: string
+    stage?: string
+  }) => void | Promise<void>
+  dojoAssignPending: boolean
+  isOverviewLoading: boolean
+  isCoachesLoading: boolean
+  isBindingsLoading: boolean
+  dojoSchoolLabel: (key?: string) => string
+  dojoStageLabel: (stage?: string) => string
+  dojoStageTone: (stage?: string) => string
+  growthPoolLabel: (pool?: string) => string
+  growthDomainLabel: (domain?: string) => string
+  highlightAid?: string
+}) {
+  const [assignDrafts, setAssignDrafts] = useState<Record<string, {
+    primaryCoachAid: string
+    shadowCoachAid: string
+    schoolKey: string
+    stage: string
+  }>>({})
+
+  function deriveSchoolKey(agent: AdminAgentGrowthProfile) {
+    if (agent.primary_domain === 'automation' || agent.primary_domain === 'development') return 'automation_ops'
+    if (agent.primary_domain === 'content') return 'content_ops'
+    if (agent.primary_domain === 'data') return 'research_ops'
+    if (agent.primary_domain === 'support') return 'service_ops'
+    return 'generalist'
+  }
+
+  function readDraft(aid: string, agent: AdminAgentGrowthProfile) {
+    const existingBinding = dojoBindingItems.find((binding) => binding.aid === aid)
+    return assignDrafts[aid] || {
+      primaryCoachAid: existingBinding?.primary_coach_aid || 'official://dojo/general-coach',
+      shadowCoachAid: existingBinding?.shadow_coach_aid || '',
+      schoolKey: existingBinding?.school_key || deriveSchoolKey(agent),
+      stage: existingBinding?.stage || 'diagnostic',
+    }
+  }
+
+  const prioritizedBindings = useMemo(() => {
+    if (!highlightAid) return visibleDojoBindings
+    return [...visibleDojoBindings].sort((left, right) => {
+      if (left.aid === highlightAid) return -1
+      if (right.aid === highlightAid) return 1
+      return 0
+    })
+  }, [highlightAid, visibleDojoBindings])
+
+  const prioritizedAgents = useMemo(() => {
+    if (!highlightAid) return visibleDojoAgents
+    return [...visibleDojoAgents].sort((left, right) => {
+      if (left.aid === highlightAid) return -1
+      if (right.aid === highlightAid) return 1
+      return 0
+    })
+  }, [highlightAid, visibleDojoAgents])
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="活跃教练" value={dojoOverview?.total_coaches ?? '—'} tone="emerald" />
+        <StatCard title="已绑定 Agent" value={dojoOverview?.active_coach_bindings ?? '—'} tone="slate" />
+        <StatCard title="活跃修复计划" value={dojoOverview?.active_plans ?? '—'} tone="amber" />
+        <StatCard title="开放错题" value={dojoOverview?.open_mistakes ?? '—'} tone={(dojoOverview?.open_mistakes || 0) > 0 ? 'rose' : 'emerald'} />
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">道场总览</h2>
+            <p className="text-sm text-slate-500">聚焦教练绑定、训练阶段推进和纠错压力。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            {isOverviewLoading ? '加载中' : `高危错题 ${dojoOverview?.high_severity_mistakes ?? 0}`}
+          </span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="诊断阶段" value={dojoOverview?.diagnostic_stage_agents ?? '—'} tone="amber" />
+          <StatCard title="训练阶段" value={dojoOverview?.practice_stage_agents ?? '—'} tone="slate" />
+          <StatCard title="待上场" value={dojoOverview?.arena_ready_agents ?? '—'} tone="emerald" />
+          <StatCard title="高危错题" value={dojoOverview?.high_severity_mistakes ?? '—'} tone="rose" />
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {Object.entries(dojoOverview?.by_school || {}).map(([schoolKey, count]) => (
+            <SummaryChip key={schoolKey} label={dojoSchoolLabel(schoolKey)} value={count} tone="bg-slate-100 text-slate-700" />
+          ))}
+          {Object.keys(dojoOverview?.by_school || {}).length === 0 && (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">当前还没有绑定分布</span>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">筛选与分配</h2>
+            <p className="text-sm text-slate-500">先筛人，再直接分配教练和学校流派。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            当前绑定 {dojoBindingItems.length}
+          </span>
+        </div>
+        <form className="grid gap-3 rounded-xl border border-slate-200 p-4 xl:grid-cols-[minmax(0,1.2fr)_repeat(2,minmax(0,0.7fr))_auto]" onSubmit={applyDojoFilters}>
+          <label className="block text-sm text-slate-600">
+            <span className="mb-1 block font-medium text-slate-700">关键字</span>
+            <input
+              value={dojoDraftFilters.keyword}
+              onChange={(event) => setDojoDraftFilters((current) => ({ ...current, keyword: event.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+              placeholder="搜索 aid / coach / school"
+            />
+          </label>
+          <label className="block text-sm text-slate-600">
+            <span className="mb-1 block font-medium text-slate-700">阶段</span>
+            <select
+              value={dojoDraftFilters.stage}
+              onChange={(event) => setDojoDraftFilters((current) => ({ ...current, stage: event.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+            >
+              <option value="all">全部</option>
+              <option value="diagnostic">入门诊断</option>
+              <option value="practice">训练场</option>
+              <option value="arena_ready">待上场</option>
+              <option value="arena">演武场</option>
+            </select>
+          </label>
+          <label className="block text-sm text-slate-600">
+            <span className="mb-1 block font-medium text-slate-700">学派</span>
+            <select
+              value={dojoDraftFilters.schoolKey}
+              onChange={(event) => setDojoDraftFilters((current) => ({ ...current, schoolKey: event.target.value }))}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+            >
+              <option value="all">全部</option>
+              <option value="generalist">通识流</option>
+              <option value="automation_ops">自动化流</option>
+              <option value="content_ops">内容流</option>
+              <option value="research_ops">研究流</option>
+              <option value="service_ops">服务流</option>
+            </select>
+          </label>
+          <div className="flex items-end gap-2">
+            <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">应用</button>
+            <button type="button" onClick={resetDojoFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">重置</button>
+          </div>
+        </form>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">当前绑定</h3>
+              <p className="text-sm text-slate-500">查看已经进入道场的 Agent。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{visibleDojoBindings.length}</span>
+          </div>
+          <div className="space-y-3">
+            {isBindingsLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载道场绑定…</p>}
+            {!isBindingsLoading && prioritizedBindings.slice(0, 10).map((binding) => (
+              <div key={binding.aid} className={`rounded-xl border px-4 py-3 ${highlightAid === binding.aid ? 'border-primary-300 bg-primary-50' : 'border-slate-200'}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">{binding.aid}</p>
+                    <p className="mt-1 text-sm text-slate-600">{binding.primary_coach_aid}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{dojoSchoolLabel(binding.school_key)}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs ${dojoStageTone(binding.stage)}`}>{dojoStageLabel(binding.stage)}</span>
+                  </div>
+                </div>
+                {binding.shadow_coach_aid && <p className="mt-2 text-xs text-slate-500">Shadow coach：{binding.shadow_coach_aid}</p>}
+              </div>
+            ))}
+            {!isBindingsLoading && prioritizedBindings.length === 0 && (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有已绑定的道场 Agent。</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">教练名册</h3>
+              <p className="text-sm text-slate-500">教练是第一类角色，可以挂不同流派。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{visibleDojoCoaches.length}</span>
+          </div>
+          <div className="space-y-3">
+            {isCoachesLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载教练名册…</p>}
+            {!isCoachesLoading && visibleDojoCoaches.map((coach) => (
+              <div key={coach.coach_aid} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">{coach.coach_aid}</p>
+                    <p className="mt-1 text-sm text-slate-600">{coach.bio}</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">{coach.status}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {(coach.schools || []).map((school) => (
+                    <span key={school} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{dojoSchoolLabel(school)}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {!isCoachesLoading && visibleDojoCoaches.length === 0 && (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选下没有教练。</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-900">候选 Agent 分配台</h3>
+            <p className="text-sm text-slate-500">从成长池选人，直接绑定教练并推进到对应阶段。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{prioritizedAgents.length}</span>
+        </div>
+        <div className="space-y-4">
+          {prioritizedAgents.slice(0, 12).map((agent) => {
+            const draft = readDraft(agent.aid, agent)
+            const currentBinding = dojoBindingItems.find((binding) => binding.aid === agent.aid)
+            return (
+              <div key={agent.aid} className={`rounded-2xl border p-4 ${highlightAid === agent.aid ? 'border-primary-300 bg-primary-50' : 'border-slate-200'}`}>
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-slate-900">{agent.aid}</p>
+                      <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">{growthDomainLabel(agent.primary_domain)}</span>
+                      <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">{growthPoolLabel(agent.current_maturity_pool)}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-600">{agent.model} · {agent.provider}</p>
+                    <p className="mt-2 text-sm text-slate-600">{agent.evaluation_summary}</p>
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+                      <span>完成任务 {agent.completed_task_count}</span>
+                      <span>·</span>
+                      <span>成长分 {agent.growth_score ?? 0}</span>
+                      <span>·</span>
+                      <span>风险分 {agent.risk_score ?? 0}</span>
+                    </div>
+                    {currentBinding && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">当前教练 {currentBinding.primary_coach_aid}</span>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{dojoSchoolLabel(currentBinding.school_key)}</span>
+                        <span className={`rounded-full px-3 py-1 text-xs ${dojoStageTone(currentBinding.stage)}`}>{dojoStageLabel(currentBinding.stage)}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid gap-3 xl:min-w-[440px] xl:grid-cols-2">
+                    <label className="block text-sm text-slate-600">
+                      <span className="mb-1 block font-medium text-slate-700">Primary coach</span>
+                      <input
+                        list="dojo-coach-options"
+                        value={draft.primaryCoachAid}
+                        onChange={(event) => setAssignDrafts((current) => ({
+                          ...current,
+                          [agent.aid]: { ...draft, primaryCoachAid: event.target.value },
+                        }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                        placeholder="official://dojo/general-coach"
+                      />
+                    </label>
+                    <label className="block text-sm text-slate-600">
+                      <span className="mb-1 block font-medium text-slate-700">Shadow coach</span>
+                      <input
+                        list="dojo-coach-options"
+                        value={draft.shadowCoachAid}
+                        onChange={(event) => setAssignDrafts((current) => ({
+                          ...current,
+                          [agent.aid]: { ...draft, shadowCoachAid: event.target.value },
+                        }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                        placeholder="可留空"
+                      />
+                    </label>
+                    <label className="block text-sm text-slate-600">
+                      <span className="mb-1 block font-medium text-slate-700">学派</span>
+                      <select
+                        value={draft.schoolKey}
+                        onChange={(event) => setAssignDrafts((current) => ({
+                          ...current,
+                          [agent.aid]: { ...draft, schoolKey: event.target.value },
+                        }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                      >
+                        <option value="generalist">通识流</option>
+                        <option value="automation_ops">自动化流</option>
+                        <option value="content_ops">内容流</option>
+                        <option value="research_ops">研究流</option>
+                        <option value="service_ops">服务流</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm text-slate-600">
+                      <span className="mb-1 block font-medium text-slate-700">阶段</span>
+                      <select
+                        value={draft.stage}
+                        onChange={(event) => setAssignDrafts((current) => ({
+                          ...current,
+                          [agent.aid]: { ...draft, stage: event.target.value },
+                        }))}
+                        className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                      >
+                        <option value="diagnostic">入门诊断</option>
+                        <option value="practice">训练场</option>
+                        <option value="arena_ready">待上场</option>
+                        <option value="arena">演武场</option>
+                      </select>
+                    </label>
+                    <div className="xl:col-span-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openGrowthProfileDetail(agent)}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                      >
+                        查看成长档案
+                      </button>
+                      <button
+                        type="button"
+                        disabled={dojoAssignPending}
+                        onClick={() => handleAssignDojoCoach({
+                          aid: agent.aid,
+                          primaryCoachAid: draft.primaryCoachAid,
+                          shadowCoachAid: draft.shadowCoachAid || undefined,
+                          schoolKey: draft.schoolKey,
+                          stage: draft.stage,
+                        })}
+                        className="rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {dojoAssignPending ? '绑定中...' : '保存道场绑定'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+          {prioritizedAgents.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选下没有候选 Agent。</p>
+          )}
+        </div>
+        <datalist id="dojo-coach-options">
+          {dojoCoachItems.map((coach) => (
+            <option key={coach.coach_aid} value={coach.coach_aid}>
+              {coach.coach_type}
+            </option>
+          ))}
+        </datalist>
       </div>
     </section>
   )

@@ -346,6 +346,57 @@ export type AdminAgentGrowthRiskMemoryListResponse = {
   offset: number
 }
 
+export type AdminDojoCoachProfile = {
+  coach_aid: string
+  coach_type: string
+  schools: string[]
+  bio: string
+  pricing: Record<string, unknown>
+  rating: number
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type AdminDojoCoachListResponse = {
+  items: AdminDojoCoachProfile[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminDojoBinding = {
+  aid: string
+  primary_coach_aid: string
+  shadow_coach_aid?: string
+  school_key: string
+  stage: string
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export type AdminDojoBindingListResponse = {
+  items: AdminDojoBinding[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminDojoOverview = {
+  total_coaches: number
+  active_coach_bindings: number
+  diagnostic_stage_agents: number
+  practice_stage_agents: number
+  arena_ready_agents: number
+  active_plans: number
+  open_mistakes: number
+  high_severity_mistakes: number
+  by_school: Record<string, number>
+  by_stage: Record<string, number>
+  last_activity_at?: string | null
+}
+
 export type AdminEmployerTemplate = {
   id: number
   template_id: string
@@ -532,6 +583,63 @@ export async function fetchAdminAgentGrowthRiskMemories(params: {
     },
   })
   return unwrapData(response.data) as AdminAgentGrowthRiskMemoryListResponse
+}
+
+export async function fetchAdminDojoOverview() {
+  const response = await adminApi.get('/v1/admin/dojo/overview')
+  return unwrapData(response.data) as AdminDojoOverview
+}
+
+export async function fetchAdminDojoCoaches(params: {
+  limit?: number
+  offset?: number
+  status?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/dojo/coaches', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      status: params.status,
+    },
+  })
+  return unwrapData(response.data) as AdminDojoCoachListResponse
+}
+
+export async function fetchAdminDojoBindings(params: {
+  limit?: number
+  offset?: number
+  schoolKey?: string
+  stage?: string
+  status?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/dojo/bindings', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      school_key: params.schoolKey,
+      stage: params.stage,
+      status: params.status,
+    },
+  })
+  return unwrapData(response.data) as AdminDojoBindingListResponse
+}
+
+export async function assignAdminDojoCoach(
+  aid: string,
+  payload: {
+    primaryCoachAid?: string
+    shadowCoachAid?: string
+    schoolKey?: string
+    stage?: string
+  },
+) {
+  const response = await adminApi.post(`/v1/admin/dojo/agents/${encodeURIComponent(aid)}/assign-coach`, {
+    primary_coach_aid: payload.primaryCoachAid,
+    shadow_coach_aid: payload.shadowCoachAid,
+    school_key: payload.schoolKey,
+    stage: payload.stage,
+  })
+  return unwrapData(response.data) as AdminDojoBinding
 }
 
 export async function updateAdminAgentGrowthSkillDraft(

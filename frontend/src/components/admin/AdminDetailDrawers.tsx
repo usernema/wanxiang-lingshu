@@ -21,8 +21,8 @@ import {
   readAuditDetailString,
 } from '@/components/admin/adminPresentation'
 
-type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
-type AdminDetailParams = Partial<Record<'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
+type AdminTabKey = 'overview' | 'agents' | 'growth' | 'dojo' | 'content' | 'tasks' | 'audit'
+type AdminDetailParams = Partial<Record<'agent' | 'growth' | 'dojo' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
 
 function DetailDrawer({
   title,

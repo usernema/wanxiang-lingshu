@@ -6,6 +6,7 @@ import { getAdminAuditResourceTarget } from '@/components/admin/adminAuditNaviga
 import {
   AdminAgentsPanel,
   AdminContentPanel,
+  AdminDojoPanel,
   AdminGrowthPanel,
   AdminOverviewPanel,
   AdminTaskOperationsPanel,
@@ -123,6 +124,31 @@ function growthReadinessTone(score: number) {
   return 'bg-slate-100 text-slate-700'
 }
 
+function dojoSchoolLabel(key?: string) {
+  if (key === 'automation_ops') return '自动化流'
+  if (key === 'content_ops') return '内容流'
+  if (key === 'research_ops') return '研究流'
+  if (key === 'service_ops') return '服务流'
+  if (key === 'generalist') return '通识流'
+  return key || '未知'
+}
+
+function dojoStageLabel(stage?: string) {
+  if (stage === 'diagnostic') return '入门诊断'
+  if (stage === 'practice' || stage === 'training') return '训练场'
+  if (stage === 'arena_ready') return '待上场'
+  if (stage === 'arena') return '演武场'
+  return stage || '未知'
+}
+
+function dojoStageTone(stage?: string) {
+  if (stage === 'diagnostic') return 'bg-amber-100 text-amber-800'
+  if (stage === 'practice' || stage === 'training') return 'bg-sky-100 text-sky-800'
+  if (stage === 'arena_ready') return 'bg-violet-100 text-violet-800'
+  if (stage === 'arena') return 'bg-emerald-100 text-emerald-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
 function draftTone(status?: string) {
   if (status === 'published') return 'bg-emerald-100 text-emerald-800'
   if (status === 'validated') return 'bg-sky-100 text-sky-800'
@@ -140,14 +166,15 @@ function draftLabel(status?: string) {
   return status || '未知'
 }
 
-type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
-type AdminDetailParamKey = 'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit'
+type AdminTabKey = 'overview' | 'agents' | 'growth' | 'dojo' | 'content' | 'tasks' | 'audit'
+type AdminDetailParamKey = 'agent' | 'growth' | 'dojo' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit'
 type AdminDetailParams = Partial<Record<AdminDetailParamKey, string>>
 
 const ADMIN_TAB_SEGMENTS: Record<AdminTabKey, string> = {
   overview: 'overview',
   agents: 'agents',
   growth: 'growth',
+  dojo: 'dojo',
   content: 'content',
   tasks: 'tasks',
   audit: 'audit',
@@ -165,6 +192,7 @@ function getAdminTabFromPath(pathname: string): AdminTabKey {
 
   if (segment === 'agents') return 'agents'
   if (segment === 'growth') return 'growth'
+  if (segment === 'dojo') return 'dojo'
   if (segment === 'content') return 'content'
   if (segment === 'tasks') return 'tasks'
   if (segment === 'audit') return 'audit'
@@ -253,6 +281,8 @@ export default function Admin() {
       setTaskDraftFilters,
       auditDraftFilters,
       setAuditDraftFilters,
+      dojoDraftFilters,
+      setDojoDraftFilters,
       growthPoolFilter,
       setGrowthPoolFilter,
       growthDomainFilter,
@@ -301,6 +331,9 @@ export default function Admin() {
       growthDraftItems,
       growthExperienceCardItems,
       growthRiskMemoryItems,
+      dojoOverview,
+      dojoCoachItems,
+      dojoBindingItems,
       employerTemplateItems,
       employerSkillGrantItems,
       postItems,
@@ -314,6 +347,9 @@ export default function Admin() {
       visibleGrowthDrafts,
       visibleGrowthExperienceCards,
       visibleGrowthRiskMemories,
+      visibleDojoCoaches,
+      visibleDojoBindings,
+      visibleDojoAgents,
       agentStatusSummary,
       postStatusSummary,
       taskStatusSummary,
@@ -326,6 +362,9 @@ export default function Admin() {
       growthDraftsQuery,
       growthExperienceCardsQuery,
       growthRiskMemoriesQuery,
+      dojoOverviewQuery,
+      dojoCoachesQuery,
+      dojoBindingsQuery,
       employerTemplatesQuery,
       employerSkillGrantsQuery,
       postsQuery,
@@ -343,10 +382,13 @@ export default function Admin() {
       resetTaskFilters,
       applyAuditFilters,
       resetAuditFilters,
+      applyDojoFilters,
+      resetDojoFilters,
       handlePostAction,
       handleAgentAction,
       handleGrowthEvaluate,
       handleGrowthDraftAction,
+      handleAssignDojoCoach,
       handleCommentAction,
       handleBatchAgentAction,
       handleBatchPostAction,
@@ -356,6 +398,7 @@ export default function Admin() {
     mutationState: {
       growthEvaluatePending,
       growthDraftPending,
+      dojoAssignPending,
       normalizeLegacyAssignedPending,
       recordTaskOpsPending,
     },
@@ -365,12 +408,14 @@ export default function Admin() {
       resetContentControls,
       resetTaskControls,
       resetAuditControls,
+      resetDojoControls,
     },
   } = useAdminConsoleState()
 
   const detailSearchParams = new URLSearchParams(location.search)
   const deepLinkAgentAid = detailSearchParams.get('agent')
   const deepLinkGrowthAid = detailSearchParams.get('growth')
+  const deepLinkDojoAid = detailSearchParams.get('dojo')
   const deepLinkDraftId = detailSearchParams.get('draft')
   const deepLinkTemplateId = detailSearchParams.get('template')
   const deepLinkGrantId = detailSearchParams.get('grant')
@@ -450,6 +495,10 @@ export default function Admin() {
       resetGrowthControls()
     }
 
+    if (tab === 'dojo') {
+      resetDojoControls()
+    }
+
     if (tab === 'content') {
       resetContentControls()
     }
@@ -495,6 +544,12 @@ export default function Admin() {
       label: '成长',
       description: '处理成长分池、Skill 草稿审核，以及雇主沉淀资产。',
       badge: growthDraftsQuery.data?.total ?? 0,
+    },
+    {
+      key: 'dojo',
+      label: '道场',
+      description: '处理教练绑定、训练流转和训练侧运营动作。',
+      badge: dojoBindingsQuery.data?.total ?? 0,
     },
     {
       key: 'content',
@@ -737,6 +792,33 @@ export default function Admin() {
           draftTone={draftTone}
           draftLabel={draftLabel}
           summarizeText={summarizeText}
+        />
+      )}
+
+      {activeTab === 'dojo' && (
+        <AdminDojoPanel
+          dojoOverview={dojoOverview}
+          dojoCoachItems={dojoCoachItems}
+          dojoBindingItems={dojoBindingItems}
+          visibleDojoCoaches={visibleDojoCoaches}
+          visibleDojoBindings={visibleDojoBindings}
+          visibleDojoAgents={visibleDojoAgents}
+          dojoDraftFilters={dojoDraftFilters}
+          setDojoDraftFilters={setDojoDraftFilters}
+          applyDojoFilters={applyDojoFilters}
+          resetDojoFilters={resetDojoFilters}
+          openGrowthProfileDetail={openGrowthProfileDetail}
+          handleAssignDojoCoach={handleAssignDojoCoach}
+          dojoAssignPending={dojoAssignPending}
+          isOverviewLoading={dojoOverviewQuery.isLoading}
+          isCoachesLoading={dojoCoachesQuery.isLoading}
+          isBindingsLoading={dojoBindingsQuery.isLoading}
+          dojoSchoolLabel={dojoSchoolLabel}
+          dojoStageLabel={dojoStageLabel}
+          dojoStageTone={dojoStageTone}
+          growthPoolLabel={growthPoolLabel}
+          growthDomainLabel={growthDomainLabel}
+          highlightAid={deepLinkDojoAid || undefined}
         />
       )}
 

@@ -16,6 +16,7 @@ type DojoRepository interface {
 	ListCoachProfiles(ctx context.Context, limit, offset int, status string) ([]*models.CoachProfile, int, error)
 	UpsertCoachBinding(ctx context.Context, binding *models.AgentCoachBinding) error
 	GetCoachBinding(ctx context.Context, aid string) (*models.AgentCoachBinding, error)
+	ListCoachBindings(ctx context.Context, limit, offset int, schoolKey, stage, status string) ([]models.AgentCoachBinding, int, error)
 	EnsureQuestionSet(ctx context.Context, set *models.TrainingQuestionSet, questions []models.TrainingQuestion) error
 	GetQuestionSet(ctx context.Context, setID string) (*models.TrainingQuestionSet, error)
 	FindQuestionSetBySchoolAndScene(ctx context.Context, schoolKey, sceneType string) (*models.TrainingQuestionSet, error)
@@ -355,6 +356,70 @@ func (r *dojoRepository) GetCoachBinding(ctx context.Context, aid string) (*mode
 	}
 
 	return item, nil
+}
+
+func (r *dojoRepository) ListCoachBindings(ctx context.Context, limit, offset int, schoolKey, stage, status string) ([]models.AgentCoachBinding, int, error) {
+	countQuery := `SELECT COUNT(1) FROM agent_coach_bindings WHERE 1=1`
+	listQuery := `
+		SELECT aid, primary_coach_aid, shadow_coach_aid, school_key, stage, status, created_at, updated_at
+		FROM agent_coach_bindings
+		WHERE 1=1
+	`
+
+	args := make([]interface{}, 0, 3)
+	if schoolKey != "" {
+		args = append(args, schoolKey)
+		countQuery += fmt.Sprintf(" AND school_key = $%d", len(args))
+		listQuery += fmt.Sprintf(" AND school_key = $%d", len(args))
+	}
+	if stage != "" {
+		args = append(args, stage)
+		countQuery += fmt.Sprintf(" AND stage = $%d", len(args))
+		listQuery += fmt.Sprintf(" AND stage = $%d", len(args))
+	}
+	if status != "" {
+		args = append(args, status)
+		countQuery += fmt.Sprintf(" AND status = $%d", len(args))
+		listQuery += fmt.Sprintf(" AND status = $%d", len(args))
+	}
+
+	var total int
+	if err := r.db.DB.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("failed to count coach bindings: %w", err)
+	}
+
+	listArgs := append(args, limit, offset)
+	listQuery += fmt.Sprintf(" ORDER BY updated_at DESC LIMIT $%d OFFSET $%d", len(args)+1, len(args)+2)
+
+	rows, err := r.db.DB.QueryContext(ctx, listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list coach bindings: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.AgentCoachBinding, 0, limit)
+	for rows.Next() {
+		item := models.AgentCoachBinding{}
+		if err := rows.Scan(
+			&item.AID,
+			&item.PrimaryCoachAID,
+			&item.ShadowCoachAID,
+			&item.SchoolKey,
+			&item.Stage,
+			&item.Status,
+			&item.CreatedAt,
+			&item.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("failed to scan coach binding: %w", err)
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("failed to iterate coach bindings: %w", err)
+	}
+
+	return items, total, nil
 }
 
 func (r *dojoRepository) EnsureQuestionSet(ctx context.Context, set *models.TrainingQuestionSet, questions []models.TrainingQuestion) error {

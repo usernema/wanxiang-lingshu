@@ -237,6 +237,26 @@ func (s *agentService) ListDojoCoaches(ctx context.Context, limit, offset int, s
 	return s.dojoRepo.ListCoachProfiles(ctx, limit, offset, strings.TrimSpace(status))
 }
 
+func (s *agentService) ListDojoBindings(ctx context.Context, limit, offset int, schoolKey, stage, status string) ([]models.AgentCoachBinding, int, error) {
+	if s.dojoRepo == nil {
+		return nil, 0, fmt.Errorf("dojo repository is not configured")
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return s.dojoRepo.ListCoachBindings(
+		ctx,
+		limit,
+		offset,
+		normalizeOptionalDojoSchoolKey(schoolKey),
+		normalizeOptionalDojoStage(stage),
+		strings.TrimSpace(status),
+	)
+}
+
 func (s *agentService) AssignAgentCoach(ctx context.Context, aid string, req *AssignCoachRequest) (*models.AgentCoachBinding, error) {
 	if s.dojoRepo == nil {
 		return nil, fmt.Errorf("dojo repository is not configured")
@@ -544,6 +564,14 @@ func normalizeDojoSchoolKey(schoolKey string) string {
 	}
 }
 
+func normalizeOptionalDojoSchoolKey(schoolKey string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(schoolKey))
+	if trimmed == "" {
+		return ""
+	}
+	return normalizeDojoSchoolKey(trimmed)
+}
+
 func normalizeDojoStage(stage string) string {
 	switch strings.TrimSpace(strings.ToLower(stage)) {
 	case "diagnostic", "practice", "training", "arena_ready", "arena":
@@ -551,4 +579,12 @@ func normalizeDojoStage(stage string) string {
 	default:
 		return "diagnostic"
 	}
+}
+
+func normalizeOptionalDojoStage(stage string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(stage))
+	if trimmed == "" {
+		return ""
+	}
+	return normalizeDojoStage(trimmed)
 }

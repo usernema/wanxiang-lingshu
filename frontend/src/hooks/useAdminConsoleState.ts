@@ -2,17 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type FormEvent, useState } from 'react'
 import type { AgentProfile } from '@/lib/api'
 import {
+  assignAdminDojoCoach,
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
   clearAdminToken,
+  type AdminDojoBinding,
+  type AdminDojoCoachProfile,
   type AdminAgentGrowthExperienceCard,
   type AdminAgentGrowthProfile,
   type AdminAgentGrowthRiskMemory,
+  type AdminDojoOverview,
   fetchAdminAgentGrowthOverview,
   fetchAdminAgentGrowthExperienceCards,
   fetchAdminAgentGrowthProfiles,
   fetchAdminAgentGrowthRiskMemories,
   fetchAdminAgentGrowthSkillDrafts,
+  fetchAdminDojoBindings,
+  fetchAdminDojoCoaches,
+  fetchAdminDojoOverview,
   fetchAdminAgents,
   fetchAdminAuditLogs,
   type AdminAgentStatus,
@@ -59,6 +66,11 @@ type AuditDraftFilters = {
   resourceType: string
   action: string
 }
+type DojoDraftFilters = {
+  keyword: string
+  stage: string
+  schoolKey: string
+}
 type GrowthPoolFilter = 'all' | 'cold_start' | 'observed' | 'standard' | 'preferred'
 type GrowthDomainFilter = 'all' | 'automation' | 'content' | 'data' | 'development' | 'support'
 
@@ -76,6 +88,12 @@ const defaultTaskFilters: TaskDraftFilters = {
 const defaultAuditFilters: AuditDraftFilters = {
   resourceType: 'all',
   action: '',
+}
+
+const defaultDojoFilters: DojoDraftFilters = {
+  keyword: '',
+  stage: 'all',
+  schoolKey: 'all',
 }
 
 const SYSTEM_AGENT_AID = 'agent://a2ahub/system'
@@ -133,6 +151,8 @@ export function useAdminConsoleState() {
   const [taskFilters, setTaskFilters] = useState(defaultTaskFilters)
   const [auditDraftFilters, setAuditDraftFilters] = useState(defaultAuditFilters)
   const [auditFilters, setAuditFilters] = useState(defaultAuditFilters)
+  const [dojoDraftFilters, setDojoDraftFilters] = useState(defaultDojoFilters)
+  const [dojoFilters, setDojoFilters] = useState(defaultDojoFilters)
   const [growthPoolFilter, setGrowthPoolFilter] = useState<GrowthPoolFilter>('all')
   const [growthDomainFilter, setGrowthDomainFilter] = useState<GrowthDomainFilter>('all')
   const [growthKeyword, setGrowthKeyword] = useState('')
@@ -199,6 +219,34 @@ export function useAdminConsoleState() {
     queryFn: () => fetchAdminAgentGrowthRiskMemories({
       limit: 50,
       offset: 0,
+    }),
+    enabled,
+  })
+
+  const dojoOverviewQuery = useQuery({
+    queryKey: ['admin', 'dojo-overview', activeToken],
+    queryFn: fetchAdminDojoOverview,
+    enabled,
+  })
+
+  const dojoCoachesQuery = useQuery({
+    queryKey: ['admin', 'dojo-coaches', activeToken],
+    queryFn: () => fetchAdminDojoCoaches({
+      limit: 50,
+      offset: 0,
+      status: 'active',
+    }),
+    enabled,
+  })
+
+  const dojoBindingsQuery = useQuery({
+    queryKey: ['admin', 'dojo-bindings', activeToken, dojoFilters],
+    queryFn: () => fetchAdminDojoBindings({
+      limit: 100,
+      offset: 0,
+      schoolKey: dojoFilters.schoolKey === 'all' ? undefined : dojoFilters.schoolKey,
+      stage: dojoFilters.stage === 'all' ? undefined : dojoFilters.stage,
+      status: 'active',
     }),
     enabled,
   })
@@ -291,6 +339,9 @@ export function useAdminConsoleState() {
       growthDraftsQuery.refetch(),
       growthExperienceCardsQuery.refetch(),
       growthRiskMemoriesQuery.refetch(),
+      dojoOverviewQuery.refetch(),
+      dojoCoachesQuery.refetch(),
+      dojoBindingsQuery.refetch(),
       employerTemplatesQuery.refetch(),
       employerSkillGrantsQuery.refetch(),
       postsQuery.refetch(),
@@ -364,6 +415,26 @@ export function useAdminConsoleState() {
     },
   })
 
+  const dojoAssignCoachMutation = useMutation({
+    mutationFn: ({
+      aid,
+      primaryCoachAid,
+      shadowCoachAid,
+      schoolKey,
+      stage,
+    }: {
+      aid: string
+      primaryCoachAid?: string
+      shadowCoachAid?: string
+      schoolKey?: string
+      stage?: string
+    }) => assignAdminDojoCoach(aid, { primaryCoachAid, shadowCoachAid, schoolKey, stage }),
+    onSuccess: async () => {
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
   const normalizeLegacyAssignedMutation = useMutation({
     mutationFn: () => normalizeAdminLegacyAssignedTasks(),
     onSuccess: async (result: AdminTaskNormalizationResult) => {
@@ -420,8 +491,8 @@ export function useAdminConsoleState() {
     setExpandedTaskId(null)
   }
 
-  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || growthExperienceCardsQuery.error || growthRiskMemoriesQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
-  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error || recordTaskOpsMutation.error
+  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || growthExperienceCardsQuery.error || growthRiskMemoriesQuery.error || dojoOverviewQuery.error || dojoCoachesQuery.error || dojoBindingsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
+  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || dojoAssignCoachMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error || recordTaskOpsMutation.error
   const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -583,9 +654,19 @@ export function useAdminConsoleState() {
     setAuditFilters(auditDraftFilters)
   }
 
+  const applyDojoFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setDojoFilters(dojoDraftFilters)
+  }
+
   const resetAuditFilters = () => {
     setAuditDraftFilters(defaultAuditFilters)
     setAuditFilters(defaultAuditFilters)
+  }
+
+  const resetDojoFilters = () => {
+    setDojoDraftFilters(defaultDojoFilters)
+    setDojoFilters(defaultDojoFilters)
   }
 
   const resetAgentControls = () => {
@@ -619,6 +700,11 @@ export function useAdminConsoleState() {
     setAuditFilters(defaultAuditFilters)
   }
 
+  const resetDojoControls = () => {
+    setDojoDraftFilters(defaultDojoFilters)
+    setDojoFilters(defaultDojoFilters)
+  }
+
   const handlePostAction = async (postId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
     if (!confirmModeration('该帖子', nextStatus)) return
     await postStatusMutation.mutateAsync({ postId, status: nextStatus })
@@ -635,6 +721,22 @@ export function useAdminConsoleState() {
 
   const handleGrowthDraftAction = async (draftId: string, status: AdminAgentGrowthSkillDraftStatus) => {
     await growthDraftMutation.mutateAsync({ draftId, status })
+  }
+
+  const handleAssignDojoCoach = async ({
+    aid,
+    primaryCoachAid,
+    shadowCoachAid,
+    schoolKey,
+    stage,
+  }: {
+    aid: string
+    primaryCoachAid?: string
+    shadowCoachAid?: string
+    schoolKey?: string
+    stage?: string
+  }) => {
+    await dojoAssignCoachMutation.mutateAsync({ aid, primaryCoachAid, shadowCoachAid, schoolKey, stage })
   }
 
   const handleCommentAction = async (commentId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
@@ -663,6 +765,9 @@ export function useAdminConsoleState() {
   const growthDraftItems = growthDraftsQuery.data?.items || []
   const growthExperienceCardItems = growthExperienceCardsQuery.data?.items || []
   const growthRiskMemoryItems = growthRiskMemoriesQuery.data?.items || []
+  const dojoOverview = dojoOverviewQuery.data as AdminDojoOverview | undefined
+  const dojoCoachItems = dojoCoachesQuery.data?.items || []
+  const dojoBindingItems = dojoBindingsQuery.data?.items || []
   const employerTemplateItems = employerTemplatesQuery.data?.items || []
   const employerSkillGrantItems = employerSkillGrantsQuery.data?.items || []
   const postItems = postsQuery.data?.posts || []
@@ -733,6 +838,35 @@ export function useAdminConsoleState() {
       .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
   })
 
+  const dojoKeyword = dojoFilters.keyword.trim().toLowerCase()
+  const visibleDojoBindings = dojoBindingItems.filter((binding: AdminDojoBinding) => {
+    if (!dojoKeyword) return true
+    return [binding.aid, binding.primary_coach_aid, binding.shadow_coach_aid, binding.school_key, binding.stage]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
+  })
+
+  const visibleDojoCoaches = dojoCoachItems.filter((coach: AdminDojoCoachProfile) => {
+    if (!dojoKeyword) return true
+    return [coach.coach_aid, coach.coach_type, coach.bio, ...(coach.schools || [])]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
+  })
+
+  const visibleDojoAgents = growthProfileItems.filter((agent) => {
+    if (!dojoKeyword) return true
+    return [
+      agent.aid,
+      agent.model,
+      agent.provider,
+      agent.primary_domain,
+      agent.current_maturity_pool,
+      ...(agent.capabilities || []),
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
+  })
+
   const agentStatusSummary = summarizeStatuses(agentItems.map((agent) => agent.status))
   const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
   const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
@@ -780,6 +914,8 @@ export function useAdminConsoleState() {
       setTaskDraftFilters,
       auditDraftFilters,
       setAuditDraftFilters,
+      dojoDraftFilters,
+      setDojoDraftFilters,
       growthPoolFilter,
       setGrowthPoolFilter,
       growthDomainFilter,
@@ -828,6 +964,9 @@ export function useAdminConsoleState() {
       growthDraftItems,
       growthExperienceCardItems,
       growthRiskMemoryItems,
+      dojoOverview,
+      dojoCoachItems,
+      dojoBindingItems,
       employerTemplateItems,
       employerSkillGrantItems,
       postItems,
@@ -840,6 +979,9 @@ export function useAdminConsoleState() {
       visibleGrowthDrafts,
       visibleGrowthExperienceCards,
       visibleGrowthRiskMemories,
+      visibleDojoCoaches,
+      visibleDojoBindings,
+      visibleDojoAgents,
       agentStatusSummary,
       postStatusSummary,
       taskStatusSummary,
@@ -854,6 +996,9 @@ export function useAdminConsoleState() {
       growthDraftsQuery,
       growthExperienceCardsQuery,
       growthRiskMemoriesQuery,
+      dojoOverviewQuery,
+      dojoCoachesQuery,
+      dojoBindingsQuery,
       employerTemplatesQuery,
       employerSkillGrantsQuery,
       postsQuery,
@@ -873,10 +1018,13 @@ export function useAdminConsoleState() {
       resetTaskFilters,
       applyAuditFilters,
       resetAuditFilters,
+      applyDojoFilters,
+      resetDojoFilters,
       handlePostAction,
       handleAgentAction,
       handleGrowthEvaluate,
       handleGrowthDraftAction,
+      handleAssignDojoCoach,
       handleCommentAction,
       handleBatchAgentAction,
       handleBatchPostAction,
@@ -886,6 +1034,7 @@ export function useAdminConsoleState() {
     mutationState: {
       growthEvaluatePending: growthEvaluateMutation.isPending,
       growthDraftPending: growthDraftMutation.isPending,
+      dojoAssignPending: dojoAssignCoachMutation.isPending,
       normalizeLegacyAssignedPending: normalizeLegacyAssignedMutation.isPending,
       recordTaskOpsPending: recordTaskOpsMutation.isPending,
     },
@@ -895,6 +1044,7 @@ export function useAdminConsoleState() {
       resetContentControls,
       resetTaskControls,
       resetAuditControls,
+      resetDojoControls,
     },
   }
 }

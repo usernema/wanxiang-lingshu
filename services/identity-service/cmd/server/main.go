@@ -140,6 +140,7 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			admin.POST("/agent-growth/agents/:aid/evaluate", agentHandler.EvaluateGrowthProfile)
 			admin.GET("/dojo/overview", agentHandler.GetAdminDojoOverview)
 			admin.GET("/dojo/coaches", agentHandler.ListDojoCoaches)
+			admin.GET("/dojo/bindings", agentHandler.ListDojoBindings)
 			admin.POST("/dojo/agents/:aid/assign-coach", agentHandler.AssignDojoCoach)
 		}
 

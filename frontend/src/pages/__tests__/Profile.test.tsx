@@ -13,10 +13,14 @@ import {
 import type { Session, SessionRole } from '@/lib/api'
 
 const mockFetchCurrentAgentGrowth = vi.fn()
+const mockFetchCurrentDojoOverview = vi.fn()
+const mockFetchCurrentDojoMistakes = vi.fn()
+const mockFetchCurrentDojoRemediationPlans = vi.fn()
 const mockFetchMySkillDrafts = vi.fn()
 const mockFetchMyEmployerTemplates = vi.fn()
 const mockFetchMyEmployerSkillGrants = vi.fn()
 const mockCreateTaskFromEmployerTemplate = vi.fn()
+const mockStartCurrentDojoDiagnostics = vi.fn()
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -25,10 +29,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getActiveRole: () => mockGetActiveRole(),
     getActiveSession: () => mockGetActiveSession(),
     fetchCurrentAgentGrowth: () => mockFetchCurrentAgentGrowth(),
+    fetchCurrentDojoOverview: () => mockFetchCurrentDojoOverview(),
+    fetchCurrentDojoMistakes: (...args: unknown[]) => mockFetchCurrentDojoMistakes(...args),
+    fetchCurrentDojoRemediationPlans: (...args: unknown[]) => mockFetchCurrentDojoRemediationPlans(...args),
     fetchMySkillDrafts: (...args: unknown[]) => mockFetchMySkillDrafts(...args),
     fetchMyEmployerTemplates: (...args: unknown[]) => mockFetchMyEmployerTemplates(...args),
     fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
     createTaskFromEmployerTemplate: (...args: unknown[]) => mockCreateTaskFromEmployerTemplate(...args),
+    startCurrentDojoDiagnostics: (...args: unknown[]) => mockStartCurrentDojoDiagnostics(...args),
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
     },
@@ -104,6 +112,83 @@ function renderProfile(options?: {
       { id: 1, aid: 'worker-agent', pool_type: 'maturity', pool_key: 'standard', pool_score: 100, status: 'active', effective_at: '2026-03-10T00:00:00.000Z', created_at: '2026-03-10T00:00:00.000Z' },
     ],
   })
+  mockFetchCurrentDojoOverview.mockResolvedValue({
+    aid: 'worker-agent',
+    school_key: 'automation_ops',
+    stage: 'diagnostic',
+    binding: {
+      aid: 'worker-agent',
+      primary_coach_aid: 'official://dojo/general-coach',
+      school_key: 'automation_ops',
+      stage: 'diagnostic',
+      status: 'active',
+    },
+    coach: {
+      coach_aid: 'official://dojo/general-coach',
+      coach_type: 'official',
+      schools: ['automation_ops'],
+      bio: '平台官方总教练',
+      pricing: { amount: 0, currency: 'credits' },
+      rating: 5,
+      status: 'active',
+    },
+    active_plan: {
+      plan_id: 'plan-1',
+      aid: 'worker-agent',
+      coach_aid: 'official://dojo/general-coach',
+      trigger_type: 'diagnostic',
+      goal: { title: '完成入门诊断并进入训练场' },
+      assigned_set_ids: ['dojo_automation_ops_diagnostic_v1'],
+      required_pass_count: 1,
+      status: 'active',
+    },
+    last_diagnostic_attempt: {
+      attempt_id: 'attempt-1',
+      aid: 'worker-agent',
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      scene_type: 'diagnostic',
+      score: 0,
+      result_status: 'queued',
+      artifact: {},
+      feedback: {},
+    },
+    mistake_count: 1,
+    open_mistake_count: 1,
+    pending_plan_count: 1,
+    diagnostic_set_id: 'dojo_automation_ops_diagnostic_v1',
+    suggested_next_action: 'complete_diagnostic',
+  })
+  mockFetchCurrentDojoMistakes.mockResolvedValue({
+    items: [
+      {
+        mistake_id: 'mistake-1',
+        aid: 'worker-agent',
+        source_type: 'diagnostic',
+        source_ref_id: 'attempt-1',
+        capability_key: 'task_alignment',
+        mistake_type: '目标复述不完整',
+        severity: 'medium',
+        evidence: {},
+        status: 'open',
+      },
+    ],
+    limit: 10,
+  })
+  mockFetchCurrentDojoRemediationPlans.mockResolvedValue({
+    items: [
+      {
+        plan_id: 'plan-1',
+        aid: 'worker-agent',
+        coach_aid: 'official://dojo/general-coach',
+        trigger_type: 'diagnostic',
+        goal: { title: '完成入门诊断并进入训练场' },
+        assigned_set_ids: ['dojo_automation_ops_diagnostic_v1'],
+        required_pass_count: 1,
+        status: 'active',
+      },
+    ],
+    limit: 10,
+  })
   mockFetchMySkillDrafts.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
   mockFetchMyEmployerTemplates.mockResolvedValue(options?.employerTemplatesResponse ?? { items: [], total: 0, limit: 10, offset: 0 })
   mockFetchMyEmployerSkillGrants.mockResolvedValue(options?.employerSkillGrantsResponse ?? { items: [], total: 0, limit: 10, offset: 0 })
@@ -120,6 +205,33 @@ function renderProfile(options?: {
     updated_at: null,
     completed_at: null,
     cancelled_at: null,
+  })
+  mockStartCurrentDojoDiagnostics.mockResolvedValue({
+    overview: {
+      aid: 'worker-agent',
+      school_key: 'automation_ops',
+      stage: 'diagnostic',
+      suggested_next_action: 'complete_diagnostic',
+    },
+    plan: {
+      plan_id: 'plan-1',
+      aid: 'worker-agent',
+      coach_aid: 'official://dojo/general-coach',
+      trigger_type: 'diagnostic',
+      goal: { title: '完成入门诊断并进入训练场' },
+      assigned_set_ids: ['dojo_automation_ops_diagnostic_v1'],
+      required_pass_count: 1,
+      status: 'active',
+    },
+    question_set: {
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      school_key: 'automation_ops',
+      scene_type: 'diagnostic',
+      title: '自动化流入门诊断',
+      difficulty: 'starter',
+      tags: ['diagnostic'],
+      status: 'active',
+    },
   })
   mockApiGet.mockImplementation(
     options?.apiGetImpl ??
@@ -267,6 +379,21 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByRole('link', { name: '去核对钱包通知' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
     expect(screen.getByRole('link', { name: '发布可售 Skill' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
     expect(screen.getByRole('link', { name: '去钱包通知中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
+  })
+
+  it('renders dojo overview and starts diagnostics from profile', async () => {
+    renderProfile()
+
+    expect(await screen.findByText('Dojo / 道场')).toBeInTheDocument()
+    expect(await screen.findByText((_, node) => node?.textContent === '自动化流')).toBeInTheDocument()
+    expect(await screen.findByText((_, node) => node?.textContent === '入门诊断')).toBeInTheDocument()
+    expect(await screen.findByText('目标复述不完整')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '继续当前诊断' }))
+
+    await waitFor(() => {
+      expect(mockStartCurrentDojoDiagnostics).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('adds a direct marketplace entry for gifted employer skills', async () => {

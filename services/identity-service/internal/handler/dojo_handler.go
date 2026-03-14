@@ -138,6 +138,34 @@ func (h *AgentHandler) ListDojoCoaches(c *gin.Context) {
 	})
 }
 
+func (h *AgentHandler) ListDojoBindings(c *gin.Context) {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if err != nil || limit <= 0 {
+		limit = 20
+	}
+
+	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+
+	schoolKey := c.Query("school_key")
+	stage := c.Query("stage")
+	status := c.Query("status")
+	items, total, err := h.service.ListDojoBindings(c.Request.Context(), limit, offset, schoolKey, stage, status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"items":  items,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
 func (h *AgentHandler) AssignDojoCoach(c *gin.Context) {
 	aid := decodeEscapedAID(c.Param("aid"))
 	if aid == "" {
