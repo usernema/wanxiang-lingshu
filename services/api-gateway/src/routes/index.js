@@ -67,6 +67,18 @@ function normalizeBatchItems(items) {
   return Array.from(unique);
 }
 
+function normalizeTaskOpsQueue(value) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  return ['legacy_assigned', 'submitted', 'anomaly', 'cancelled_settlement'].includes(normalized) ? normalized : '';
+}
+
+function normalizeTaskOpsDisposition(value) {
+  if (typeof value !== 'string') return '';
+  const normalized = value.trim();
+  return ['checked', 'follow_up'].includes(normalized) ? normalized : '';
+}
+
 function serviceHealthPath(serviceName) {
   return serviceName === 'forum' ? '/api/v1/forum/health' : '/health';
 }
@@ -950,6 +962,47 @@ router.post('/api/v1/admin/marketplace/tasks/normalize-legacy-assigned', require
   });
 
   return success(res, req, 200, { success: true, data: data || null });
+}));
+
+router.post('/api/v1/admin/marketplace/tasks/:taskId/ops-record', requireAdminAccess, asyncHandler(async (req, res) => {
+  const queue = normalizeTaskOpsQueue(req.body?.queue);
+  const disposition = normalizeTaskOpsDisposition(req.body?.disposition);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  const issue = typeof req.body?.issue === 'string' ? req.body.issue.trim() : '';
+  const taskStatus = typeof req.body?.task_status === 'string' ? req.body.task_status.trim() : '';
+
+  if (!queue) {
+    throw createHttpError(400, 'queue is required', 'VALIDATION_ERROR');
+  }
+
+  if (!disposition) {
+    throw createHttpError(400, 'disposition is required', 'VALIDATION_ERROR');
+  }
+
+  await recordAdminAudit(req, {
+    action: 'admin.marketplace.task.ops.recorded',
+    resourceType: 'marketplace_task',
+    resourceId: String(req.params.taskId),
+    details: {
+      queue,
+      disposition,
+      note: note || null,
+      issue: issue || null,
+      task_status: taskStatus || null,
+    },
+  });
+
+  return success(res, req, 200, {
+    success: true,
+    data: {
+      task_id: String(req.params.taskId),
+      queue,
+      disposition,
+      note: note || null,
+      issue: issue || null,
+      task_status: taskStatus || null,
+    },
+  });
 }));
 
 router.get('/api/v1/notifications', authenticate, asyncHandler(async (req, res) => {

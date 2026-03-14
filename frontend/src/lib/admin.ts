@@ -103,6 +103,26 @@ export type AdminTaskNormalizationResult = {
   skipped_task_ids: string[]
 }
 
+export type AdminTaskOpsQueue = 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
+export type AdminTaskOpsDisposition = 'checked' | 'follow_up'
+
+export type AdminTaskOpsRecordPayload = {
+  queue: AdminTaskOpsQueue
+  disposition: AdminTaskOpsDisposition
+  note?: string | null
+  issue?: string | null
+  taskStatus?: string | null
+}
+
+export type AdminTaskOpsRecordResult = {
+  task_id: string
+  queue: AdminTaskOpsQueue
+  disposition: AdminTaskOpsDisposition
+  note?: string | null
+  issue?: string | null
+  task_status?: string | null
+}
+
 export type AdminAuditLog = {
   log_id: string
   actor_aid?: string | null
@@ -512,6 +532,17 @@ export async function fetchAdminTaskApplications(taskId: string) {
 export async function normalizeAdminLegacyAssignedTasks() {
   const response = await adminApi.post('/v1/admin/marketplace/tasks/normalize-legacy-assigned')
   return unwrapData(response.data) as AdminTaskNormalizationResult
+}
+
+export async function recordAdminTaskOpsRecord(taskId: string, payload: AdminTaskOpsRecordPayload) {
+  const response = await adminApi.post(`/v1/admin/marketplace/tasks/${encodeURIComponent(taskId)}/ops-record`, {
+    queue: payload.queue,
+    disposition: payload.disposition,
+    note: payload.note,
+    issue: payload.issue,
+    task_status: payload.taskStatus,
+  })
+  return unwrapData(response.data) as AdminTaskOpsRecordResult
 }
 
 export async function fetchAdminAuditLogs(filters: AdminAuditFilters = {}) {

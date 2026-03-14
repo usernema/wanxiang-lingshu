@@ -27,8 +27,11 @@ import {
   fetchAdminTasks,
   getAdminToken,
   normalizeAdminLegacyAssignedTasks,
+  recordAdminTaskOpsRecord,
   setAdminToken,
   type AdminTask,
+  type AdminTaskOpsDisposition,
+  type AdminTaskOpsQueue,
   type AdminTaskNormalizationResult,
   type AdminTaskStatus,
   triggerAdminAgentGrowthEvaluation,
@@ -246,6 +249,17 @@ export function useAdminConsoleState() {
     enabled,
   })
 
+  const taskOpsAuditQuery = useQuery({
+    queryKey: ['admin', 'audit-logs', 'task-ops', activeToken],
+    queryFn: () => fetchAdminAuditLogs({
+      limit: 10,
+      offset: 0,
+      action: 'admin.marketplace.task.ops.recorded',
+      resourceType: 'marketplace_task',
+    }),
+    enabled,
+  })
+
   const refreshAdminData = async () => {
     await Promise.all([
       overviewQuery.refetch(),
@@ -259,6 +273,7 @@ export function useAdminConsoleState() {
       tasksQuery.refetch(),
       auditLogsQuery.refetch(),
       moderationAuditQuery.refetch(),
+      taskOpsAuditQuery.refetch(),
       expandedPostId !== null ? commentsQuery.refetch() : Promise.resolve(),
       expandedTaskId !== null ? taskApplicationsQuery.refetch() : Promise.resolve(),
     ])
@@ -344,6 +359,30 @@ export function useAdminConsoleState() {
     },
   })
 
+  const recordTaskOpsMutation = useMutation({
+    mutationFn: ({
+      taskId,
+      queue,
+      disposition,
+      note,
+      issue,
+      taskStatus,
+    }: {
+      taskId: string
+      queue: AdminTaskOpsQueue
+      disposition: AdminTaskOpsDisposition
+      note?: string | null
+      issue?: string | null
+      taskStatus?: string | null
+    }) => recordAdminTaskOpsRecord(taskId, { queue, disposition, note, issue, taskStatus }),
+    onSuccess: async (result) => {
+      const dispositionLabel = result.disposition === 'checked' ? '已核对' : '待跟进'
+      setTaskMaintenanceMessage(`已为任务 ${result.task_id} 记录“${dispositionLabel}”运维结果。`)
+      await refreshAdminData()
+      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+    },
+  })
+
   const closeAllDetails = () => {
     setSelectedAgent(null)
     setSelectedGrowthProfile(null)
@@ -357,8 +396,8 @@ export function useAdminConsoleState() {
     setExpandedTaskId(null)
   }
 
-  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error
-  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error
+  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
+  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error || recordTaskOpsMutation.error
   const displayError = sharedError || mutationError
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -386,6 +425,36 @@ export function useAdminConsoleState() {
   const handleNormalizeLegacyAssignedTasks = async () => {
     if (!window.confirm('确认将历史 assigned 任务归一化为 in_progress 吗？')) return
     await normalizeLegacyAssignedMutation.mutateAsync()
+  }
+
+  const handleRecordTaskOps = async ({
+    taskId,
+    queue,
+    disposition,
+    issue,
+    taskStatus,
+  }: {
+    taskId: string
+    queue: AdminTaskOpsQueue
+    disposition: AdminTaskOpsDisposition
+    issue?: string | null
+    taskStatus?: string | null
+  }) => {
+    const note = window.prompt(
+      disposition === 'checked'
+        ? '可选：补充本次“已核对”的备注（可留空）'
+        : '可选：补充为什么需要继续跟进（可留空）',
+      issue || '',
+    )
+    if (note === null) return
+    await recordTaskOpsMutation.mutateAsync({
+      taskId,
+      queue,
+      disposition,
+      note: note.trim() || undefined,
+      issue,
+      taskStatus,
+    })
   }
 
   const openAgentDetail = (agent: AgentProfile) => {
@@ -574,6 +643,7 @@ export function useAdminConsoleState() {
   const taskItems = tasksQuery.data?.items || []
   const auditLogItems = auditLogsQuery.data?.items || []
   const moderationAuditItems = moderationAuditQuery.data?.items || []
+  const taskOpsAuditItems = taskOpsAuditQuery.data?.items || []
 
   const keyword = agentKeyword.trim().toLowerCase()
   const visibleAgents = agentItems.filter((agent) => {
@@ -730,6 +800,7 @@ export function useAdminConsoleState() {
       postStatusSummary,
       taskStatusSummary,
       consistencyExamples,
+      taskOpsAuditItems,
     },
     queries: {
       overviewQuery,
@@ -745,6 +816,7 @@ export function useAdminConsoleState() {
       taskApplicationsQuery,
       auditLogsQuery,
       moderationAuditQuery,
+      taskOpsAuditQuery,
     },
     actions: {
       handleToggleAgentSelection,
@@ -763,11 +835,13 @@ export function useAdminConsoleState() {
       handleBatchAgentAction,
       handleBatchPostAction,
       handleNormalizeLegacyAssignedTasks,
+      handleRecordTaskOps,
     },
     mutationState: {
       growthEvaluatePending: growthEvaluateMutation.isPending,
       growthDraftPending: growthDraftMutation.isPending,
       normalizeLegacyAssignedPending: normalizeLegacyAssignedMutation.isPending,
+      recordTaskOpsPending: recordTaskOpsMutation.isPending,
     },
     resets: {
       resetAgentControls,

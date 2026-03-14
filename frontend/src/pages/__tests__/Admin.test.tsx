@@ -21,6 +21,7 @@ const mockFetchAdminTasks = vi.fn()
 const mockFetchAdminPostComments = vi.fn()
 const mockFetchAdminTaskApplications = vi.fn()
 const mockNormalizeAdminLegacyAssignedTasks = vi.fn()
+const mockRecordAdminTaskOpsRecord = vi.fn()
 const mockTriggerAdminAgentGrowthEvaluation = vi.fn()
 const mockUpdateAdminAgentGrowthSkillDraft = vi.fn()
 const mockUpdateAdminAgentStatus = vi.fn()
@@ -45,6 +46,7 @@ vi.mock('@/lib/admin', () => ({
   fetchAdminPostComments: (...args: unknown[]) => mockFetchAdminPostComments(...args),
   fetchAdminTaskApplications: (...args: unknown[]) => mockFetchAdminTaskApplications(...args),
   normalizeAdminLegacyAssignedTasks: (...args: unknown[]) => mockNormalizeAdminLegacyAssignedTasks(...args),
+  recordAdminTaskOpsRecord: (...args: unknown[]) => mockRecordAdminTaskOpsRecord(...args),
   triggerAdminAgentGrowthEvaluation: (...args: unknown[]) => mockTriggerAdminAgentGrowthEvaluation(...args),
   updateAdminAgentGrowthSkillDraft: (...args: unknown[]) => mockUpdateAdminAgentGrowthSkillDraft(...args),
   batchUpdateAdminAgentStatus: (...args: unknown[]) => mockBatchUpdateAdminAgentStatus(...args),
@@ -60,6 +62,7 @@ describe('Admin page', () => {
     vi.clearAllMocks()
     mockFormatAdminError.mockReturnValue('后台加载失败')
     vi.stubGlobal('confirm', vi.fn(() => true))
+    vi.stubGlobal('prompt', vi.fn(() => '已核对托管与状态'))
   })
 
   it('shows token gate when no admin token is present', async () => {
@@ -367,24 +370,50 @@ describe('Admin page', () => {
       limit: 20,
       offset: 0,
     })
-    mockFetchAdminAuditLogs.mockResolvedValue({
-      items: [
-        {
-          log_id: 'log-1',
-          action: 'admin.agent.status.updated',
-          resource_type: 'agent',
-          resource_id: 'agent://a2ahub/admin-1',
-          details: {
-            status: 'suspended',
-            request_id: 'req-1',
-            batch: false,
+    mockFetchAdminAuditLogs.mockImplementation((filters?: { action?: string; resourceType?: string }) => {
+      if (filters?.action === 'admin.marketplace.task.ops.recorded') {
+        return Promise.resolve({
+          items: [
+            {
+              log_id: 'log-task-ops-1',
+              action: 'admin.marketplace.task.ops.recorded',
+              resource_type: 'marketplace_task',
+              resource_id: 'task-legacy-1',
+              details: {
+                queue: 'legacy_assigned',
+                disposition: 'checked',
+                note: '已核对托管与状态',
+                issue: 'assigned 缺少 escrow_id',
+                request_id: 'req-task-ops-1',
+              },
+              created_at: '2026-03-12T01:00:00.000Z',
+            },
+          ],
+          total: 1,
+          limit: 10,
+          offset: 0,
+        })
+      }
+
+      return Promise.resolve({
+        items: [
+          {
+            log_id: 'log-1',
+            action: 'admin.agent.status.updated',
+            resource_type: 'agent',
+            resource_id: 'agent://a2ahub/admin-1',
+            details: {
+              status: 'suspended',
+              request_id: 'req-1',
+              batch: false,
+            },
+            created_at: '2026-03-12T00:00:00.000Z',
           },
-          created_at: '2026-03-12T00:00:00.000Z',
-        },
-      ],
-      total: 1,
-      limit: 20,
-      offset: 0,
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      })
     })
     mockFetchAdminPostComments.mockResolvedValue({
       comments: [
@@ -431,6 +460,14 @@ describe('Admin page', () => {
       skipped_count: 0,
       normalized_task_ids: ['task-legacy-1', 'task-legacy-2'],
       skipped_task_ids: [],
+    })
+    mockRecordAdminTaskOpsRecord.mockResolvedValue({
+      task_id: 'task-legacy-1',
+      queue: 'legacy_assigned',
+      disposition: 'checked',
+      note: '已核对托管与状态',
+      issue: 'assigned 缺少 escrow_id',
+      task_status: 'assigned',
     })
     mockTriggerAdminAgentGrowthEvaluation.mockResolvedValue({ ok: true })
     mockUpdateAdminAgentGrowthSkillDraft.mockResolvedValue({ draft_id: 'draft-1', status: 'published' })
@@ -659,6 +696,7 @@ describe('Admin page', () => {
     expect(screen.getByText('待验收积压')).toBeInTheDocument()
     expect(screen.getByText('缺字段待人工复核')).toBeInTheDocument()
     expect(screen.getByText('取消后待核账')).toBeInTheDocument()
+    expect(screen.getByText('最近处理记录')).toBeInTheDocument()
     expect(screen.getAllByText('旧分配任务').length).toBeGreaterThan(0)
     expect(screen.getAllByText('退款核对任务').length).toBeGreaterThan(0)
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
@@ -666,6 +704,20 @@ describe('Admin page', () => {
     expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: '待验收' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '归一化历史 assigned' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '标记任务 task-legacy-1 已核对' }))
+
+    await waitFor(() => {
+      expect(mockRecordAdminTaskOpsRecord).toHaveBeenCalledWith('task-legacy-1', {
+        queue: 'legacy_assigned',
+        disposition: 'checked',
+        note: '已核对托管与状态',
+        issue: undefined,
+        taskStatus: 'assigned',
+      })
+    })
+
+    expect(await screen.findByText('已为任务 task-legacy-1 记录“已核对”运维结果。')).toBeInTheDocument()
 
     fireEvent.change(screen.getByLabelText('任务状态'), {
       target: { value: 'submitted' },

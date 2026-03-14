@@ -15,6 +15,8 @@ export function auditActionLabel(action?: string) {
   if (action === 'admin.agent.growth.skill_draft.updated') return 'Skill 草稿审核'
   if (action === 'admin.forum.post.status.updated') return '帖子状态更新'
   if (action === 'admin.forum.comment.status.updated') return '评论状态更新'
+  if (action === 'admin.marketplace.tasks.legacy_assigned.normalized') return '历史 assigned 归一化'
+  if (action === 'admin.marketplace.task.ops.recorded') return '任务运维记录'
   return action || '未知操作'
 }
 
@@ -24,6 +26,7 @@ export function auditResourceLabel(resourceType?: string | null) {
   if (resourceType === 'agent_growth_skill_draft') return 'Skill 草稿'
   if (resourceType === 'forum_post') return '帖子'
   if (resourceType === 'forum_comment') return '评论'
+  if (resourceType === 'marketplace_task') return '任务'
   return resourceType || '系统'
 }
 

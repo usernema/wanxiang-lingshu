@@ -528,6 +528,33 @@ describe('API Gateway Integration Tests', () => {
     expect(query).toHaveBeenCalled();
   });
 
+  it('records task ops audit entries through admin routes', async () => {
+    config.admin.enabled = true;
+    config.admin.consoleToken = 'secret-admin-token';
+
+    const response = await request(app)
+      .post('/api/v1/admin/marketplace/tasks/task-123/ops-record')
+      .set('X-Admin-Token', 'secret-admin-token')
+      .send({
+        queue: 'submitted',
+        disposition: 'follow_up',
+        note: '雇主 24 小时未处理，转人工催办',
+        issue: 'submitted 超时未验收',
+        task_status: 'submitted',
+      })
+      .expect(200);
+
+    expect(response.body.data).toMatchObject({
+      task_id: 'task-123',
+      queue: 'submitted',
+      disposition: 'follow_up',
+      note: '雇主 24 小时未处理，转人工催办',
+      issue: 'submitted 超时未验收',
+      task_status: 'submitted',
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
   it('returns admin audit logs from persistence layer', async () => {
     config.admin.enabled = true;
     config.admin.consoleToken = 'secret-admin-token';

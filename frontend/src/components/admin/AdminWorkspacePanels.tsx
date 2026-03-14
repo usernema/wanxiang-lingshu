@@ -60,6 +60,8 @@ type TaskOpsQueueItem = {
   title: string
   note: string
   meta?: string
+  queue: 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
+  issue?: string
   task?: AdminTask
 }
 
@@ -83,6 +85,9 @@ function TaskOpsQueueCard({
   actionLabel,
   onAction,
   openTaskDetail,
+  queueKey,
+  onRecordDisposition,
+  recordPending,
 }: {
   title: string
   description: string
@@ -93,6 +98,15 @@ function TaskOpsQueueCard({
   actionLabel?: string
   onAction?: () => void | Promise<void>
   openTaskDetail?: (task: AdminTask) => void
+  queueKey?: 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
+  onRecordDisposition?: (payload: {
+    taskId: string
+    queue: 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
+    disposition: 'checked' | 'follow_up'
+    issue?: string | null
+    taskStatus?: string | null
+  }) => void | Promise<void>
+  recordPending?: boolean
 }) {
   const toneMap = {
     slate: 'bg-slate-50 text-slate-900 border-slate-200',
@@ -133,6 +147,40 @@ function TaskOpsQueueCard({
                   </button>
                 )}
               </div>
+              {item.task && queueKey && onRecordDisposition && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-label={`标记任务 ${item.task.task_id} 已核对`}
+                    disabled={recordPending}
+                    onClick={() => onRecordDisposition({
+                      taskId: item.task?.task_id || '',
+                      queue: queueKey,
+                      disposition: 'checked',
+                      issue: item.issue,
+                      taskStatus: item.task?.status,
+                    })}
+                    className="rounded-lg border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    标记已核对
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`标记任务 ${item.task.task_id} 待跟进`}
+                    disabled={recordPending}
+                    onClick={() => onRecordDisposition({
+                      taskId: item.task?.task_id || '',
+                      queue: queueKey,
+                      disposition: 'follow_up',
+                      issue: item.issue,
+                      taskStatus: item.task?.status,
+                    })}
+                    className="rounded-lg border border-amber-300 px-2 py-1 text-xs text-amber-700 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    标记待跟进
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}
@@ -923,7 +971,10 @@ export function AdminTaskOperationsPanel({
   consistencySummary,
   consistencyExamples,
   handleNormalizeLegacyAssignedTasks,
+  handleRecordTaskOps,
   normalizeLegacyAssignedPending,
+  recordTaskOpsPending,
+  taskOpsAuditItems,
   taskStatusTone,
   taskStatusLabel,
   summarizeText,
@@ -940,7 +991,16 @@ export function AdminTaskOperationsPanel({
   consistencySummary?: ConsistencySummary
   consistencyExamples: Array<{ task_id: string; status: string; issue: string }>
   handleNormalizeLegacyAssignedTasks: () => void | Promise<void>
+  handleRecordTaskOps: (payload: {
+    taskId: string
+    queue: 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
+    disposition: 'checked' | 'follow_up'
+    issue?: string | null
+    taskStatus?: string | null
+  }) => void | Promise<void>
   normalizeLegacyAssignedPending: boolean
+  recordTaskOpsPending: boolean
+  taskOpsAuditItems: AdminAuditLog[]
   taskStatusTone: (status?: string) => string
   taskStatusLabel: (status?: string) => string
   summarizeText: (content?: string | null, maxLength?: number) => string
@@ -961,6 +1021,7 @@ export function AdminTaskOperationsPanel({
         ? `已分配给 ${task.worker_aid || '未知 worker'}，但仍停留在 legacy assigned。`
         : '已分配但缺少 escrow_id，暂不建议自动归一化。',
       meta: `雇主 ${task.employer_aid} · ${task.escrow_id ? `Escrow ${task.escrow_id}` : 'Escrow 待补'}`,
+      queue: 'legacy_assigned',
       task,
     }))
   const submittedQueueItems: TaskOpsQueueItem[] = taskItems
@@ -970,6 +1031,7 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: `Worker ${task.worker_aid || '未记录'} 已提交交付，等待 employer 决策。`,
       meta: `雇主 ${task.employer_aid} · Reward ${task.reward}`,
+      queue: 'submitted',
       task,
     }))
   const cancelledSettlementQueueItems: TaskOpsQueueItem[] = taskItems
@@ -979,6 +1041,7 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: '已取消且带 escrow 轨迹，建议核对退款、冻结余额和通知解释。',
       meta: `${task.escrow_id} · 取消时间 ${task.cancelled_at ? formatTime(task.cancelled_at) : '待补'}`,
+      queue: 'cancelled_settlement',
       task,
     }))
   const anomalyQueueItemMap = new Map<string, TaskOpsQueueItem>()
@@ -990,6 +1053,8 @@ export function AdminTaskOperationsPanel({
       title: task?.title || example.task_id,
       note: example.issue,
       meta: task ? `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}` : taskStatusLabel(example.status),
+      queue: 'anomaly',
+      issue: example.issue,
       task,
     })
   })
@@ -1004,11 +1069,14 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: issue,
       meta: `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}`,
+      queue: 'anomaly',
+      issue,
       task,
     })
   })
 
   const anomalyQueueItems = Array.from(anomalyQueueItemMap.values())
+  const recentTaskOpsRecords = taskOpsAuditItems.slice(0, 5)
 
   return (
     <section className="grid gap-6">
@@ -1040,6 +1108,9 @@ export function AdminTaskOperationsPanel({
             actionLabel={legacyAssignedQueueItems.length > 0 ? '执行归一化' : undefined}
             onAction={legacyAssignedQueueItems.length > 0 ? handleNormalizeLegacyAssignedTasks : undefined}
             openTaskDetail={openTaskDetail}
+            queueKey="legacy_assigned"
+            onRecordDisposition={handleRecordTaskOps}
+            recordPending={recordTaskOpsPending}
           />
           <TaskOpsQueueCard
             title="待验收积压"
@@ -1049,6 +1120,9 @@ export function AdminTaskOperationsPanel({
             items={submittedQueueItems}
             emptyText="当前没有 submitted 积压任务。"
             openTaskDetail={openTaskDetail}
+            queueKey="submitted"
+            onRecordDisposition={handleRecordTaskOps}
+            recordPending={recordTaskOpsPending}
           />
           <TaskOpsQueueCard
             title="缺字段待人工复核"
@@ -1058,6 +1132,9 @@ export function AdminTaskOperationsPanel({
             items={anomalyQueueItems}
             emptyText="当前没有需要人工复核的异常样本。"
             openTaskDetail={openTaskDetail}
+            queueKey="anomaly"
+            onRecordDisposition={handleRecordTaskOps}
+            recordPending={recordTaskOpsPending}
           />
           <TaskOpsQueueCard
             title="取消后待核账"
@@ -1067,6 +1144,9 @@ export function AdminTaskOperationsPanel({
             items={cancelledSettlementQueueItems}
             emptyText="当前没有需要核账的取消任务。"
             openTaskDetail={openTaskDetail}
+            queueKey="cancelled_settlement"
+            onRecordDisposition={handleRecordTaskOps}
+            recordPending={recordTaskOpsPending}
           />
         </div>
       </div>
@@ -1169,6 +1249,60 @@ export function AdminTaskOperationsPanel({
                   <span className="font-medium text-slate-900">{example.task_id}</span> · {taskStatusLabel(example.status)} · {example.issue}
                 </div>
               )) : <p className="text-sm text-slate-500">当前没有检测到一致性异常。</p>}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-slate-900">最近处理记录</p>
+                <p className="text-sm text-slate-500">记录队列项被标记为已核对 / 待跟进的最新结果，便于值班交接。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                {recentTaskOpsRecords.length} 条
+              </span>
+            </div>
+            <div className="mt-4 space-y-3">
+              {recentTaskOpsRecords.length === 0 ? (
+                <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有任务运维处理记录。</p>
+              ) : (
+                recentTaskOpsRecords.map((log) => {
+                  const disposition = readAuditDetailString(log.details, 'disposition')
+                  const queue = readAuditDetailString(log.details, 'queue')
+                  const note = readAuditDetailString(log.details, 'note')
+                  const issue = readAuditDetailString(log.details, 'issue')
+                  const task = log.resource_id ? taskMap.get(log.resource_id) : undefined
+
+                  return (
+                    <div key={log.log_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">
+                            {disposition === 'checked' ? '已核对' : disposition === 'follow_up' ? '待跟进' : '运维记录'}
+                          </span>
+                          {queue && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">队列 {queue}</span>}
+                        </div>
+                        <p className="text-xs text-slate-500">{formatTime(log.created_at)}</p>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-700">任务 {log.resource_id || '—'}{task ? ` · ${task.title}` : ''}</p>
+                      {issue && <p className="mt-1 text-xs text-amber-700">问题：{issue}</p>}
+                      {note && <p className="mt-1 text-xs text-slate-500">备注：{note}</p>}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {task && (
+                          <button
+                            type="button"
+                            aria-label={`查看处理记录任务 ${task.task_id} 详情`}
+                            onClick={() => openTaskDetail(task)}
+                            className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                          >
+                            查看任务
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
           </div>
         </div>

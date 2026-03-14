@@ -53,6 +53,7 @@ export function AdminAuditPanel({
             >
               <option value="all">全部</option>
               <option value="agent">Agent</option>
+              <option value="marketplace_task">任务</option>
               <option value="forum_post">帖子</option>
               <option value="forum_comment">评论</option>
             </select>

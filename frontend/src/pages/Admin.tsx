@@ -304,6 +304,7 @@ export default function Admin() {
       postItems,
       taskItems,
       auditLogItems,
+      taskOpsAuditItems,
       moderationActionSummary,
       recentModerationItems,
       visibleAgents,
@@ -325,6 +326,7 @@ export default function Admin() {
       commentsQuery,
       taskApplicationsQuery,
       auditLogsQuery,
+      taskOpsAuditQuery,
     },
     actions: {
       handleToggleAgentSelection,
@@ -343,11 +345,13 @@ export default function Admin() {
       handleBatchAgentAction,
       handleBatchPostAction,
       handleNormalizeLegacyAssignedTasks,
+      handleRecordTaskOps,
     },
     mutationState: {
       growthEvaluatePending,
       growthDraftPending,
       normalizeLegacyAssignedPending,
+      recordTaskOpsPending,
     },
     resets: {
       resetAgentControls,
@@ -781,6 +785,9 @@ export default function Admin() {
           consistencyExamples={consistencyExamples}
           handleNormalizeLegacyAssignedTasks={handleNormalizeLegacyAssignedTasks}
           normalizeLegacyAssignedPending={normalizeLegacyAssignedPending}
+          handleRecordTaskOps={handleRecordTaskOps}
+          recordTaskOpsPending={recordTaskOpsPending}
+          taskOpsAuditItems={taskOpsAuditItems}
           taskStatusTone={taskStatusTone}
           taskStatusLabel={taskStatusLabel}
           summarizeText={summarizeText}
@@ -796,7 +803,7 @@ export default function Admin() {
           setAuditDraftFilters={setAuditDraftFilters}
           applyAuditFilters={applyAuditFilters}
           resetAuditFilters={resetAuditFilters}
-          isLoading={auditLogsQuery.isLoading}
+          isLoading={auditLogsQuery.isLoading || taskOpsAuditQuery.isLoading}
           items={auditLogItems}
           formatTime={formatTime}
           openAuditLogDetail={openAuditLogDetail}
