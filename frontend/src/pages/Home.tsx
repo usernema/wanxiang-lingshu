@@ -137,8 +137,14 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const unreadCount = notificationsQuery.data?.unread_count || 0
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
   const growthProfile = growthQuery.data?.profile
-  const employerActiveTask = useMemo(() => getPriorityTask(employerTasks), [employerTasks])
-  const workerActiveTask = useMemo(() => getPriorityTask(workerTasks), [workerTasks])
+  const employerActiveTask = useMemo(
+    () => getPriorityTask(employerTasks.filter((task) => ['open', 'assigned', 'in_progress', 'submitted'].includes(task.status))),
+    [employerTasks],
+  )
+  const workerActiveTask = useMemo(
+    () => getPriorityTask(workerTasks.filter((task) => ['assigned', 'in_progress', 'submitted'].includes(task.status))),
+    [workerTasks],
+  )
   const latestCompletedTask = useMemo(
     () => getLatestTask([...workerTasks, ...employerTasks].filter((task) => task.status === 'completed')),
     [workerTasks, employerTasks],
@@ -204,6 +210,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const hasEmployerReusableAssets = Boolean(
     (growthProfile?.employer_template_count || 0) > 0 || (growthProfile?.template_reuse_count || 0) > 0,
   )
+  const hasWorkerAssetOperations = workerCompletedCount > 0 && (hasPublishedSkill || hasWorkerGrowthAssets)
+  const hasEmployerAssetOperations = employerCompletedCount > 0
   const employerTaskWorkspaceHref = buildTaskWorkspaceHref(employerActiveTask || employerCompletedTask, 'home-employer')
   const workerTaskWorkspaceHref = buildTaskWorkspaceHref(workerActiveTask || workerCompletedTask, 'home-worker')
   const employerCompletedAssetHref = hasEmployerReusableAssets
@@ -249,6 +257,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         items.push(item)
       }
     }
+    const isMatureRole = workRole === 'worker' ? hasWorkerAssetOperations : hasEmployerAssetOperations
 
     if (workRole === 'employer') {
       if (employerActiveTask) {
@@ -261,7 +270,19 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         })
       }
 
-      if (employerTasks.length === 0) {
+      if (!employerActiveTask && employerCompletedCount > 0) {
+        pushItem({
+          key: 'employer-assets',
+          title: hasEmployerReusableAssets ? '复盘模板并继续放大复购' : '沉淀雇主侧复购资产',
+          description: hasEmployerReusableAssets
+            ? `你已经完成 ${employerCompletedCount} 个雇主闭环，个人中心里已有模板或复购资产，下一步建议继续复盘并提高复用率。`
+            : `你已经完成 ${employerCompletedCount} 个雇主闭环，建议回个人中心检查模板沉淀、复购机会与资金解释。`,
+          href: '/profile?source=home-employer-assets',
+          cta: hasEmployerReusableAssets ? '去复盘模板' : '去看成长资产',
+        })
+      }
+
+      if (!employerActiveTask && employerTasks.length === 0) {
         pushItem({
           key: 'employer-create-task',
           title: '发布第一个真实任务',
@@ -281,7 +302,25 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         })
       }
 
-      if (workerTasks.length === 0) {
+      if (!workerActiveTask && workerCompletedCount > 0) {
+        pushItem({
+          key: 'worker-assets',
+          title: hasPublishedSkill ? '继续运营已沉淀 Skill' : hasWorkerGrowthAssets ? '整理成长资产并公开发布' : '把已完成经验沉淀为 Skill',
+          description: hasPublishedSkill
+            ? `你已经完成 ${workerCompletedCount} 个交付，且公开了 ${skills.length} 个 Skill。下一步应继续优化展示、定价与复购入口。`
+            : hasWorkerGrowthAssets
+              ? `你已经完成 ${workerCompletedCount} 个交付，个人中心里已有成长资产草稿，建议尽快整理并公开上架。`
+              : `你已经完成 ${workerCompletedCount} 个交付，下一步最重要的是把成功经验沉淀成公开 Skill。`,
+          href: hasPublishedSkill
+            ? '/marketplace?tab=skills&source=home-worker-assets'
+            : hasWorkerGrowthAssets
+              ? '/profile?source=home-worker-assets'
+              : '/marketplace?tab=skills&focus=publish-skill&source=home-worker-assets',
+          cta: hasPublishedSkill ? '去运营 Skill' : hasWorkerGrowthAssets ? '去看成长资产' : '去发布 Skill',
+        })
+      }
+
+      if (!workerActiveTask && workerTasks.length === 0) {
         pushItem({
           key: 'worker-browse-task',
           title: '去任务市场申请首单',
@@ -302,7 +341,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       })
     }
 
-    if (completedTaskCount > 0 && !hasPublishedSkill) {
+    if (!isMatureRole && completedTaskCount > 0 && !hasPublishedSkill) {
       pushItem({
         key: 'publish-skill',
         title: '把已完成任务沉淀成可复用 Skill',
@@ -312,7 +351,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       })
     }
 
-    if (!hasProfileBasics) {
+    if (!isMatureRole && !hasProfileBasics) {
       pushItem({
         key: 'profile',
         title: '补齐个人资料',
@@ -322,7 +361,15 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       })
     }
 
-    if (posts.length === 0) {
+    if (isMatureRole && completedTaskCount > 0 && posts.length === 0) {
+      pushItem({
+        key: 'forum-case-study',
+        title: '发一篇真实案例复盘帖',
+        description: '你已经有真实交付或验收结果，建议把案例、方法和边界整理成帖子，提升复购与外部信任。',
+        href: '/forum?focus=create-post&source=home-case-study',
+        cta: '去发复盘帖',
+      })
+    } else if (!isMatureRole && posts.length === 0) {
       pushItem({
         key: 'forum',
         title: '发第一篇自我介绍 / 需求帖',
@@ -332,7 +379,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       })
     }
 
-    if (!hasMarketplaceExperience) {
+    if (!isMatureRole && !hasMarketplaceExperience) {
       pushItem({
         key: 'marketplace',
         title: '进入市场完成首个真实流转',
@@ -380,16 +427,23 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   }, [
     completedTaskCount,
     employerActiveTask,
+    employerCompletedCount,
     employerOpenLoopCount,
     employerTaskWorkspaceHref,
     employerTasks.length,
+    hasEmployerAssetOperations,
+    hasEmployerReusableAssets,
     hasMarketplaceExperience,
     hasProfileBasics,
     hasPublishedSkill,
     posts.length,
+    skills.length,
     unreadCount,
     workRole,
     workerActiveTask,
+    workerCompletedCount,
+    hasWorkerAssetOperations,
+    hasWorkerGrowthAssets,
     workerOpenLoopCount,
     workerTaskWorkspaceHref,
     workerTasks.length,

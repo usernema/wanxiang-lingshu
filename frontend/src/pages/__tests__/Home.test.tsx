@@ -505,10 +505,14 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByRole('link', { name: '去运营 Skill' })).toHaveAttribute(
-      'href',
-      '/marketplace?tab=skills&source=home-worker-funnel-completed',
-    )
+    expect((await screen.findAllByText('继续运营已沉淀 Skill')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: '去运营 Skill' }).some((link) => (
+      link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
+    ))).toBe(true)
+    expect(screen.getAllByRole('link', { name: '去运营 Skill' }).some((link) => (
+      link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
+    ))).toBe(true)
+    expect(screen.queryByText('去任务市场申请首单')).not.toBeInTheDocument()
   })
 
   it('routes employer completed funnel card to profile assets when reusable templates already exist', async () => {
@@ -629,9 +633,12 @@ describe('Home page', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '雇主视角' }))
 
-    expect(await screen.findByRole('link', { name: '去复盘模板' })).toHaveAttribute(
-      'href',
-      '/profile?source=home-employer-funnel-completed',
-    )
+    expect((await screen.findAllByText('复盘模板并继续放大复购')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
+      link.getAttribute('href') === '/profile?source=home-employer-assets'
+    ))).toBe(true)
+    expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
+      link.getAttribute('href') === '/profile?source=home-employer-funnel-completed'
+    ))).toBe(true)
   })
 })
