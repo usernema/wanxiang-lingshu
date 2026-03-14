@@ -17,6 +17,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getActiveSession: () => mockGetActiveSession(),
     setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
     fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+    fetchCurrentAgentGrowth: async () => (await mockApiGet('/v1/agents/me/growth')).data,
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
     },
@@ -115,6 +116,43 @@ describe('Home page', () => {
       }
       if (endpoint === '/v1/marketplace/skills?author_aid=worker-agent') {
         return { data: [] }
+      }
+      if (endpoint === '/v1/agents/me/growth') {
+        return {
+          data: {
+            profile: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'anthropic',
+              capabilities: ['coding'],
+              reputation: 88,
+              status: 'active',
+              primary_domain: 'development',
+              domain_scores: { development: 80 },
+              current_maturity_pool: 'execution',
+              recommended_task_scope: 'small',
+              auto_growth_eligible: false,
+              completed_task_count: 0,
+              active_skill_count: 0,
+              total_task_count: 1,
+              incubating_draft_count: 0,
+              validated_draft_count: 0,
+              published_draft_count: 0,
+              employer_template_count: 0,
+              template_reuse_count: 0,
+              promotion_readiness_score: 20,
+              recommended_next_pool: 'delivery',
+              promotion_candidate: false,
+              suggested_actions: [],
+              risk_flags: [],
+              evaluation_summary: 'ok',
+              last_evaluated_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:00:00.000Z',
+              created_at: '2026-03-14T00:00:00.000Z',
+            },
+            pools: [],
+          },
+        }
       }
       if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
         return { data: [] }
@@ -263,6 +301,43 @@ describe('Home page', () => {
       if (endpoint === '/v1/marketplace/skills?author_aid=worker-agent') {
         return { data: [{ id: 1, skill_id: 'skill_1', author_aid: 'worker-agent', name: '站内交付', price: 25, purchase_count: 1, view_count: 10, status: 'active' }] }
       }
+      if (endpoint === '/v1/agents/me/growth') {
+        return {
+          data: {
+            profile: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'anthropic',
+              capabilities: ['coding'],
+              reputation: 88,
+              status: 'active',
+              primary_domain: 'development',
+              domain_scores: { development: 90 },
+              current_maturity_pool: 'delivery',
+              recommended_task_scope: 'medium',
+              auto_growth_eligible: true,
+              completed_task_count: 1,
+              active_skill_count: 1,
+              total_task_count: 1,
+              incubating_draft_count: 0,
+              validated_draft_count: 0,
+              published_draft_count: 1,
+              employer_template_count: 0,
+              template_reuse_count: 0,
+              promotion_readiness_score: 75,
+              recommended_next_pool: 'specialist',
+              promotion_candidate: true,
+              suggested_actions: ['publish'],
+              risk_flags: [],
+              evaluation_summary: 'ok',
+              last_evaluated_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:00:00.000Z',
+              created_at: '2026-03-14T00:00:00.000Z',
+            },
+            pools: [],
+          },
+        }
+      }
       if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
         return {
           data: [
@@ -313,5 +388,250 @@ describe('Home page', () => {
       '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer-funnel-review',
     )
     expect(mockSetActiveRole).toHaveBeenCalledWith('employer')
+  })
+
+  it('routes worker completed funnel card to skill operations when completed work has become reusable assets', async () => {
+    mockGetActiveSession.mockReturnValue(activeSession)
+    mockGetActiveRole.mockReturnValue('worker')
+    mockFetchNotifications.mockResolvedValue({
+      items: [],
+      total: 0,
+      unread_count: 0,
+      limit: 5,
+      offset: 0,
+    })
+    mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/health/ready') {
+        return { data: { status: 'ready' } }
+      }
+      if (endpoint === '/v1/agents/me') {
+        return {
+          data: {
+            aid: 'worker-agent',
+            model: 'Claude Worker',
+            provider: 'anthropic',
+            capabilities: ['coding'],
+            reputation: 88,
+            status: 'active',
+            membership_level: 'member',
+            trust_level: 'verified',
+            headline: '全栈执行者',
+            bio: '可以做开发与交付',
+            created_at: '2026-03-14T00:00:00.000Z',
+          },
+        }
+      }
+      if (endpoint === '/v1/credits/balance') {
+        return {
+          data: {
+            aid: 'worker-agent',
+            balance: 120,
+            frozen_balance: 0,
+            total_earned: 150,
+            total_spent: 30,
+          },
+        }
+      }
+      if (endpoint === '/v1/forum/posts?author_aid=worker-agent') {
+        return { data: { data: [] } }
+      }
+      if (endpoint === '/v1/marketplace/skills?author_aid=worker-agent') {
+        return { data: [{ id: 1, skill_id: 'skill_1', author_aid: 'worker-agent', name: '站内交付', price: 25, purchase_count: 1, view_count: 10, status: 'active' }] }
+      }
+      if (endpoint === '/v1/agents/me/growth') {
+        return {
+          data: {
+            profile: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'anthropic',
+              capabilities: ['coding'],
+              reputation: 88,
+              status: 'active',
+              primary_domain: 'development',
+              domain_scores: { development: 92 },
+              current_maturity_pool: 'delivery',
+              recommended_task_scope: 'medium',
+              auto_growth_eligible: true,
+              completed_task_count: 1,
+              active_skill_count: 1,
+              total_task_count: 1,
+              incubating_draft_count: 0,
+              validated_draft_count: 0,
+              published_draft_count: 1,
+              employer_template_count: 0,
+              template_reuse_count: 0,
+              promotion_readiness_score: 82,
+              recommended_next_pool: 'specialist',
+              promotion_candidate: true,
+              suggested_actions: ['publish'],
+              risk_flags: [],
+              evaluation_summary: 'ok',
+              last_evaluated_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:00:00.000Z',
+              created_at: '2026-03-14T00:00:00.000Z',
+            },
+            pools: [],
+          },
+        }
+      }
+      if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
+        return { data: [] }
+      }
+      if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
+        return {
+          data: [
+            {
+              id: 1,
+              task_id: 'task_completed_1',
+              employer_aid: 'employer-agent',
+              worker_aid: 'worker-agent',
+              title: '已完成交付任务',
+              description: '完成后沉淀为 Skill',
+              reward: 25,
+              status: 'completed',
+              created_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T01:00:00.000Z',
+            },
+          ],
+        }
+      }
+      if (endpoint === '/v1/marketplace/tasks') {
+        return { data: [] }
+      }
+
+      throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+    })
+
+    renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
+
+    expect(await screen.findByRole('link', { name: '去运营 Skill' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=skills&source=home-worker-funnel-completed',
+    )
+  })
+
+  it('routes employer completed funnel card to profile assets when reusable templates already exist', async () => {
+    mockGetActiveSession.mockReturnValue(activeSession)
+    mockGetActiveRole.mockReturnValue('employer')
+    mockFetchNotifications.mockResolvedValue({
+      items: [],
+      total: 0,
+      unread_count: 0,
+      limit: 5,
+      offset: 0,
+    })
+    mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/health/ready') {
+        return { data: { status: 'ready' } }
+      }
+      if (endpoint === '/v1/agents/me') {
+        return {
+          data: {
+            aid: 'worker-agent',
+            model: 'Claude Worker',
+            provider: 'anthropic',
+            capabilities: ['coding'],
+            reputation: 88,
+            status: 'active',
+            membership_level: 'member',
+            trust_level: 'verified',
+            headline: '全栈执行者',
+            bio: '可以做开发与交付',
+            created_at: '2026-03-14T00:00:00.000Z',
+          },
+        }
+      }
+      if (endpoint === '/v1/credits/balance') {
+        return {
+          data: {
+            aid: 'worker-agent',
+            balance: 120,
+            frozen_balance: 0,
+            total_earned: 150,
+            total_spent: 30,
+          },
+        }
+      }
+      if (endpoint === '/v1/forum/posts?author_aid=worker-agent') {
+        return { data: { data: [] } }
+      }
+      if (endpoint === '/v1/marketplace/skills?author_aid=worker-agent') {
+        return { data: [] }
+      }
+      if (endpoint === '/v1/agents/me/growth') {
+        return {
+          data: {
+            profile: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'anthropic',
+              capabilities: ['coding'],
+              reputation: 88,
+              status: 'active',
+              primary_domain: 'development',
+              domain_scores: { development: 92 },
+              current_maturity_pool: 'delivery',
+              recommended_task_scope: 'medium',
+              auto_growth_eligible: true,
+              completed_task_count: 1,
+              active_skill_count: 0,
+              total_task_count: 1,
+              incubating_draft_count: 0,
+              validated_draft_count: 0,
+              published_draft_count: 0,
+              employer_template_count: 2,
+              template_reuse_count: 1,
+              promotion_readiness_score: 82,
+              recommended_next_pool: 'specialist',
+              promotion_candidate: true,
+              suggested_actions: ['reuse'],
+              risk_flags: [],
+              evaluation_summary: 'ok',
+              last_evaluated_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:00:00.000Z',
+              created_at: '2026-03-14T00:00:00.000Z',
+            },
+            pools: [],
+          },
+        }
+      }
+      if (endpoint === '/v1/marketplace/tasks?employer_aid=worker-agent') {
+        return {
+          data: [
+            {
+              id: 10,
+              task_id: 'task_employer_completed_1',
+              employer_aid: 'worker-agent',
+              worker_aid: 'worker-2',
+              title: '雇主侧已完成任务',
+              description: '已形成模板资产',
+              reward: 50,
+              status: 'completed',
+              created_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T02:00:00.000Z',
+            },
+          ],
+        }
+      }
+      if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
+        return { data: [] }
+      }
+      if (endpoint === '/v1/marketplace/tasks') {
+        return { data: [] }
+      }
+
+      throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+    })
+
+    renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '雇主视角' }))
+
+    expect(await screen.findByRole('link', { name: '去复盘模板' })).toHaveAttribute(
+      'href',
+      '/profile?source=home-employer-funnel-completed',
+    )
   })
 })

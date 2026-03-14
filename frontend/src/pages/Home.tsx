@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
+import { api, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
 import type { AppSessionState } from '@/App'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 
@@ -79,6 +79,11 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       return response.data as Skill[]
     },
   })
+  const growthQuery = useQuery({
+    queryKey: ['home-growth', session?.aid],
+    enabled: dashboardEnabled,
+    queryFn: fetchCurrentAgentGrowth,
+  })
   const employerTasksQuery = useQuery({
     queryKey: ['home-employer-tasks', session?.aid],
     enabled: dashboardEnabled,
@@ -131,6 +136,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const marketTasks = marketTasksQuery.data || []
   const unreadCount = notificationsQuery.data?.unread_count || 0
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
+  const growthProfile = growthQuery.data?.profile
   const employerActiveTask = useMemo(() => getPriorityTask(employerTasks), [employerTasks])
   const workerActiveTask = useMemo(() => getPriorityTask(workerTasks), [workerTasks])
   const latestCompletedTask = useMemo(
@@ -190,8 +196,34 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       toNumber(balance.total_spent) > 0 ||
       unreadCount > 0)
   const hasPublishedSkill = skills.length > 0
+  const hasWorkerGrowthAssets = Boolean(
+    (growthProfile?.published_draft_count || 0) > 0 ||
+      (growthProfile?.validated_draft_count || 0) > 0 ||
+      (growthProfile?.incubating_draft_count || 0) > 0,
+  )
+  const hasEmployerReusableAssets = Boolean(
+    (growthProfile?.employer_template_count || 0) > 0 || (growthProfile?.template_reuse_count || 0) > 0,
+  )
   const employerTaskWorkspaceHref = buildTaskWorkspaceHref(employerActiveTask || employerCompletedTask, 'home-employer')
   const workerTaskWorkspaceHref = buildTaskWorkspaceHref(workerActiveTask || workerCompletedTask, 'home-worker')
+  const employerCompletedAssetHref = hasEmployerReusableAssets
+    ? '/profile?source=home-employer-funnel-completed'
+    : '/profile?source=home-employer-funnel-completed'
+  const employerCompletedAssetSummary = hasEmployerReusableAssets
+    ? '这些任务已经完成结算，模板和复购资产可继续在个人中心复盘与复用。'
+    : '这些任务已经完成结算，建议回个人中心检查模板沉淀、复购机会与资金解释。'
+  const employerCompletedAssetCta = hasEmployerReusableAssets ? '去复盘模板' : '去看成长资产'
+  const workerCompletedAssetHref = hasPublishedSkill
+    ? '/marketplace?tab=skills&source=home-worker-funnel-completed'
+    : hasWorkerGrowthAssets
+      ? '/profile?source=home-worker-funnel-completed'
+      : '/marketplace?tab=skills&focus=publish-skill&source=home-worker-funnel-completed'
+  const workerCompletedAssetSummary = hasPublishedSkill
+    ? '这些交付已经沉淀出公开 Skill，下一步适合继续运营能力资产与复用成交。'
+    : hasWorkerGrowthAssets
+      ? '这些交付已经形成成长资产草稿，下一步适合回个人中心继续复盘和整理。'
+      : '这些交付已经完成，下一步适合把经验沉淀为公开 Skill。'
+  const workerCompletedAssetCta = hasPublishedSkill ? '去运营 Skill' : hasWorkerGrowthAssets ? '去看成长资产' : '去发布 Skill'
   const roleLabel = workRole === 'worker' ? '执行者视角' : '雇主视角'
   const roleDescription = workRole === 'worker'
     ? '首页优先推荐接单、交付、验收与 Skill 沉淀动作。'
@@ -204,6 +236,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     balanceQuery.isLoading,
     postsQuery.isLoading,
     skillsQuery.isLoading,
+    growthQuery.isLoading,
     employerTasksQuery.isLoading,
     workerTasksQuery.isLoading,
     marketTasksQuery.isLoading,
@@ -409,12 +442,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           stage: '已完成验收',
           count: employerCompletedCount,
           summary: employerCompletedCount > 0
-            ? '这些任务已经完成结算，下一步适合继续复用流程资产或发布新单。'
+            ? employerCompletedAssetSummary
             : '完成验收后，这里会成为你的复购和运营基础盘。',
-          href: employerCompletedTask
-            ? buildTaskWorkspaceHref(employerCompletedTask, 'home-employer-funnel-completed')
+          href: employerCompletedCount > 0
+            ? employerCompletedAssetHref
             : '/marketplace?tab=tasks&focus=create-task&source=home-employer-funnel',
-          cta: employerCompletedTask ? '回看已完成任务' : '继续发布任务',
+          cta: employerCompletedCount > 0 ? employerCompletedAssetCta : '继续发布任务',
         },
       ]
     }
@@ -462,24 +495,28 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         stage: '已完成交付',
         count: workerCompletedCount,
         summary: workerCompletedCount > 0
-          ? '这些交付已经完成，下一步适合把经验沉淀为公开 Skill。'
+          ? workerCompletedAssetSummary
           : '完成交付后，这里会成为你的成长资产入口。',
-        href: workerCompletedTask
-          ? buildTaskWorkspaceHref(workerCompletedTask, 'home-worker-funnel-completed')
+        href: workerCompletedCount > 0
+          ? workerCompletedAssetHref
           : '/marketplace?tab=skills&focus=publish-skill&source=home-worker-funnel',
-        cta: workerCompletedTask ? '回看已完成交付' : '去发布 Skill',
+        cta: workerCompletedCount > 0 ? workerCompletedAssetCta : '去发布 Skill',
       },
     ]
   }, [
     employerCompletedCount,
-    employerCompletedTask,
+    employerCompletedAssetCta,
+    employerCompletedAssetHref,
+    employerCompletedAssetSummary,
     employerExecutionTasks,
     employerOpenTasks,
     employerReviewTasks,
     workRole,
     workerAvailableTasks.length,
     workerCompletedCount,
-    workerCompletedTask,
+    workerCompletedAssetCta,
+    workerCompletedAssetHref,
+    workerCompletedAssetSummary,
     workerExecutionTasks,
     workerReviewTasks,
   ])
