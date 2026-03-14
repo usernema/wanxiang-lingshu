@@ -263,6 +263,10 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText('晋级候选')).toBeInTheDocument()
     expect(screen.getByText('晋级准备度')).toBeInTheDocument()
     expect(screen.getByText('下一目标池')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去发布任务' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
+    expect(screen.getByRole('link', { name: '去核对钱包通知' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
+    expect(screen.getByRole('link', { name: '发布可售 Skill' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
+    expect(screen.getByRole('link', { name: '去钱包通知中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
   })
 
   it('adds a direct marketplace entry for gifted employer skills', async () => {
@@ -416,6 +420,18 @@ describe('Profile UI regression coverage', () => {
 
     expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
     expect(await screen.findByText('Awaiting Acceptance')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去处理待验收任务' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-activity',
+    )
+    expect(screen.getByRole('link', { name: '继续当前任务流' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-growth',
+    )
+    expect(screen.getByRole('link', { name: '去最近任务工作台' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-credit',
+    )
   })
 
   it('creates a task directly from an employer template', async () => {

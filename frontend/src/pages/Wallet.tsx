@@ -105,6 +105,15 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const hasPreviousNotificationPage = notificationOffset > 0
   const hasNextNotificationPage = notificationOffset + notifications.length < filteredNotificationTotal
   const flowSummary = useMemo(() => summarizeTransactions(transactions, session?.aid), [transactions, session?.aid])
+  const recommendedActions = useMemo(
+    () => buildWalletRecommendedActions({
+      unreadNotificationCount,
+      frozenBalance: toNumber(balanceQuery.data?.frozen_balance),
+      notifications,
+      transactions,
+    }),
+    [unreadNotificationCount, balanceQuery.data?.frozen_balance, notifications, transactions],
+  )
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -129,6 +138,21 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         <Card label="入账笔数" value={flowSummary.incoming} tone="green" />
         <Card label="出账笔数" value={flowSummary.outgoing} tone="slate" />
         <Card label="托管相关" value={flowSummary.escrowRelated} tone="amber" />
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">下一步动作推荐</h2>
+            <p className="mt-1 text-sm text-gray-600">根据未读通知、冻结积分和最近流水，把你下一步最该处理的入口直接拉出来。</p>
+          </div>
+          <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">实时建议 {recommendedActions.length}</span>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          {recommendedActions.map((action) => (
+            <WalletRecommendationCard key={`${action.label}-${action.href}`} action={action} />
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -387,6 +411,43 @@ function Card({ label, value, tone = 'primary' }: { label: string; value: string
   )
 }
 
+type WalletRecommendation = {
+  label: string
+  description: string
+  href: string
+  tone: 'primary' | 'green' | 'amber' | 'slate'
+}
+
+function WalletRecommendationCard({ action }: { action: WalletRecommendation }) {
+  const toneClass = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    green: 'border-green-200 bg-green-50 text-green-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[action.tone]
+
+  const content = (
+    <>
+      <div className="font-semibold">{action.label}</div>
+      <p className="mt-2 text-sm text-gray-600">{action.description}</p>
+    </>
+  )
+
+  if (action.href.startsWith('/')) {
+    return (
+      <Link to={action.href} className={`rounded-2xl border p-4 transition hover:shadow-sm ${toneClass}`}>
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <a href={action.href} className={`rounded-2xl border p-4 transition hover:shadow-sm ${toneClass}`}>
+      {content}
+    </a>
+  )
+}
+
 function summarizeTransactions(transactions: CreditTransaction[], aid?: string) {
   return transactions.reduce(
     (summary, transaction) => {
@@ -413,6 +474,164 @@ function parseMetadata(metadata?: string) {
   } catch {
     return {} as Record<string, string>
   }
+}
+
+function toNumber(value: string | number | undefined) {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isNaN(parsed) ? 0 : parsed
+  }
+  return 0
+}
+
+function buildWalletRecommendedActions({
+  unreadNotificationCount,
+  frozenBalance,
+  notifications,
+  transactions,
+}: {
+  unreadNotificationCount: number
+  frozenBalance: number
+  notifications: Notification[]
+  transactions: CreditTransaction[]
+}) {
+  const actions: WalletRecommendation[] = []
+  const taskHref = findRecentTaskHref(notifications, transactions)
+  const skillHref = findRecentSkillHref(notifications, transactions)
+
+  if (unreadNotificationCount > 0) {
+    actions.push({
+      label: '先看未读通知',
+      description: '优先处理托管、审核和账号状态提醒，避免真实流转静默卡住。',
+      href: '/wallet?focus=notifications&source=wallet-recommendations',
+      tone: 'primary',
+    })
+  }
+
+  if (frozenBalance > 0) {
+    actions.push({
+      label: taskHref ? '去核对托管任务' : '去核对资金提醒',
+      description: '冻结积分通常对应托管中或待结算任务，建议立即对齐业务对象。',
+      href: taskHref || '/wallet?focus=notifications&source=wallet-frozen',
+      tone: 'amber',
+    })
+  }
+
+  if (transactions.length === 0) {
+    actions.push({
+      label: '发布首个任务',
+      description: '还没有流水时，先创建一个真实需求，最快形成完整闭环。',
+      href: '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
+      tone: 'green',
+    })
+    actions.push({
+      label: '去市场查看 Skill',
+      description: '也可以先购买一个 Skill，完整体验钱包、托管与结算流转。',
+      href: '/marketplace?tab=skills&source=wallet-empty',
+      tone: 'slate',
+    })
+  } else if (taskHref) {
+    actions.push({
+      label: '回到最近任务工作台',
+      description: '最近流水已关联任务，可以继续托管、交付、验收或结算。',
+      href: taskHref,
+      tone: 'slate',
+    })
+  } else if (skillHref) {
+    actions.push({
+      label: '回到最近 Skill',
+      description: '最近流水已关联 Skill，可继续查看详情或形成复购。',
+      href: skillHref,
+      tone: 'slate',
+    })
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      label: '继续浏览 Marketplace',
+      description: '当前资金状态平稳，可以继续发布任务或购买 Skill。',
+      href: '/marketplace?source=wallet-default',
+      tone: 'primary',
+    })
+  }
+
+  return dedupeWalletRecommendations(actions).slice(0, 3)
+}
+
+function dedupeWalletRecommendations(actions: WalletRecommendation[]) {
+  const seen = new Set<string>()
+  return actions.filter((action) => {
+    const key = `${action.label}:${action.href}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function findRecentTaskHref(notifications: Notification[], transactions: CreditTransaction[]) {
+  for (const notification of notifications) {
+    const metadata = (notification.metadata || {}) as Record<string, string>
+    if (notification.link?.includes('/marketplace') && (metadata.task_id || notification.link.includes('focus=task-workspace'))) {
+      return notification.link
+    }
+    if (metadata.task_id) {
+      return buildTaskWorkspaceHref(metadata.task_id, 'wallet-notification')
+    }
+  }
+
+  for (const transaction of transactions) {
+    const metadata = parseMetadata(transaction.metadata)
+    if (metadata.marketplace_link?.includes('/marketplace') && (metadata.task_id || metadata.marketplace_link.includes('focus=task-workspace'))) {
+      return metadata.marketplace_link
+    }
+    if (metadata.task_id) {
+      return buildTaskWorkspaceHref(metadata.task_id, 'wallet-transaction')
+    }
+  }
+
+  return ''
+}
+
+function findRecentSkillHref(notifications: Notification[], transactions: CreditTransaction[]) {
+  for (const notification of notifications) {
+    const metadata = (notification.metadata || {}) as Record<string, string>
+    if (notification.link?.includes('/marketplace') && (metadata.skill_id || notification.link.includes('skill_id='))) {
+      return notification.link
+    }
+    if (metadata.skill_id) {
+      return buildSkillMarketplaceHref(metadata.skill_id, 'wallet-notification')
+    }
+  }
+
+  for (const transaction of transactions) {
+    const metadata = parseMetadata(transaction.metadata)
+    if (metadata.marketplace_link?.includes('/marketplace') && (metadata.skill_id || metadata.marketplace_link.includes('skill_id='))) {
+      return metadata.marketplace_link
+    }
+    if (metadata.skill_id) {
+      return buildSkillMarketplaceHref(metadata.skill_id, 'wallet-transaction')
+    }
+  }
+
+  return ''
+}
+
+function buildTaskWorkspaceHref(taskId: string, source = 'wallet') {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'tasks',
+    task: taskId,
+    focus: 'task-workspace',
+    source,
+  }).toString()}`
+}
+
+function buildSkillMarketplaceHref(skillId: string, source = 'wallet') {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    skill_id: skillId,
+    source,
+  }).toString()}`
 }
 
 function getResourceLabel(metadata: Record<string, string>) {

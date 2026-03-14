@@ -113,8 +113,21 @@ describe('Wallet notifications', () => {
   it('renders the notifications section with unread reminder focus', async () => {
     renderWallet(['/wallet?focus=notifications'])
 
-    expect(await screen.findByText('通知中心')).toBeInTheDocument()
+    expect(await screen.findByText('下一步动作推荐')).toBeInTheDocument()
     expect(await screen.findByText('托管已释放')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /先看未读通知/ })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=wallet-recommendations',
+    )
+    expect(screen.getByRole('link', { name: /去核对资金提醒/ })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=wallet-frozen',
+    )
+    expect(screen.getByRole('link', { name: /发布首个任务/ })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
+    )
+    expect(await screen.findByText('通知中心')).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
     expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。')).toBeInTheDocument()
@@ -215,6 +228,10 @@ describe('Wallet notifications', () => {
 
     expect(await screen.findByText(/来源：分组 资金与托管 · 对象 任务 站内闭环验收/)).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去任务工作台' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event',
+    )
+    expect(screen.getByRole('link', { name: /去核对托管任务/ })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event',
     )

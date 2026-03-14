@@ -120,14 +120,21 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const capabilities = useMemo(() => (profile?.capabilities || session?.capabilities || []).filter(Boolean), [profile?.capabilities, session?.capabilities])
   const recentPosts = posts.slice(0, 3)
   const recentSkills = skills.slice(0, 3)
+  const sortedEmployerTasks = useMemo(() => sortTasksByActivityDate(employerTasks), [employerTasks])
+  const sortedWorkerTasks = useMemo(() => sortTasksByActivityDate(workerTasks), [workerTasks])
+  const sortedAllTasks = useMemo(() => sortTasksByActivityDate([...employerTasks, ...workerTasks]), [employerTasks, workerTasks])
   const taskSummary = useMemo(() => summarizeTaskStatuses([...employerTasks, ...workerTasks]), [employerTasks, workerTasks])
-  const recentTasks = [...employerTasks, ...workerTasks]
-    .sort((a, b) => new Date(b.updated_at || b.completed_at || b.created_at).getTime() - new Date(a.updated_at || a.completed_at || a.created_at).getTime())
-    .slice(0, 5)
+  const latestEmployerTask = sortedEmployerTasks[0]
+  const latestWorkerTask = sortedWorkerTasks[0]
+  const latestSubmittedTask = sortedAllTasks.find((task) => task.status === 'submitted')
+  const latestInProgressTask = sortedAllTasks.find((task) => task.status === 'in_progress')
+  const latestActionableTask = latestSubmittedTask || latestInProgressTask || latestWorkerTask || latestEmployerTask || sortedAllTasks[0]
+  const recentTasks = sortedAllTasks.slice(0, 5)
   const recentGrowthDrafts = growthDrafts.slice(0, 3)
   const recentEmployerTemplates = employerTemplates.slice(0, 3)
   const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
   const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
+  const hasFrozenBalance = toNumber(balance?.frozen_balance) > 0
   const profileStrength = useMemo(
     () => calculateProfileStrength({
       headline: profile?.headline,
@@ -181,12 +188,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         growthQuery.refetch(),
       ])
       setAssetMessage(`已根据模板“${templateTitle}”创建任务 ${task.title}，正在跳转到任务工作台。`)
-      navigate(`/marketplace?${new URLSearchParams({
-        tab: 'tasks',
-        task: task.task_id,
-        focus: 'task-workspace',
-        source: 'template-created',
-      }).toString()}`)
+      navigate(buildTaskWorkspaceHref(task, 'template-created'))
     } catch (error) {
       if (axios.isAxiosError<{ detail?: string; error?: string; message?: string }>(error)) {
         setAssetError(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.message || '根据模板创建任务失败')
@@ -356,6 +358,37 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <MetricCard label="待交付任务" value={taskSummary.in_progress} />
             <MetricCard label="待验收任务" value={taskSummary.submitted} />
           </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link
+              to={
+                latestSubmittedTask
+                  ? buildTaskWorkspaceHref(latestSubmittedTask, 'profile-activity')
+                  : latestInProgressTask
+                    ? buildTaskWorkspaceHref(latestInProgressTask, 'profile-activity')
+                    : latestActionableTask
+                      ? buildTaskWorkspaceHref(latestActionableTask, 'profile-activity')
+                      : '/marketplace?tab=tasks&focus=create-task'
+              }
+              className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+            >
+              {latestSubmittedTask ? '去处理待验收任务' : latestInProgressTask ? '去处理待交付任务' : latestActionableTask ? '回到最近任务工作台' : '去发布任务'}
+            </Link>
+            <Link
+              to={hasFrozenBalance || showCreditVerificationFocus ? '/wallet?focus=notifications&source=profile-activity' : '/marketplace?tab=tasks&source=profile-activity'}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              {hasFrozenBalance || showCreditVerificationFocus ? '去核对钱包通知' : '去浏览任务市场'}
+            </Link>
+          </div>
+          <p className="mt-3 text-sm text-gray-500">
+            {latestSubmittedTask
+              ? '有任务正等待验收，优先回到任务工作台完成最后一步。'
+              : latestInProgressTask
+                ? '当前有执行中的任务，建议优先处理交付与托管节点。'
+                : hasFrozenBalance
+                  ? '当前存在冻结积分，建议同步核对钱包通知与关联任务。'
+                  : '当前没有进行中的任务，可以继续发布需求或去市场寻找机会。'}
+          </p>
         </div>
       </section>
 
@@ -421,6 +454,17 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                   )}
                 </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Link to="/marketplace?tab=skills&focus=publish-skill&source=profile-growth" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                  发布可售 Skill
+                </Link>
+                <Link
+                  to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-growth') : '/marketplace?tab=tasks&source=profile-growth'}
+                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  {latestActionableTask ? '继续当前任务流' : '去市场接任务'}
+                </Link>
               </div>
               <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
                 <div className="font-medium text-gray-800">评估摘要</div>
@@ -558,6 +602,22 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             请重点核对 Balance、Frozen、Earned、Spent，与当前 task / escrow 状态是否一致。
           </div>
         )}
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link to="/wallet?focus=notifications&source=profile-credit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+            去钱包通知中心
+          </Link>
+          <Link
+            to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-credit') : '/marketplace?tab=tasks&source=profile-credit'}
+            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            {latestActionableTask ? '去最近任务工作台' : '去任务市场'}
+          </Link>
+        </div>
+        <p className="mt-3 text-sm text-gray-500">
+          {hasFrozenBalance
+            ? '当前存在冻结积分，通常对应托管中或待结算任务，建议连同通知中心一起核对。'
+            : '如果最近做过购买、雇佣或托管操作，可以直接从通知中心回到关联对象继续处理。'}
+        </p>
       </section>
 
       <section className="grid gap-6 xl:grid-cols-3">
@@ -677,6 +737,23 @@ function ActivitySection({
       </div>
     </section>
   )
+}
+
+function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'profile') {
+  if (!task?.task_id) return '/marketplace?tab=tasks&focus=create-task'
+
+  const params = new URLSearchParams({
+    tab: 'tasks',
+    task: task.task_id,
+    focus: 'task-workspace',
+    source,
+  })
+
+  return `/marketplace?${params.toString()}`
+}
+
+function sortTasksByActivityDate(tasks: MarketplaceTask[]) {
+  return [...tasks].sort((a, b) => new Date(b.updated_at || b.completed_at || b.created_at).getTime() - new Date(a.updated_at || a.completed_at || a.created_at).getTime())
 }
 
 function summarizeTaskStatuses(tasks: MarketplaceTask[]) {
