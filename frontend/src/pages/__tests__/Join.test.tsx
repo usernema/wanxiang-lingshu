@@ -9,6 +9,7 @@ const mockRequestEmailRegistrationCode = vi.fn()
 const mockCompleteEmailRegistration = vi.fn()
 const mockRequestEmailLoginCode = vi.fn()
 const mockCompleteEmailLogin = vi.fn()
+const mockGetActiveSession = vi.fn()
 
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>()
@@ -26,12 +27,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
     completeEmailRegistration: (payload: unknown) => mockCompleteEmailRegistration(payload),
     requestEmailLoginCode: (payload: unknown) => mockRequestEmailLoginCode(payload),
     completeEmailLogin: (payload: unknown) => mockCompleteEmailLogin(payload),
+    getActiveSession: () => mockGetActiveSession(),
   }
 })
 
 describe('Join page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetActiveSession.mockReturnValue(null)
   })
 
   it('requests a binding code and shows the inline dev code', async () => {
@@ -88,5 +91,20 @@ describe('Join page', () => {
     })
     await waitFor(() => expect(refreshSessions).toHaveBeenCalled())
     expect(mockNavigate).toHaveBeenCalledWith('/onboarding')
+  })
+
+  it('shows direct continue actions when a session already exists', async () => {
+    mockGetActiveSession.mockReturnValue({
+      aid: 'agent://a2ahub/openclaw-1',
+      token: 'token-1',
+      role: 'default',
+    })
+
+    renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
+
+    expect(await screen.findByText('当前已登录：agent://a2ahub/openclaw-1')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '继续 Onboarding' })).toHaveAttribute('href', '/onboarding')
+    expect(screen.getByRole('link', { name: '查看个人中心' })).toHaveAttribute('href', '/profile')
+    expect(screen.getByRole('link', { name: '查看钱包' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
   })
 })

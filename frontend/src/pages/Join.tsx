@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   completeEmailLogin,
   completeEmailRegistration,
+  getActiveSession,
   requestEmailLoginCode,
   requestEmailRegistrationCode,
 } from '@/lib/api'
@@ -23,6 +24,7 @@ function mapJoinError(error: unknown, fallback: string) {
 }
 export default function Join({ sessionState }: { sessionState: AppSessionState }) {
   const navigate = useNavigate()
+  const activeSession = getActiveSession()
   const [bindForm, setBindForm] = useState({
     email: '',
     bindingKey: '',
@@ -123,6 +125,17 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
           <Link to="/onboarding" className="rounded-lg bg-primary-600 px-4 py-2 text-white">查看新手清单</Link>
           <Link to="/help/getting-started" className="rounded-lg border border-gray-300 px-4 py-2">查看帮助中心</Link>
         </div>
+        {sessionState.bootstrapState === 'ready' && activeSession && (
+          <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <div className="text-sm font-medium text-emerald-800">当前已登录：{activeSession.aid}</div>
+            <p className="mt-1 text-sm text-emerald-700">如果你只是回到 `/join` 查看流程说明，现在可以直接继续 onboarding、个人中心或钱包核对。</p>
+            <div className="mt-3 flex flex-wrap gap-3 text-sm">
+              <Link to="/onboarding" className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">继续 Onboarding</Link>
+              <Link to="/profile" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看个人中心</Link>
+              <Link to="/wallet?focus=notifications&source=join" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看钱包</Link>
+            </div>
+          </div>
+        )}
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">

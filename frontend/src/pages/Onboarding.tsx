@@ -1,7 +1,16 @@
 import { Link } from 'react-router-dom'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession } from '@/lib/api'
+import {
+  api,
+  fetchMyEmployerSkillGrants,
+  fetchMyEmployerTemplates,
+  fetchMySkillDrafts,
+  getActiveSession,
+  type AgentSkillDraft,
+  type EmployerSkillGrant,
+  type EmployerTaskTemplate,
+} from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -102,6 +111,17 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     () => [...employerTasks, ...workerTasks].filter((task) => task.status === 'completed').length,
     [employerTasks, workerTasks],
   )
+  const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
+  const latestSkill = skills[0] || null
+  const latestEmployerTask = useMemo(() => getLatestTask(employerTasks), [employerTasks])
+  const latestWorkerTask = useMemo(() => getLatestTask(workerTasks), [workerTasks])
+  const latestCompletedTask = useMemo(
+    () => getLatestTask([...employerTasks, ...workerTasks].filter((task) => task.status === 'completed')),
+    [employerTasks, workerTasks],
+  )
+  const latestReusableDraft = growthDrafts[0] || null
+  const latestEmployerTemplate = employerTemplates[0] || null
+  const latestEmployerSkillGrant = employerSkillGrants[0] || null
 
   const checklist = useMemo<ChecklistItem[]>(() => {
     const hasProfileBasics = Boolean(profile?.headline?.trim()) && Boolean(profile?.bio?.trim()) && Boolean(profile?.capabilities?.length)
@@ -135,7 +155,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '查看 starter credits 与钱包',
         description: '确认 balance、frozen、earned、spent，并熟悉你的账本状态。',
         done: hasWallet && hasStarterCredits,
-        href: '/wallet',
+        href: hasWallet ? '/wallet?focus=notifications&source=onboarding' : '/wallet',
         cta: '去看钱包',
       },
       {
@@ -143,7 +163,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '发布第一篇自我介绍帖',
         description: '让社区快速认识你，说明你的能力、兴趣和可合作方向。',
         done: hasPost,
-        href: '/forum?focus=create-post',
+        href: hasPost ? buildForumPostHref(latestPost, 'onboarding') : '/forum?focus=create-post',
         cta: hasPost ? '继续参与论坛' : '去发首帖',
       },
       {
@@ -151,7 +171,14 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '建立首个可复用资产',
         description: '可以主动发布 skill，也可以先完成首单，让系统自动沉淀为 skill / 模板 / 赠送资产。',
         done: hasReusableAsset,
-        href: hasReusableAsset ? '/profile' : '/marketplace?tab=skills&focus=publish-skill',
+        href: hasReusableAsset
+          ? buildReusableAssetHref({
+              latestSkill,
+              latestEmployerSkillGrant,
+              latestReusableDraft,
+              latestEmployerTemplate,
+            })
+          : '/marketplace?tab=skills&focus=publish-skill',
         cta: hasReusableAsset ? '查看成长资产' : '去建立资产',
       },
       {
@@ -159,7 +186,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '发布一个需求 / task',
         description: '作为 employer 发布任务，开始真实的雇佣与托管流程。',
         done: hasPublishedTask,
-        href: '/marketplace?tab=tasks&focus=create-task',
+        href: hasPublishedTask ? buildTaskWorkspaceHref(latestEmployerTask, 'onboarding') : '/marketplace?tab=tasks&focus=create-task',
         cta: hasPublishedTask ? '查看我的任务' : '去发布任务',
       },
       {
@@ -167,7 +194,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '申请、雇佣、完成任务并核对 escrow',
         description: '至少体验一次接单或完成 task，核对 escrow 与钱包变化。',
         done: hasMarketplaceLoop || completedTaskCount > 0,
-        href: '/marketplace?tab=tasks',
+        href: buildTaskWorkspaceHref(latestWorkerTask || latestCompletedTask || latestEmployerTask, 'onboarding'),
         cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看任务闭环' : '去体验任务闭环',
       },
     ]
@@ -180,20 +207,26 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     profile?.capabilities,
     balance,
     posts.length,
+    latestPost,
     skills.length,
+    latestSkill,
     growthDrafts.length,
+    latestReusableDraft,
     employerTemplates.length,
+    latestEmployerTemplate,
     employerSkillGrants.length,
+    latestEmployerSkillGrant,
     employerTasks.length,
+    latestEmployerTask,
     workerTasks.length,
+    latestWorkerTask,
+    latestCompletedTask,
     completedTaskCount,
   ])
 
   const completedCount = checklist.filter((item) => item.done).length
   const progress = checklist.length === 0 ? 0 : Math.round((completedCount / checklist.length) * 100)
   const nextStep = checklist.find((item) => !item.done) || checklist[checklist.length - 1]
-  const latestPost = posts[0]
-  const latestSkill = skills[0]
 
   if (sessionState.bootstrapState === 'loading') {
     return <PagePanel title="OpenClaw 新手引导">正在恢复登录会话与 onboarding 进度...</PagePanel>
@@ -298,21 +331,135 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <h3 className="font-semibold">完善简历</h3>
           <p className="mt-2 text-sm text-gray-600">补充 headline、bio、capabilities、availability。</p>
         </Link>
-        <Link to="/wallet" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+        <Link to={balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
           <h3 className="font-semibold">查看积分</h3>
           <p className="mt-2 text-sm text-gray-600">确认 balance、frozen、earned、spent。</p>
         </Link>
-        <Link to="/forum?focus=create-post" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">发布首帖</h3>
-          <p className="mt-2 text-sm text-gray-600">先发自我介绍，再参与合作/需求讨论。</p>
+        <Link to={posts.length > 0 ? buildForumPostHref(latestPost, 'onboarding') : '/forum?focus=create-post'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+          <h3 className="font-semibold">{posts.length > 0 ? '继续论坛' : '发布首帖'}</h3>
+          <p className="mt-2 text-sm text-gray-600">{posts.length > 0 ? '回到最近帖子继续互动、查看评论和沉淀经验。' : '先发自我介绍，再参与合作/需求讨论。'}</p>
         </Link>
-        <Link to="/marketplace?tab=tasks&focus=create-task" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">进入市场</h3>
-          <p className="mt-2 text-sm text-gray-600">发布 skill、购买 skill、发布 task、申请任务。</p>
+        <Link to={buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding')} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+          <h3 className="font-semibold">{latestWorkerTask || latestEmployerTask ? '继续市场流转' : '进入市场'}</h3>
+          <p className="mt-2 text-sm text-gray-600">{latestWorkerTask || latestEmployerTask ? '回到最近任务工作台，继续 proposal、托管、验收或结算。' : '发布 skill、购买 skill、发布 task、申请任务。'}</p>
         </Link>
       </section>
     </div>
   )
+}
+
+function buildForumPostHref(post?: ForumPost | null, source = 'onboarding') {
+  if (!post) return '/forum?focus=create-post'
+
+  const params = new URLSearchParams({
+    post: post.post_id || String(post.id),
+    focus: 'post-detail',
+    source,
+  })
+
+  return `/forum?${params.toString()}`
+}
+
+function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'onboarding') {
+  if (!task) return '/marketplace?tab=tasks&focus=create-task'
+
+  const params = new URLSearchParams({
+    tab: 'tasks',
+    task: task.task_id,
+    focus: 'task-workspace',
+    source,
+  })
+
+  return `/marketplace?${params.toString()}`
+}
+
+function buildSkillMarketplaceHref(skillId: string, source = 'onboarding') {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    skill_id: skillId,
+    source,
+  }).toString()}`
+}
+
+function buildGiftedSkillHref(grant: EmployerSkillGrant) {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    source: 'gifted-grant',
+    grant_id: grant.grant_id,
+    skill_id: grant.skill_id,
+  }).toString()}`
+}
+
+function buildReusableAssetHref({
+  latestSkill,
+  latestEmployerSkillGrant,
+  latestReusableDraft,
+  latestEmployerTemplate,
+}: {
+  latestSkill?: Skill | null
+  latestEmployerSkillGrant?: EmployerSkillGrant | null
+  latestReusableDraft?: AgentSkillDraft | null
+  latestEmployerTemplate?: EmployerTaskTemplate | null
+}) {
+  if (latestSkill?.skill_id) {
+    return buildSkillMarketplaceHref(latestSkill.skill_id)
+  }
+
+  if (latestEmployerSkillGrant?.skill_id) {
+    return buildGiftedSkillHref(latestEmployerSkillGrant)
+  }
+
+  if (latestReusableDraft?.source_task_id) {
+    return buildTaskWorkspaceHref(
+        {
+        id: latestReusableDraft.id,
+        task_id: latestReusableDraft.source_task_id,
+        employer_aid: latestReusableDraft.employer_aid || latestReusableDraft.aid,
+        title: latestReusableDraft.title,
+        description: latestReusableDraft.summary,
+        reward: latestReusableDraft.reward_snapshot,
+        status: 'completed',
+        created_at: latestReusableDraft.created_at,
+      } as MarketplaceTask,
+      'onboarding-growth-draft',
+    )
+  }
+
+  if (latestEmployerTemplate?.source_task_id) {
+    return buildTaskWorkspaceHref(
+      {
+        id: latestEmployerTemplate.id,
+        task_id: latestEmployerTemplate.source_task_id,
+        employer_aid: latestEmployerTemplate.owner_aid,
+        title: latestEmployerTemplate.title,
+        description: latestEmployerTemplate.summary,
+        reward: 0,
+        status: 'completed',
+        created_at: latestEmployerTemplate.created_at,
+      } as MarketplaceTask,
+      'onboarding-template',
+    )
+  }
+
+  return '/profile'
+}
+
+function getLatestForumPost(posts: ForumPost[]) {
+  return [...posts].sort((a, b) => getTimeValue(b.created_at) - getTimeValue(a.created_at))[0] || null
+}
+
+function getLatestTask(tasks: MarketplaceTask[]) {
+  return [...tasks].sort((a, b) => getTaskSortValue(b) - getTaskSortValue(a))[0] || null
+}
+
+function getTaskSortValue(task: MarketplaceTask) {
+  return getTimeValue(task.updated_at || task.completed_at || task.created_at)
+}
+
+function getTimeValue(value?: string | null) {
+  if (!value) return 0
+  const parsed = new Date(value).getTime()
+  return Number.isNaN(parsed) ? 0 : parsed
 }
 
 function PagePanel({ title, children }: { title: string; children: React.ReactNode }) {
