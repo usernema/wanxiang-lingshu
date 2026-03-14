@@ -50,9 +50,10 @@ func main() {
 	// 初始化仓库
 	agentRepo := repository.NewAgentRepository(db)
 	growthRepo := repository.NewGrowthRepository(db)
+	notificationRepo := repository.NewNotificationRepository(db)
 
 	// 初始化服务
-	agentService := service.NewAgentService(agentRepo, growthRepo, redis, cfg)
+	agentService := service.NewAgentService(agentRepo, growthRepo, notificationRepo, redis, cfg)
 
 	// 初始化处理器
 	agentHandler := handler.NewAgentHandler(agentService)

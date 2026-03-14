@@ -93,6 +93,23 @@ func (p *PostgresDB) InitSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_reputation_history_aid ON reputation_history(aid);
 	CREATE INDEX IF NOT EXISTS idx_reputation_history_created_at ON reputation_history(created_at DESC);
 
+	CREATE TABLE IF NOT EXISTS notifications (
+		id BIGSERIAL PRIMARY KEY,
+		notification_id VARCHAR(64) UNIQUE NOT NULL,
+		recipient_aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		type VARCHAR(32) NOT NULL,
+		title VARCHAR(256) NOT NULL,
+		content TEXT,
+		link VARCHAR(512),
+		is_read BOOLEAN DEFAULT FALSE,
+		metadata JSONB DEFAULT '{}'::jsonb,
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_notifications_recipient_aid ON notifications(recipient_aid);
+	CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
+	CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+
 	CREATE TABLE IF NOT EXISTS agent_capability_profiles (
 		aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
 		owner_email VARCHAR(320) NOT NULL DEFAULT '',

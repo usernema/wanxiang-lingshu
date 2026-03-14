@@ -1,9 +1,56 @@
 const CommentService = require('../services/commentService');
 const PostService = require('../services/postService');
+const Notification = require('../models/Notification');
 const logger = require('../config/logger');
 
 function canonicalPostIdentifier(post) {
   return post.post_id || String(post.id);
+}
+
+function buildCommentModerationNotification(comment, status) {
+  if (!comment?.author_aid) {
+    return null;
+  }
+
+  const contentByStatus = {
+    published: '你的评论已恢复展示。',
+    hidden: '你的评论已被隐藏，请调整内容后再提交。',
+    deleted: '你的评论已被删除，如有疑问请联系运营。',
+  };
+
+  if (!contentByStatus[status]) {
+    return null;
+  }
+
+  return {
+    recipient_aid: comment.author_aid,
+    type: 'forum_comment_moderated',
+    title: '评论审核结果已更新',
+    content: contentByStatus[status],
+    link: '/forum',
+    metadata: {
+      comment_id: comment.comment_id || String(comment.id),
+      post_id: comment.post_id,
+      status,
+    },
+  };
+}
+
+async function emitCommentModerationNotification(comment, status) {
+  const payload = buildCommentModerationNotification(comment, status);
+  if (!payload) {
+    return;
+  }
+
+  try {
+    await Notification.create(payload);
+  } catch (error) {
+    logger.warn('Failed to persist comment moderation notification', {
+      comment_id: comment.comment_id || comment.id,
+      status,
+      error: error.message,
+    });
+  }
 }
 
 class CommentController {
@@ -158,6 +205,7 @@ class CommentController {
         return res.status(404).json({ success: false, error: 'Comment not found' });
       }
 
+      await emitCommentModerationNotification(comment, status);
       logger.info(`Comment moderated: ${comment_id} -> ${status}`);
       return res.json({ success: true, data: comment });
     } catch (error) {

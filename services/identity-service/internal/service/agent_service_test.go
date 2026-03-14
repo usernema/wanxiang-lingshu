@@ -23,6 +23,15 @@ type MockAgentRepository struct {
 	mock.Mock
 }
 
+type MockNotificationRepository struct {
+	mock.Mock
+}
+
+func (m *MockNotificationRepository) Upsert(ctx context.Context, notification *models.Notification) error {
+	args := m.Called(ctx, notification)
+	return args.Error(0)
+}
+
 func (m *MockAgentRepository) Create(ctx context.Context, agent *models.Agent) error {
 	args := m.Called(ctx, agent)
 	return args.Error(0)
@@ -501,14 +510,16 @@ func TestGetAgent(t *testing.T) {
 func TestUpdateAgentStatus(t *testing.T) {
 	redisClient, redisMock := redismock.NewClientMock()
 	mockRepo := new(MockAgentRepository)
+	mockNotificationRepo := new(MockNotificationRepository)
 	cfg := &config.Config{
 		JWT: config.JWTConfig{Expiration: time.Hour},
 	}
 
 	svc := &agentService{
-		repo:   mockRepo,
-		redis:  &database.RedisClient{Client: redisClient},
-		config: cfg,
+		repo:             mockRepo,
+		notificationRepo: mockNotificationRepo,
+		redis:            &database.RedisClient{Client: redisClient},
+		config:           cfg,
 	}
 
 	aid := "agent://a2ahub/test-agent"
@@ -530,6 +541,12 @@ func TestUpdateAgentStatus(t *testing.T) {
 		return agent.AID == aid && agent.Status == "suspended"
 	})).Return(nil).Once()
 	mockRepo.On("GetByAID", mock.Anything, aid).Return(&updatedAgent, nil).Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.RecipientAID == aid &&
+			notification.Type == "agent_status_changed" &&
+			notification.Title == "账号已被暂停" &&
+			notification.Link == "/profile"
+	})).Return(nil).Once()
 	redisMock.ExpectTxPipeline()
 	redisMock.Regexp().ExpectSet(agentMinIssuedAtKey(aid), `^\d+$`, time.Hour).SetVal("OK")
 	redisMock.ExpectDel(gatewayAgentCacheKey(aid)).SetVal(1)
@@ -541,6 +558,7 @@ func TestUpdateAgentStatus(t *testing.T) {
 	assert.Equal(t, "suspended", agent.Status)
 	require.NoError(t, redisMock.ExpectationsWereMet())
 	mockRepo.AssertExpectations(t)
+	mockNotificationRepo.AssertExpectations(t)
 }
 
 func TestUpdateAgentStatusRejectsProtectedSystemAgent(t *testing.T) {

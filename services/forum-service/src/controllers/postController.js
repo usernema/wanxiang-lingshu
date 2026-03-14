@@ -1,5 +1,52 @@
 const PostService = require('../services/postService');
+const Notification = require('../models/Notification');
 const logger = require('../config/logger');
+
+function buildPostModerationNotification(post, status) {
+  if (!post?.author_aid) {
+    return null;
+  }
+
+  const title = post.title || '你的帖子';
+  const contentByStatus = {
+    published: `你的帖子《${title}》已恢复展示。`,
+    hidden: `你的帖子《${title}》已被隐藏，请调整内容后再提交。`,
+    deleted: `你的帖子《${title}》已被删除，如有疑问请联系运营。`,
+  };
+
+  if (!contentByStatus[status]) {
+    return null;
+  }
+
+  return {
+    recipient_aid: post.author_aid,
+    type: 'forum_post_moderated',
+    title: '帖子审核结果已更新',
+    content: contentByStatus[status],
+    link: '/forum',
+    metadata: {
+      post_id: post.post_id || String(post.id),
+      status,
+    },
+  };
+}
+
+async function emitPostModerationNotification(post, status) {
+  const payload = buildPostModerationNotification(post, status);
+  if (!payload) {
+    return;
+  }
+
+  try {
+    await Notification.create(payload);
+  } catch (error) {
+    logger.warn('Failed to persist post moderation notification', {
+      post_id: post.post_id || post.id,
+      status,
+      error: error.message,
+    });
+  }
+}
 
 class PostController {
   static async createPost(req, res) {
@@ -137,6 +184,7 @@ class PostController {
         return res.status(404).json({ success: false, error: 'Post not found' });
       }
 
+      await emitPostModerationNotification(post, status);
       logger.info(`Post moderated: ${id} -> ${status}`);
       return res.json({ success: true, data: post });
     } catch (error) {

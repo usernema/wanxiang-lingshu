@@ -47,19 +47,21 @@ type AgentService interface {
 
 // agentService Agent 服务实现
 type agentService struct {
-	repo       repository.AgentRepository
-	growthRepo repository.GrowthRepository
-	redis      *database.RedisClient
-	config     *config.Config
+	repo             repository.AgentRepository
+	growthRepo       repository.GrowthRepository
+	notificationRepo repository.NotificationRepository
+	redis            *database.RedisClient
+	config           *config.Config
 }
 
 // NewAgentService 创建 Agent 服务
-func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
+func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, notificationRepo repository.NotificationRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
 	return &agentService{
-		repo:       repo,
-		growthRepo: growthRepo,
-		redis:      redis,
-		config:     cfg,
+		repo:             repo,
+		growthRepo:       growthRepo,
+		notificationRepo: notificationRepo,
+		redis:            redis,
+		config:           cfg,
 	}
 }
 
@@ -563,6 +565,7 @@ func (s *agentService) UpdateAgentStatus(ctx context.Context, aid, status string
 	if err != nil {
 		return nil, err
 	}
+	previousStatus := agent.Status
 
 	agent.Status = status
 	if err := s.repo.Update(ctx, agent); err != nil {
@@ -579,6 +582,9 @@ func (s *agentService) UpdateAgentStatus(ctx context.Context, aid, status string
 		s.revokeAgentSessionsBestEffort(ctx, aid, time.Now().Unix()+1)
 	}
 	s.syncGrowthProfileBestEffort(ctx, aid, "agent_status_updated")
+	if previousStatus != status {
+		s.emitAgentStatusNotification(ctx, updatedAgent, previousStatus, status)
+	}
 
 	return s.sanitizeAgent(updatedAgent), nil
 }
@@ -944,4 +950,69 @@ func (s *agentService) revokeAgentSessionsBestEffort(ctx context.Context, aid st
 	pipeline.Set(ctx, agentMinIssuedAtKey(aid), strconv.FormatInt(minIssuedAt, 10), sessionTTL)
 	pipeline.Del(ctx, gatewayAgentCacheKey(aid))
 	_, _ = pipeline.Exec(ctx)
+}
+
+func (s *agentService) emitAgentStatusNotification(ctx context.Context, agent *models.Agent, previousStatus, status string) {
+	if s.notificationRepo == nil || agent == nil || strings.TrimSpace(agent.AID) == "" {
+		return
+	}
+
+	notification := buildAgentStatusNotification(agent, previousStatus, status)
+	if notification == nil {
+		return
+	}
+
+	if err := s.notificationRepo.Upsert(ctx, notification); err != nil {
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"aid":             agent.AID,
+			"previous_status": previousStatus,
+			"status":          status,
+		}).Warn("Failed to persist agent status notification")
+	}
+}
+
+func buildAgentStatusNotification(agent *models.Agent, previousStatus, status string) *models.Notification {
+	if agent == nil || strings.TrimSpace(agent.AID) == "" {
+		return nil
+	}
+
+	title := "账号状态已更新"
+	content := "你的账号状态已更新，请前往个人中心查看。"
+
+	switch status {
+	case "active":
+		title = "账号已恢复可用"
+		content = "你的 Agent 账号已恢复可用，可以继续登录、接单和参与平台流转。"
+	case "suspended":
+		title = "账号已被暂停"
+		content = "你的 Agent 账号已被暂停，暂时无法继续登录或参与平台流转，请联系运营核查。"
+	case "banned":
+		title = "账号已被封禁"
+		content = "你的 Agent 账号已被封禁，已停止登录与平台流转权限，如有疑问请联系运营。"
+	default:
+		return nil
+	}
+
+	metadata, err := json.Marshal(map[string]string{
+		"aid":             agent.AID,
+		"model":           agent.Model,
+		"provider":        agent.Provider,
+		"previous_status": previousStatus,
+		"status":          status,
+	})
+	if err != nil {
+		metadata = []byte(`{}`)
+	}
+
+	return &models.Notification{
+		NotificationID: fmt.Sprintf("notif_%s", uuid.NewString()),
+		RecipientAID:   agent.AID,
+		Type:           "agent_status_changed",
+		Title:          title,
+		Content:        content,
+		Link:           "/profile",
+		IsRead:         false,
+		Metadata:       string(metadata),
+		CreatedAt:      time.Now(),
+	}
 }
