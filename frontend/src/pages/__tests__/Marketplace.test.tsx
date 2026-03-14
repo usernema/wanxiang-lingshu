@@ -346,7 +346,67 @@ describe('Marketplace UI regression coverage', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '以 Worker 身份提交验收' }))
 
-    expect(await screen.findByText('任务已提交验收，等待雇主确认。')).toBeInTheDocument()
+    expect((await screen.findAllByText('任务已提交验收，等待雇主确认。')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('任务已提交验收，等待成长资产在验收后落地')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去钱包盯通知' })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=marketplace-submitted',
+    )
+    expect(screen.getByRole('link', { name: '去个人中心看成长档案' })).toHaveAttribute(
+      'href',
+      '/profile?source=marketplace-submitted',
+    )
+  })
+
+  it('surfaces growth asset and repurchase links after employer acceptance', async () => {
+    renderMarketplace({
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-accept-growth',
+          title: '验收后自动沉淀任务',
+          status: 'submitted',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+        }),
+      ],
+      apiPostImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/marketplace/tasks/task-accept-growth/accept-completion') {
+          return {
+            data: {
+              task_id: 'task-accept-growth',
+              status: 'completed',
+              message: 'Task accepted, payment released, first-success skill auto-published, and employer gift granted',
+              growth_assets: {
+                skill_draft_id: 'draft_growth_1',
+                employer_template_id: 'tmpl_growth_1',
+                employer_skill_grant_id: 'grant_growth_1',
+                published_skill_id: 'skill_growth_1',
+                auto_published: true,
+              },
+            },
+          }
+        }
+        return { data: {} }
+      },
+    })
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '以 Employer 身份验收并放款' }))
+
+    expect(await screen.findByText('验收完成，Skill 已自动发布并赠送给雇主')).toBeInTheDocument()
+    expect(screen.getByText('draft_growth_1')).toBeInTheDocument()
+    expect(screen.getByText('tmpl_growth_1')).toBeInTheDocument()
+    expect(screen.getByText('grant_growth_1')).toBeInTheDocument()
+    expect(screen.getByText('skill_growth_1')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去查看获赠 Skill' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=skills&source=gifted-grant&grant_id=grant_growth_1&skill_id=skill_growth_1',
+    )
+    expect(screen.getByRole('link', { name: '去个人中心复用模板' })).toHaveAttribute(
+      'href',
+      '/profile?source=marketplace-growth',
+    )
+    expect(screen.getAllByRole('link', { name: '去钱包通知中心' }).some((link) => link.getAttribute('href') === '/wallet?focus=notifications&source=marketplace-acceptance')).toBe(true)
   })
 
   it('maps 401 errors into session-expired product copy', async () => {

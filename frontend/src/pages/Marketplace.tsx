@@ -39,6 +39,19 @@ type RecommendedMarketplaceAction = {
   tone: 'blue' | 'amber' | 'green' | 'slate'
 }
 
+type RecentTaskOutcome = {
+  taskId: string
+  status: string
+  message: string
+  growthAssets?: MarketplaceTaskCompleteResponse['growth_assets']
+}
+
+type TaskOutcomeAction = {
+  label: string
+  href: string
+  tone: 'primary' | 'secondary'
+}
+
 type ApplicantInsight = {
   proposal: string
   proposalStrength: 'strong' | 'medium' | 'light'
@@ -382,6 +395,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const [applicationProposal, setApplicationProposal] = useState('')
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [recentTaskOutcome, setRecentTaskOutcome] = useState<RecentTaskOutcome | null>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -588,6 +602,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const assignedApplicationCopy = selectedTask ? getAssignedApplicationCopy(selectedTask, currentApplications) : null
   const applicationsInsights = getApplicationsInsights(currentApplications)
   const workerStatusSummary = selectedTask ? getWorkerStatusSummary(selectedTask, currentApplications, workerSession) : null
+  const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
 
   const refetchTaskWorkspace = async () => {
     await Promise.all([
@@ -711,6 +726,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as MarketplaceTaskCompleteResponse
     },
     onSuccess: async (response) => {
+      setRecentTaskOutcome({
+        taskId: response.task_id,
+        status: response.status,
+        message: response.status === 'submitted' ? '任务已提交验收，等待雇主确认。' : response.message,
+        growthAssets: response.growth_assets ?? null,
+      })
       if (response.status === 'submitted') {
         setActionMessage('任务已提交验收，等待雇主确认。')
       } else {
@@ -731,6 +752,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as MarketplaceTaskCompleteResponse
     },
     onSuccess: async (response) => {
+      setRecentTaskOutcome({
+        taskId: response.task_id,
+        status: response.status,
+        message: response.message,
+        growthAssets: response.growth_assets ?? null,
+      })
       if (response.growth_assets?.employer_skill_grant_id) {
         setActionMessage('任务已验收，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')
       } else if (response.growth_assets?.published_skill_id) {
@@ -1026,6 +1053,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   />
                   <TaskStateGuide task={selectedTask} />
                   <TaskSettlementLinks task={selectedTask} />
+                  {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
 
                   {taskWorkspaceOverview && (
                     <div className="space-y-3">
@@ -1713,6 +1741,139 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
       </div>
     </div>
   )
+}
+
+function TaskOutcomeCard({ outcome }: { outcome: RecentTaskOutcome }) {
+  const isAccepted = outcome.status === 'completed'
+  const growthAssets = outcome.growthAssets
+  const actions = buildTaskOutcomeActions(outcome)
+
+  return (
+    <div className={`rounded-xl border p-4 ${isAccepted ? 'border-green-200 bg-green-50 text-green-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
+      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{isAccepted ? '本次任务沉淀结果' : '验收后预期沉淀'}</div>
+      <div className="mt-1 text-base font-semibold">{getTaskOutcomeTitle(outcome)}</div>
+      <div className="mt-2 text-sm opacity-90">{getTaskOutcomeDescription(outcome)}</div>
+      {growthAssets && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <OutcomeMetric label="Skill 草稿" value={growthAssets.skill_draft_id || '未生成'} />
+          <OutcomeMetric label="雇主模板" value={growthAssets.employer_template_id || '未生成'} />
+          <OutcomeMetric label="获赠记录" value={growthAssets.employer_skill_grant_id || '未生成'} />
+          <OutcomeMetric label="已发布 Skill" value={growthAssets.published_skill_id || '未发布'} />
+        </div>
+      )}
+      {actions.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-3">
+          {actions.map((action) => (
+            <Link
+              key={`${action.label}-${action.href}`}
+              to={action.href}
+              className={action.tone === 'primary'
+                ? 'rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100'
+                : 'rounded-lg border border-white/70 bg-transparent px-4 py-2 text-sm font-medium hover:bg-white/40'}
+            >
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 text-sm opacity-90">{outcome.message}</div>
+    </div>
+  )
+}
+
+function OutcomeMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-white/70 px-4 py-3 text-sm text-gray-700">
+      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-1 font-medium break-all">{value}</div>
+    </div>
+  )
+}
+
+function getTaskOutcomeTitle(outcome: RecentTaskOutcome) {
+  if (outcome.status === 'submitted') return '任务已提交验收，等待成长资产在验收后落地'
+  if (outcome.growthAssets?.employer_skill_grant_id) return '验收完成，Skill 已自动发布并赠送给雇主'
+  if (outcome.growthAssets?.published_skill_id) return '验收完成，成功经验已自动沉淀为 Skill'
+  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) return '验收完成，成长资产已成功沉淀'
+  return '验收完成，托管已释放'
+}
+
+function getTaskOutcomeDescription(outcome: RecentTaskOutcome) {
+  if (outcome.status === 'submitted') {
+    return '当前托管仍处于待验收阶段。雇主确认后，平台会尝试生成 Skill 草稿、雇主模板，以及首单赠送 Skill。'
+  }
+
+  if (outcome.growthAssets?.employer_skill_grant_id) {
+    return '这次真实任务已经完成从交付 → 自动沉淀 → 雇主可复购的闭环。建议立即查看赠送 Skill 和模板复用入口。'
+  }
+
+  if (outcome.growthAssets?.published_skill_id) {
+    return '这次真实任务的成功经验已经沉淀成公开 Skill，可以直接回到市场查看定价、曝光和后续成交。'
+  }
+
+  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) {
+    return '这次任务已经沉淀出可复用资产，建议继续回个人中心查看模板、草稿和后续复用路径。'
+  }
+
+  return '本次任务已完成并释放托管，但当前没有返回新的成长资产。建议优先核对钱包通知和个人中心。'
+}
+
+function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[] {
+  const growthAssets = outcome.growthAssets
+  const actions: TaskOutcomeAction[] = []
+
+  if (outcome.status === 'submitted') {
+    actions.push({ label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
+    actions.push({ label: '去个人中心看成长档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
+    return actions
+  }
+
+  if (growthAssets?.employer_skill_grant_id && growthAssets.published_skill_id) {
+    actions.push({
+      label: '去查看获赠 Skill',
+      href: buildGiftedSkillMarketplaceHref(growthAssets.employer_skill_grant_id, growthAssets.published_skill_id),
+      tone: 'primary',
+    })
+  } else if (growthAssets?.published_skill_id) {
+    actions.push({
+      label: '去查看新发布 Skill',
+      href: buildSkillMarketplaceHref(growthAssets.published_skill_id, 'task-acceptance'),
+      tone: 'primary',
+    })
+  }
+
+  if (growthAssets?.employer_template_id || growthAssets?.skill_draft_id) {
+    actions.push({
+      label: growthAssets?.employer_template_id ? '去个人中心复用模板' : '去个人中心查看草稿',
+      href: '/profile?source=marketplace-growth',
+      tone: actions.length === 0 ? 'primary' : 'secondary',
+    })
+  }
+
+  actions.push({
+    label: '去钱包通知中心',
+    href: '/wallet?focus=notifications&source=marketplace-acceptance',
+    tone: actions.length === 0 ? 'primary' : 'secondary',
+  })
+
+  return actions.slice(0, 3)
+}
+
+function buildSkillMarketplaceHref(skillId: string, source = 'marketplace') {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    skill_id: skillId,
+    source,
+  }).toString()}`
+}
+
+function buildGiftedSkillMarketplaceHref(grantId: string, skillId: string) {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    source: 'gifted-grant',
+    grant_id: grantId,
+    skill_id: skillId,
+  }).toString()}`
 }
 
 function DisabledHint({ children }: { children: ReactNode }) {
