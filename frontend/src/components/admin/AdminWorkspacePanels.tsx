@@ -1,7 +1,9 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import type {
+  AdminAgentGrowthExperienceCard,
   AdminAgentGrowthOverview,
   AdminAgentGrowthProfile,
+  AdminAgentGrowthRiskMemory,
   AdminAgentGrowthSkillDraft,
   AdminAgentGrowthSkillDraftStatus,
   AdminAuditLog,
@@ -39,6 +41,24 @@ function StatCard({ title, value, tone = 'slate' }: { title: string; value: stri
       <p className="mt-2 text-3xl font-semibold">{value}</p>
     </div>
   )
+}
+
+function growthExperienceTone(card: AdminAgentGrowthExperienceCard) {
+  if (card.is_cross_employer_validated) return 'bg-emerald-100 text-emerald-800'
+  if (card.accepted_on_first_pass) return 'bg-sky-100 text-sky-800'
+  return 'bg-amber-100 text-amber-800'
+}
+
+function growthRiskSeverityTone(severity?: string) {
+  if (severity === 'high') return 'bg-rose-100 text-rose-800'
+  if (severity === 'medium') return 'bg-amber-100 text-amber-800'
+  return 'bg-slate-100 text-slate-700'
+}
+
+function growthRiskStatusTone(status?: string) {
+  if (status === 'resolved') return 'bg-emerald-100 text-emerald-800'
+  if (status === 'active') return 'bg-rose-100 text-rose-800'
+  return 'bg-slate-100 text-slate-700'
 }
 
 function DependencyRow({ dependency, toneClass }: { dependency: AdminDependency; toneClass: (ok: boolean) => string }) {
@@ -459,13 +479,19 @@ type GrowthDomainFilter = 'all' | 'automation' | 'content' | 'data' | 'developme
 export function AdminGrowthPanel({
   growthOverview,
   growthDraftTotal,
+  growthExperienceCardTotal,
+  growthRiskMemoryTotal,
   employerSkillGrantTotal,
   visibleGrowthProfiles,
   visibleGrowthDrafts,
+  visibleGrowthExperienceCards,
+  visibleGrowthRiskMemories,
   employerTemplateItems,
   employerSkillGrantItems,
   isProfilesLoading,
   isDraftsLoading,
+  isExperienceCardsLoading,
+  isRiskMemoriesLoading,
   isTemplatesLoading,
   isGrantsLoading,
   growthPoolFilter,
@@ -499,13 +525,19 @@ export function AdminGrowthPanel({
 }: {
   growthOverview?: AdminAgentGrowthOverview
   growthDraftTotal: number
+  growthExperienceCardTotal: number
+  growthRiskMemoryTotal: number
   employerSkillGrantTotal: number
   visibleGrowthProfiles: AdminAgentGrowthProfile[]
   visibleGrowthDrafts: AdminAgentGrowthSkillDraft[]
+  visibleGrowthExperienceCards: AdminAgentGrowthExperienceCard[]
+  visibleGrowthRiskMemories: AdminAgentGrowthRiskMemory[]
   employerTemplateItems: AdminEmployerTemplate[]
   employerSkillGrantItems: AdminEmployerSkillGrant[]
   isProfilesLoading: boolean
   isDraftsLoading: boolean
+  isExperienceCardsLoading: boolean
+  isRiskMemoriesLoading: boolean
   isTemplatesLoading: boolean
   isGrantsLoading: boolean
   growthPoolFilter: GrowthPoolFilter
@@ -553,8 +585,8 @@ export function AdminGrowthPanel({
         <StatCard title="可自动成长" value={growthOverview?.auto_growth_eligible ?? '—'} tone="amber" />
         <StatCard title="晋级候选" value={growthOverview?.promotion_candidates ?? '—'} tone="emerald" />
         <StatCard title="冷启动池" value={growthOverview?.by_maturity_pool?.cold_start ?? 0} />
-        <StatCard title="已产出草稿" value={growthDraftTotal} tone="slate" />
-        <StatCard title="已赠送 Skill" value={employerSkillGrantTotal} tone="emerald" />
+        <StatCard title="经验卡总数" value={growthExperienceCardTotal} tone="slate" />
+        <StatCard title="风险记忆总数" value={growthRiskMemoryTotal} tone="rose" />
       </div>
       <div className="mt-6 grid gap-6 xl:grid-cols-4">
         <div className="rounded-2xl border border-slate-200 p-4">
@@ -851,6 +883,88 @@ export function AdminGrowthPanel({
             )}
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">Experience Cards</h3>
+              <p className="text-sm text-slate-500">真实验收后沉淀的经验单元，可用于后续复用和验证。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{growthExperienceCardTotal}</span>
+          </div>
+          <div className="space-y-3">
+            {isExperienceCardsLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载经验卡…</p>}
+            {!isExperienceCardsLoading && visibleGrowthExperienceCards.slice(0, 8).map((card) => (
+              <div key={card.card_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">{card.title}</p>
+                    <p className="mt-1 text-sm text-slate-600">{card.aid}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs ${growthExperienceTone(card)}`}>
+                    {card.is_cross_employer_validated ? '跨雇主已验证' : card.accepted_on_first_pass ? '一次通过' : '修订后通过'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{summarizeText(card.summary, 120)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{card.category || 'uncategorized'}</span>
+                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-800">质量分 {card.quality_score}</span>
+                  <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">修订 {card.revision_count}</span>
+                  {card.delivery_latency_hours !== null && card.delivery_latency_hours !== undefined && (
+                    <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">交付 {card.delivery_latency_hours}h</span>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-slate-500">任务 {card.source_task_id} · 雇主 {card.employer_aid}</p>
+              </div>
+            ))}
+            {!isExperienceCardsLoading && visibleGrowthExperienceCards.length === 0 && (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有经验卡沉淀。</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">Risk Memories</h3>
+              <p className="text-sm text-slate-500">记录返工、取消等风险事件，供晋级和风控使用。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{growthRiskMemoryTotal}</span>
+          </div>
+          <div className="space-y-3">
+            {isRiskMemoriesLoading && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">正在加载风险记忆…</p>}
+            {!isRiskMemoriesLoading && visibleGrowthRiskMemories.slice(0, 8).map((risk) => (
+              <div key={risk.risk_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium text-slate-900">{risk.risk_type}</p>
+                    <p className="mt-1 text-sm text-slate-600">{risk.aid}</p>
+                  </div>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <span className={`rounded-full px-3 py-1 text-xs ${growthRiskSeverityTone(risk.severity)}`}>{risk.severity || 'unknown'}</span>
+                    <span className={`rounded-full px-3 py-1 text-xs ${growthRiskStatusTone(risk.status)}`}>{risk.status || 'unknown'}</span>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">触发事件：{risk.trigger_event}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {risk.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{risk.category}</span>}
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">任务 {risk.source_task_id}</span>
+                  {risk.cooldown_until && <span className="rounded-full bg-rose-100 px-3 py-1 text-xs text-rose-800">冷却至 {risk.cooldown_until}</span>}
+                </div>
+              </div>
+            ))}
+            {!isRiskMemoriesLoading && visibleGrowthRiskMemories.length === 0 && (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前还没有风险记忆。</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+        <StatCard title="已产出草稿" value={growthDraftTotal} tone="slate" />
+        <StatCard title="已赠送 Skill" value={employerSkillGrantTotal} tone="emerald" />
       </div>
     </section>
   )

@@ -10,7 +10,9 @@ const mockGetAdminToken = vi.fn<() => string>()
 const mockSetAdminToken = vi.fn<(token: string) => void>()
 const mockClearAdminToken = vi.fn<() => void>()
 const mockFetchAdminAgentGrowthOverview = vi.fn()
+const mockFetchAdminAgentGrowthExperienceCards = vi.fn()
 const mockFetchAdminAgentGrowthProfiles = vi.fn()
+const mockFetchAdminAgentGrowthRiskMemories = vi.fn()
 const mockFetchAdminAgentGrowthSkillDrafts = vi.fn()
 const mockFetchAdminEmployerSkillGrants = vi.fn()
 const mockFetchAdminOverview = vi.fn()
@@ -34,7 +36,9 @@ vi.mock('@/lib/admin', () => ({
   setAdminToken: (token: string) => mockSetAdminToken(token),
   clearAdminToken: () => mockClearAdminToken(),
   fetchAdminAgentGrowthOverview: () => mockFetchAdminAgentGrowthOverview(),
+  fetchAdminAgentGrowthExperienceCards: (...args: unknown[]) => mockFetchAdminAgentGrowthExperienceCards(...args),
   fetchAdminAgentGrowthProfiles: (...args: unknown[]) => mockFetchAdminAgentGrowthProfiles(...args),
+  fetchAdminAgentGrowthRiskMemories: (...args: unknown[]) => mockFetchAdminAgentGrowthRiskMemories(...args),
   fetchAdminAgentGrowthSkillDrafts: (...args: unknown[]) => mockFetchAdminAgentGrowthSkillDrafts(...args),
   fetchAdminEmployerSkillGrants: (...args: unknown[]) => mockFetchAdminEmployerSkillGrants(...args),
   fetchAdminOverview: () => mockFetchAdminOverview(),
@@ -114,6 +118,18 @@ describe('Admin page', () => {
       by_primary_domain: { automation: 1 },
     })
     mockFetchAdminAgentGrowthProfiles.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthExperienceCards.mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthRiskMemories.mockResolvedValue({
       items: [],
       total: 0,
       limit: 50,
@@ -236,6 +252,59 @@ describe('Admin page', () => {
           risk_flags: ['no_active_skills'],
           evaluation_summary: 'cold_start profile',
           last_evaluated_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthExperienceCards.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          card_id: 'card-1',
+          aid: 'agent://a2ahub/admin-1',
+          employer_aid: 'agent://a2ahub/employer-1',
+          source_task_id: 'task-1',
+          category: 'automation',
+          scenario_key: 'automation:health-check',
+          title: '检查生产健康',
+          summary: '验收通过后沉淀出的经验卡。',
+          task_snapshot_json: {},
+          delivery_snapshot_json: {},
+          reusable_fragments_json: {},
+          outcome_status: 'accepted',
+          accepted_on_first_pass: true,
+          revision_count: 0,
+          quality_score: 92,
+          delivery_latency_hours: 3,
+          is_cross_employer_validated: false,
+          created_at: '2026-03-12T00:00:00.000Z',
+          updated_at: '2026-03-12T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    })
+    mockFetchAdminAgentGrowthRiskMemories.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          risk_id: 'risk-1',
+          aid: 'agent://a2ahub/admin-1',
+          employer_aid: 'agent://a2ahub/employer-1',
+          source_task_id: 'task-2',
+          risk_type: 'revision_requested',
+          severity: 'low',
+          category: 'automation',
+          trigger_event: 'task.completed.revision_requested',
+          status: 'active',
+          evidence_json: {},
+          cooldown_until: '2026-03-15T00:00:00.000Z',
+          resolved_at: null,
+          created_at: '2026-03-12T00:00:00.000Z',
           updated_at: '2026-03-12T00:00:00.000Z',
         },
       ],

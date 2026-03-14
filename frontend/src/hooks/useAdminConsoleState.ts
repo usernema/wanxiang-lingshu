@@ -5,9 +5,13 @@ import {
   batchUpdateAdminAgentStatus,
   batchUpdateAdminPostStatus,
   clearAdminToken,
+  type AdminAgentGrowthExperienceCard,
   type AdminAgentGrowthProfile,
+  type AdminAgentGrowthRiskMemory,
   fetchAdminAgentGrowthOverview,
+  fetchAdminAgentGrowthExperienceCards,
   fetchAdminAgentGrowthProfiles,
+  fetchAdminAgentGrowthRiskMemories,
   fetchAdminAgentGrowthSkillDrafts,
   fetchAdminAgents,
   fetchAdminAuditLogs,
@@ -181,6 +185,24 @@ export function useAdminConsoleState() {
     enabled,
   })
 
+  const growthExperienceCardsQuery = useQuery({
+    queryKey: ['admin', 'agent-growth-experience-cards', activeToken],
+    queryFn: () => fetchAdminAgentGrowthExperienceCards({
+      limit: 50,
+      offset: 0,
+    }),
+    enabled,
+  })
+
+  const growthRiskMemoriesQuery = useQuery({
+    queryKey: ['admin', 'agent-growth-risk-memories', activeToken],
+    queryFn: () => fetchAdminAgentGrowthRiskMemories({
+      limit: 50,
+      offset: 0,
+    }),
+    enabled,
+  })
+
   const employerTemplatesQuery = useQuery({
     queryKey: ['admin', 'employer-templates', activeToken],
     queryFn: () => fetchAdminEmployerTemplates({ limit: 20, offset: 0 }),
@@ -267,6 +289,8 @@ export function useAdminConsoleState() {
       growthOverviewQuery.refetch(),
       growthProfilesQuery.refetch(),
       growthDraftsQuery.refetch(),
+      growthExperienceCardsQuery.refetch(),
+      growthRiskMemoriesQuery.refetch(),
       employerTemplatesQuery.refetch(),
       employerSkillGrantsQuery.refetch(),
       postsQuery.refetch(),
@@ -396,7 +420,7 @@ export function useAdminConsoleState() {
     setExpandedTaskId(null)
   }
 
-  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
+  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || growthExperienceCardsQuery.error || growthRiskMemoriesQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
   const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error || recordTaskOpsMutation.error
   const displayError = sharedError || mutationError
 
@@ -637,6 +661,8 @@ export function useAdminConsoleState() {
   const growthOverview = growthOverviewQuery.data
   const growthProfileItems = growthProfilesQuery.data?.items || []
   const growthDraftItems = growthDraftsQuery.data?.items || []
+  const growthExperienceCardItems = growthExperienceCardsQuery.data?.items || []
+  const growthRiskMemoryItems = growthRiskMemoriesQuery.data?.items || []
   const employerTemplateItems = employerTemplatesQuery.data?.items || []
   const employerSkillGrantItems = employerSkillGrantsQuery.data?.items || []
   const postItems = postsQuery.data?.posts || []
@@ -691,6 +717,20 @@ export function useAdminConsoleState() {
     return [draft.draft_id, draft.aid, draft.title, draft.summary, draft.source_task_id]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(growthDraftKeywordValue))
+  })
+
+  const visibleGrowthExperienceCards = growthExperienceCardItems.filter((card: AdminAgentGrowthExperienceCard) => {
+    if (!growthAgentKeyword) return true
+    return [card.card_id, card.aid, card.title, card.summary, card.source_task_id, card.scenario_key, card.category]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
+  })
+
+  const visibleGrowthRiskMemories = growthRiskMemoryItems.filter((risk: AdminAgentGrowthRiskMemory) => {
+    if (!growthAgentKeyword) return true
+    return [risk.risk_id, risk.aid, risk.source_task_id, risk.risk_type, risk.category, risk.status, risk.severity]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
   })
 
   const agentStatusSummary = summarizeStatuses(agentItems.map((agent) => agent.status))
@@ -786,6 +826,8 @@ export function useAdminConsoleState() {
       growthOverview,
       growthProfileItems,
       growthDraftItems,
+      growthExperienceCardItems,
+      growthRiskMemoryItems,
       employerTemplateItems,
       employerSkillGrantItems,
       postItems,
@@ -796,6 +838,8 @@ export function useAdminConsoleState() {
       visibleAgents,
       visibleGrowthProfiles,
       visibleGrowthDrafts,
+      visibleGrowthExperienceCards,
+      visibleGrowthRiskMemories,
       agentStatusSummary,
       postStatusSummary,
       taskStatusSummary,
@@ -808,6 +852,8 @@ export function useAdminConsoleState() {
       growthOverviewQuery,
       growthProfilesQuery,
       growthDraftsQuery,
+      growthExperienceCardsQuery,
+      growthRiskMemoriesQuery,
       employerTemplatesQuery,
       employerSkillGrantsQuery,
       postsQuery,

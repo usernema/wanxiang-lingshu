@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import text
@@ -6,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.db.database import Base
-from app.models.growth import AgentSkillDraft, EmployerSkillGrant, EmployerTaskTemplate
+from app.models.growth import AgentExperienceCard, AgentRiskMemory, AgentSkillDraft, EmployerSkillGrant, EmployerTaskTemplate
 from app.models.skill import Skill
 from app.models.task import Task
 from app.services.growth_service import GrowthService
@@ -82,9 +83,15 @@ def test_create_growth_assets_for_completed_task():
                     EmployerTaskTemplate.__table__.select().where(EmployerTaskTemplate.source_task_id == "task_growth_1")
                 )
             ).first()
+            stored_card = (
+                await session.execute(
+                    AgentExperienceCard.__table__.select().where(AgentExperienceCard.source_task_id == "task_growth_1")
+                )
+            ).first()
 
             assert stored_draft is not None
             assert stored_template is not None
+            assert stored_card is not None
         finally:
             await close_session(session, engine)
 
@@ -253,6 +260,98 @@ def test_create_task_from_template_reuses_payload():
             assert task.title == "SEO 内容批量生产"
             assert task.status == "open"
             assert task.reward == Decimal("120.00")
+        finally:
+            await close_session(session, engine)
+
+    run(scenario())
+
+
+def test_submission_result_is_reused_for_experience_card_without_explicit_accept_result():
+    async def scenario():
+        session, engine = await create_session()
+        try:
+            task = Task(
+                task_id="task_growth_result_reuse",
+                employer_aid="agent://a2ahub/employer",
+                worker_aid="agent://a2ahub/worker",
+                title="运维值守 SOP 生成",
+                description="根据故障处理过程整理一份可复用 SOP",
+                requirements="故障摘要, SOP, 风险提示",
+                reward=Decimal("55.00"),
+                escrow_id="escrow_growth_result_reuse",
+                status="submitted",
+            )
+            session.add(task)
+            await session.commit()
+
+            await GrowthService.record_task_submission(session, task, result="输出 SOP、值守清单和风险提示")
+
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
+            await session.commit()
+
+            await GrowthService.create_growth_assets_for_task(session, task)
+            card = await GrowthService.get_experience_card_by_task(session, "task_growth_result_reuse")
+
+            assert card is not None
+            assert card.delivery_snapshot_json["result"] == "输出 SOP、值守清单和风险提示"
+        finally:
+            await close_session(session, engine)
+
+    run(scenario())
+
+
+def test_revision_feedback_creates_and_resolves_risk_memory_after_acceptance():
+    async def scenario():
+        session, engine = await create_session()
+        try:
+            task = Task(
+                task_id="task_growth_revision_1",
+                employer_aid="agent://a2ahub/employer",
+                worker_aid="agent://a2ahub/worker",
+                title="知识库结构化整理",
+                description="将杂乱知识库整理为结构化目录",
+                requirements="目录树, 标签体系, 使用说明",
+                reward=Decimal("72.00"),
+                escrow_id="escrow_growth_revision_1",
+                status="in_progress",
+            )
+            session.add(task)
+            await session.commit()
+
+            risk = await GrowthService.record_task_revision_feedback(
+                session,
+                task,
+                actor_aid="agent://a2ahub/employer",
+            )
+
+            assert risk is not None
+            assert risk.risk_type == "revision_requested"
+            assert risk.status == "active"
+
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
+            await session.commit()
+
+            await GrowthService.create_growth_assets_for_task(
+                session,
+                task,
+                "输出结构化目录、标签体系和使用说明",
+            )
+
+            stored_risk = (
+                await session.execute(
+                    AgentRiskMemory.__table__.select().where(AgentRiskMemory.risk_id == risk.risk_id)
+                )
+            ).first()
+            card = await GrowthService.get_experience_card_by_task(session, "task_growth_revision_1")
+
+            assert stored_risk is not None
+            assert stored_risk._mapping["status"] == "resolved"
+            assert stored_risk._mapping["resolved_at"] is not None
+            assert card is not None
+            assert card.revision_count == 1
+            assert card.accepted_on_first_pass is False
         finally:
             await close_session(session, engine)
 

@@ -260,11 +260,23 @@ async def cancel_task(
             raise HTTPException(status_code=400, detail=detail)
 
     try:
-        return await TaskService.cancel_task(db, task_id, x_agent_id)
+        cancelled_task = await TaskService.cancel_task(db, task_id, x_agent_id)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
+    try:
+        await GrowthService.record_task_cancellation_feedback(
+            db,
+            cancelled_task,
+            actor_aid=x_agent_id,
+            previous_status=task.status,
+        )
+    except Exception:
+        logger.exception("Failed to record growth cancellation feedback")
+
+    return cancelled_task
 
 
 @router.post("/tasks/{task_id}/complete")
@@ -301,6 +313,11 @@ async def complete_task(
         submitted_task = await TaskService.submit_task_completion(db, task_id, complete_data.worker_aid)
     except ValueError as e:
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+
+    try:
+        await GrowthService.record_task_submission(db, submitted_task, result=complete_data.result)
+    except Exception:
+        logger.exception("Failed to record task completion submission event")
 
     return {
         "task_id": task_id,
@@ -361,6 +378,13 @@ async def accept_task_completion(
     except Exception:
         logger.exception("Failed to create growth assets after task acceptance")
 
+    if growth_assets:
+        try:
+            experience_card = await GrowthService.get_experience_card_by_task(db, completed_task.task_id)
+            growth_assets["experience_card_id"] = experience_card.card_id if experience_card else None
+        except Exception:
+            logger.exception("Failed to fetch experience card after task acceptance")
+
     if growth_assets and growth_assets.get("employer_skill_grant_id"):
         message = "Task accepted, payment released, first-success skill auto-published, and employer gift granted"
     elif growth_assets and growth_assets.get("published_skill_id"):
@@ -403,4 +427,10 @@ async def request_task_revision(
 
     if not revised_task:
         raise HTTPException(status_code=404, detail="Task not found")
+
+    try:
+        await GrowthService.record_task_revision_feedback(db, revised_task, actor_aid=x_agent_id)
+    except Exception:
+        logger.exception("Failed to record growth revision feedback")
+
     return revised_task

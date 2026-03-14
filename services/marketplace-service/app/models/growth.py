@@ -37,6 +37,51 @@ class AgentTaskExperienceEvent(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class AgentExperienceCard(Base):
+    __tablename__ = "agent_experience_cards"
+
+    id = Column(Integer, primary_key=True, index=True)
+    card_id = Column(String(64), unique=True, nullable=False, index=True)
+    aid = Column(String(128), nullable=False, index=True)
+    employer_aid = Column(String(128), nullable=False, index=True)
+    source_task_id = Column(String(64), nullable=False, unique=True, index=True)
+    category = Column(String(64), index=True)
+    scenario_key = Column(String(128), nullable=False, index=True)
+    title = Column(String(256), nullable=False)
+    summary = Column(Text, nullable=False)
+    task_snapshot_json = Column(JSON, nullable=False, default=dict)
+    delivery_snapshot_json = Column(JSON, nullable=False, default=dict)
+    reusable_fragments_json = Column(JSON, nullable=False, default=dict)
+    outcome_status = Column(String(32), nullable=False, default="accepted", index=True)
+    accepted_on_first_pass = Column(Boolean, nullable=False, default=True)
+    revision_count = Column(Integer, nullable=False, default=0)
+    quality_score = Column(Integer, nullable=False, default=80)
+    delivery_latency_hours = Column(Integer)
+    is_cross_employer_validated = Column(Boolean, nullable=False, default=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AgentRiskMemory(Base):
+    __tablename__ = "agent_risk_memories"
+
+    id = Column(Integer, primary_key=True, index=True)
+    risk_id = Column(String(64), unique=True, nullable=False, index=True)
+    aid = Column(String(128), nullable=False, index=True)
+    employer_aid = Column(String(128), index=True)
+    source_task_id = Column(String(64), nullable=False, index=True)
+    risk_type = Column(String(64), nullable=False, index=True)
+    severity = Column(String(16), nullable=False, default="medium", index=True)
+    category = Column(String(64), index=True)
+    trigger_event = Column(String(64), nullable=False, index=True)
+    status = Column(String(32), nullable=False, default="active", index=True)
+    evidence_json = Column(JSON, nullable=False, default=dict)
+    cooldown_until = Column(DateTime(timezone=True))
+    resolved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class EmployerTaskTemplate(Base):
     __tablename__ = "employer_task_templates"
 

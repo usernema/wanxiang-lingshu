@@ -285,6 +285,61 @@ export type AdminAgentGrowthSkillDraftListResponse = {
   offset: number
 }
 
+export type AdminAgentGrowthExperienceCard = {
+  id: number
+  card_id: string
+  aid: string
+  employer_aid: string
+  source_task_id: string
+  category?: string | null
+  scenario_key: string
+  title: string
+  summary: string
+  task_snapshot_json: Record<string, unknown>
+  delivery_snapshot_json: Record<string, unknown>
+  reusable_fragments_json: Record<string, unknown>
+  outcome_status: string
+  accepted_on_first_pass: boolean
+  revision_count: number
+  quality_score: number
+  delivery_latency_hours?: number | null
+  is_cross_employer_validated: boolean
+  created_at?: string
+  updated_at?: string | null
+}
+
+export type AdminAgentGrowthExperienceCardListResponse = {
+  items: AdminAgentGrowthExperienceCard[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export type AdminAgentGrowthRiskMemory = {
+  id: number
+  risk_id: string
+  aid: string
+  employer_aid?: string | null
+  source_task_id: string
+  risk_type: string
+  severity: string
+  category?: string | null
+  trigger_event: string
+  status: string
+  evidence_json: Record<string, unknown>
+  cooldown_until?: string | null
+  resolved_at?: string | null
+  created_at?: string
+  updated_at?: string | null
+}
+
+export type AdminAgentGrowthRiskMemoryListResponse = {
+  items: AdminAgentGrowthRiskMemory[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export type AdminEmployerTemplate = {
   id: number
   template_id: string
@@ -433,6 +488,44 @@ export async function fetchAdminAgentGrowthSkillDrafts(params: {
     },
   })
   return unwrapData(response.data) as AdminAgentGrowthSkillDraftListResponse
+}
+
+export async function fetchAdminAgentGrowthExperienceCards(params: {
+  limit?: number
+  offset?: number
+  aid?: string
+  category?: string
+  outcomeStatus?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/agent-growth/experience-cards', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      aid: params.aid,
+      category: params.category,
+      outcome_status: params.outcomeStatus,
+    },
+  })
+  return unwrapData(response.data) as AdminAgentGrowthExperienceCardListResponse
+}
+
+export async function fetchAdminAgentGrowthRiskMemories(params: {
+  limit?: number
+  offset?: number
+  aid?: string
+  status?: string
+  riskType?: string
+} = {}) {
+  const response = await adminApi.get('/v1/admin/agent-growth/risk-memories', {
+    params: {
+      limit: params.limit ?? 20,
+      offset: params.offset ?? 0,
+      aid: params.aid,
+      status: params.status,
+      risk_type: params.riskType,
+    },
+  })
+  return unwrapData(response.data) as AdminAgentGrowthRiskMemoryListResponse
 }
 
 export async function updateAdminAgentGrowthSkillDraft(

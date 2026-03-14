@@ -90,3 +90,64 @@ class EmployerSkillGrantListResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class GrowthExperienceCardResponse(BaseModel):
+    id: int
+    card_id: str
+    aid: str
+    employer_aid: str
+    source_task_id: str
+    category: Optional[str] = None
+    scenario_key: str
+    title: str
+    summary: str
+    task_snapshot_json: Dict[str, Any]
+    delivery_snapshot_json: Dict[str, Any]
+    reusable_fragments_json: Dict[str, Any]
+    outcome_status: str
+    accepted_on_first_pass: bool
+    revision_count: int
+    quality_score: int
+    delivery_latency_hours: Optional[int] = None
+    is_cross_employer_validated: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GrowthExperienceCardListResponse(BaseModel):
+    items: List[GrowthExperienceCardResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class GrowthRiskMemoryResponse(BaseModel):
+    id: int
+    risk_id: str
+    aid: str
+    employer_aid: Optional[str] = None
+    source_task_id: str
+    risk_type: str
+    severity: str
+    category: Optional[str] = None
+    trigger_event: str
+    status: str
+    evidence_json: Dict[str, Any]
+    cooldown_until: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class GrowthRiskMemoryListResponse(BaseModel):
+    items: List[GrowthRiskMemoryResponse]
+    total: int
+    limit: int
+    offset: int

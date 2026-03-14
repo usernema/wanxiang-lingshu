@@ -1,13 +1,21 @@
 import re
 import uuid
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, Tuple
 
-from sqlalchemy import func, select, text
+from sqlalchemy import distinct, func, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.growth import AgentSkillDraft, AgentTaskExperienceEvent, EmployerSkillGrant, EmployerTaskTemplate
+from app.models.growth import (
+    AgentExperienceCard,
+    AgentRiskMemory,
+    AgentSkillDraft,
+    AgentTaskExperienceEvent,
+    EmployerSkillGrant,
+    EmployerTaskTemplate,
+)
 from app.models.skill import Skill
 from app.models.task import Task
 
@@ -46,6 +54,17 @@ class GrowthService:
         if normalized.lower() in {"done", "ok", "completed", "success"}:
             return None
         return normalized
+
+    @staticmethod
+    def _slugify_text(value: Optional[str], limit: int = 96) -> str:
+        if not value:
+            return "general"
+        compact = " ".join(value.split()).strip().lower()
+        compact = re.sub(r"[^\w\u4e00-\u9fff]+", "-", compact, flags=re.UNICODE)
+        compact = re.sub(r"-{2,}", "-", compact).strip("-")
+        if not compact:
+            return "general"
+        return compact[:limit].strip("-") or "general"
 
     @staticmethod
     async def _count_active_skills(db: AsyncSession, aid: str) -> int:
@@ -130,6 +149,259 @@ class GrowthService:
             },
         }
         return title, summary, category, payload
+
+    @classmethod
+    def _build_scenario_key(cls, task: Task, category: Optional[str] = None) -> str:
+        scenario_category = category or cls._detect_category(task)
+        title_key = cls._slugify_text(task.title, limit=72)
+        return f"{scenario_category}:{title_key}"
+
+    @staticmethod
+    def _calculate_delivery_latency_hours(task: Task) -> Optional[int]:
+        if not isinstance(task.created_at, datetime) or not isinstance(task.completed_at, datetime):
+            return None
+        created_at = task.created_at
+        completed_at = task.completed_at
+        if created_at.tzinfo is None and completed_at.tzinfo is not None:
+            completed_at = completed_at.replace(tzinfo=None)
+        elif created_at.tzinfo is not None and completed_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=None)
+        delta = completed_at - created_at
+        total_seconds = max(delta.total_seconds(), 0)
+        return int(total_seconds // 3600)
+
+    @classmethod
+    def _build_task_event_payload(
+        cls,
+        task: Task,
+        *,
+        category: Optional[str] = None,
+        result: Optional[str] = None,
+        extra: Optional[dict] = None,
+    ) -> dict:
+        payload = {
+            "task_id": task.task_id,
+            "worker_aid": task.worker_aid,
+            "employer_aid": task.employer_aid,
+            "category": category or cls._detect_category(task),
+            "reward": str(task.reward),
+            "completed_at": task.completed_at.isoformat() if isinstance(task.completed_at, datetime) else None,
+        }
+        normalized_result = cls._normalize_result(result)
+        if normalized_result:
+            payload["result"] = normalized_result
+        if extra:
+            payload.update(extra)
+        return payload
+
+    @staticmethod
+    async def _resolve_completion_result(
+        db: AsyncSession,
+        task_id: str,
+        explicit_result: Optional[str] = None,
+    ) -> Optional[str]:
+        normalized = GrowthService._normalize_result(explicit_result)
+        if normalized:
+            return normalized
+
+        result = await db.execute(
+            select(AgentTaskExperienceEvent)
+            .where(
+                AgentTaskExperienceEvent.task_id == task_id,
+                AgentTaskExperienceEvent.event_type == "task.completed.submitted",
+            )
+            .order_by(AgentTaskExperienceEvent.created_at.desc(), AgentTaskExperienceEvent.id.desc())
+            .limit(1)
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            return None
+        return GrowthService._normalize_result((event.payload_json or {}).get("result"))
+
+    @staticmethod
+    async def _count_revision_memories(
+        db: AsyncSession,
+        *,
+        aid: str,
+        task_id: str,
+    ) -> int:
+        result = await db.execute(
+            select(func.count())
+            .select_from(AgentRiskMemory)
+            .where(
+                AgentRiskMemory.aid == aid,
+                AgentRiskMemory.source_task_id == task_id,
+                AgentRiskMemory.risk_type == "revision_requested",
+            )
+        )
+        return int(result.scalar() or 0)
+
+    @staticmethod
+    async def _resolve_revision_memories(
+        db: AsyncSession,
+        *,
+        aid: str,
+        task_id: str,
+    ) -> int:
+        result = await db.execute(
+            select(AgentRiskMemory).where(
+                AgentRiskMemory.aid == aid,
+                AgentRiskMemory.source_task_id == task_id,
+                AgentRiskMemory.risk_type == "revision_requested",
+                AgentRiskMemory.resolved_at.is_(None),
+            )
+        )
+        items = result.scalars().all()
+        if not items:
+            return 0
+
+        resolved_at = datetime.now(timezone.utc)
+        for item in items:
+            item.status = "resolved"
+            item.resolved_at = resolved_at
+        return len(items)
+
+    @classmethod
+    async def _mark_cross_employer_validation(
+        cls,
+        db: AsyncSession,
+        *,
+        aid: str,
+        scenario_key: str,
+    ) -> bool:
+        distinct_result = await db.execute(
+            select(func.count(distinct(AgentExperienceCard.employer_aid))).where(
+                AgentExperienceCard.aid == aid,
+                AgentExperienceCard.scenario_key == scenario_key,
+            )
+        )
+        distinct_employers = int(distinct_result.scalar() or 0)
+        if distinct_employers < 2:
+            return False
+
+        await db.execute(
+            update(AgentExperienceCard)
+            .where(
+                AgentExperienceCard.aid == aid,
+                AgentExperienceCard.scenario_key == scenario_key,
+            )
+            .values(is_cross_employer_validated=True)
+        )
+        return True
+
+    @classmethod
+    async def _ensure_experience_card_for_task(
+        cls,
+        db: AsyncSession,
+        task: Task,
+        *,
+        draft: Optional[AgentSkillDraft],
+        result: Optional[str],
+    ) -> Tuple[Optional[AgentExperienceCard], bool]:
+        existing_result = await db.execute(
+            select(AgentExperienceCard).where(AgentExperienceCard.source_task_id == task.task_id)
+        )
+        existing = existing_result.scalar_one_or_none()
+        if existing:
+            resolved_count = await cls._resolve_revision_memories(db, aid=task.worker_aid, task_id=task.task_id)
+            if resolved_count:
+                existing.accepted_on_first_pass = existing.revision_count == 0
+            return existing, bool(resolved_count)
+
+        category = draft.category if draft and draft.category else cls._detect_category(task)
+        scenario_key = cls._build_scenario_key(task, category)
+        useful_result = await cls._resolve_completion_result(db, task.task_id, result)
+        revision_count = await cls._count_revision_memories(db, aid=task.worker_aid, task_id=task.task_id)
+        accepted_on_first_pass = revision_count == 0
+        quality_score = max(60, 100 - min(revision_count, 3) * 12)
+        delivery_latency_hours = cls._calculate_delivery_latency_hours(task)
+        reusable_fragments = draft.content_json if draft else {
+            "execution_steps": [
+                "确认任务目标与验收边界",
+                "拆解输入并完成交付",
+                "整理结构化结果，准备复用",
+            ],
+            "acceptance_checklist": [
+                "覆盖任务目标",
+                "满足关键约束",
+                "可复用",
+            ],
+        }
+        card = AgentExperienceCard(
+            card_id=f"card_{uuid.uuid4().hex[:12]}",
+            aid=task.worker_aid,
+            employer_aid=task.employer_aid,
+            source_task_id=task.task_id,
+            category=category,
+            scenario_key=scenario_key,
+            title=task.title,
+            summary=f"任务《{task.title}》已完成验收，沉淀为可复用经验卡。",
+            task_snapshot_json={
+                "title": task.title,
+                "description": cls._summarize_text(task.description, limit=240),
+                "requirements": cls._split_text_segments(task.requirements, fallback=[]),
+                "reward": str(task.reward),
+            },
+            delivery_snapshot_json={
+                "result": useful_result,
+                "accepted_on_first_pass": accepted_on_first_pass,
+                "revision_count": revision_count,
+                "delivery_latency_hours": delivery_latency_hours,
+                "completed_at": task.completed_at.isoformat() if isinstance(task.completed_at, datetime) else None,
+            },
+            reusable_fragments_json={
+                "applicable_scenarios": reusable_fragments.get("applicable_scenarios", []),
+                "execution_steps": reusable_fragments.get("execution_steps", []),
+                "acceptance_checklist": reusable_fragments.get("acceptance_checklist", []),
+                "output_template": reusable_fragments.get("output_template"),
+            },
+            outcome_status="accepted",
+            accepted_on_first_pass=accepted_on_first_pass,
+            revision_count=revision_count,
+            quality_score=quality_score,
+            delivery_latency_hours=delivery_latency_hours,
+        )
+        db.add(card)
+        await db.flush()
+        card.is_cross_employer_validated = await cls._mark_cross_employer_validation(
+            db,
+            aid=task.worker_aid,
+            scenario_key=scenario_key,
+        )
+        resolved_revision_count = await cls._resolve_revision_memories(db, aid=task.worker_aid, task_id=task.task_id)
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="task.completed.accepted",
+                payload_json=cls._build_task_event_payload(
+                    task,
+                    category=category,
+                    result=useful_result,
+                    extra={
+                        "accepted_on_first_pass": accepted_on_first_pass,
+                        "revision_count": revision_count,
+                        "experience_card_id": card.card_id,
+                        "resolved_revision_risk_count": resolved_revision_count,
+                    },
+                ),
+            )
+        )
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="growth.experience_card.created",
+                payload_json={
+                    "experience_card_id": card.card_id,
+                    "scenario_key": scenario_key,
+                    "category": category,
+                    "quality_score": quality_score,
+                    "is_cross_employer_validated": card.is_cross_employer_validated,
+                },
+            )
+        )
+        return card, True
 
     @classmethod
     def _build_template_payload(cls, task: Task, result: Optional[str]) -> Tuple[str, str, dict]:
@@ -269,11 +541,12 @@ class GrowthService:
 
         created_records = []
         changed = False
+        useful_result = await cls._resolve_completion_result(db, task.task_id, result)
         active_skill_count = await cls._count_active_skills(db, task.worker_aid)
         worker_is_openclaw = await cls._is_openclaw_agent(db, task.worker_aid)
 
         if not draft:
-            title, summary, category, payload = cls._build_draft_payload(task, result, active_skill_count)
+            title, summary, category, payload = cls._build_draft_payload(task, useful_result, active_skill_count)
             draft = AgentSkillDraft(
                 draft_id=f"draft_{uuid.uuid4().hex[:12]}",
                 aid=task.worker_aid,
@@ -303,7 +576,7 @@ class GrowthService:
             )
 
         if not template:
-            title, summary, payload = cls._build_template_payload(task, result)
+            title, summary, payload = cls._build_template_payload(task, useful_result)
             template = EmployerTaskTemplate(
                 template_id=f"tmpl_{uuid.uuid4().hex[:12]}",
                 owner_aid=task.employer_aid,
@@ -347,6 +620,14 @@ class GrowthService:
             )
             changed = True
 
+        _, experience_card_changed = await cls._ensure_experience_card_for_task(
+            db,
+            task,
+            draft=draft,
+            result=useful_result,
+        )
+        changed = changed or experience_card_changed
+
         for record in created_records:
             db.add(record)
 
@@ -360,6 +641,234 @@ class GrowthService:
                 await db.refresh(grant)
 
         return draft, template, grant
+
+    @staticmethod
+    async def get_experience_card_by_task(
+        db: AsyncSession,
+        task_id: str,
+    ) -> Optional[AgentExperienceCard]:
+        result = await db.execute(
+            select(AgentExperienceCard).where(AgentExperienceCard.source_task_id == task_id)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def list_experience_cards(
+        db: AsyncSession,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        aid: Optional[str] = None,
+        category: Optional[str] = None,
+        outcome_status: Optional[str] = None,
+    ):
+        query = select(AgentExperienceCard)
+        if aid:
+            query = query.where(AgentExperienceCard.aid == aid)
+        if category:
+            query = query.where(AgentExperienceCard.category == category)
+        if outcome_status:
+            query = query.where(AgentExperienceCard.outcome_status == outcome_status)
+
+        count_query = select(func.count()).select_from(query.order_by(None).subquery())
+        total = int((await db.execute(count_query)).scalar() or 0)
+        items = (
+            await db.execute(
+                query.order_by(AgentExperienceCard.created_at.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return items, total
+
+    @staticmethod
+    async def list_risk_memories(
+        db: AsyncSession,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        aid: Optional[str] = None,
+        status: Optional[str] = None,
+        risk_type: Optional[str] = None,
+    ):
+        query = select(AgentRiskMemory)
+        if aid:
+            query = query.where(AgentRiskMemory.aid == aid)
+        if status:
+            query = query.where(AgentRiskMemory.status == status)
+        if risk_type:
+            query = query.where(AgentRiskMemory.risk_type == risk_type)
+
+        count_query = select(func.count()).select_from(query.order_by(None).subquery())
+        total = int((await db.execute(count_query)).scalar() or 0)
+        items = (
+            await db.execute(
+                query.order_by(AgentRiskMemory.created_at.desc()).offset(offset).limit(limit)
+            )
+        ).scalars().all()
+        return items, total
+
+    @classmethod
+    async def record_task_submission(
+        cls,
+        db: AsyncSession,
+        task: Task,
+        *,
+        result: Optional[str] = None,
+    ) -> None:
+        if not task.worker_aid:
+            return
+
+        category = cls._detect_category(task)
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="task.completed.submitted",
+                payload_json=cls._build_task_event_payload(
+                    task,
+                    category=category,
+                    result=result,
+                    extra={"submission_status": task.status},
+                ),
+            )
+        )
+        await db.commit()
+
+    @classmethod
+    async def record_task_revision_feedback(
+        cls,
+        db: AsyncSession,
+        task: Task,
+        *,
+        actor_aid: Optional[str] = None,
+    ) -> Optional[AgentRiskMemory]:
+        if not task.worker_aid or not task.employer_aid:
+            return None
+
+        category = cls._detect_category(task)
+        revision_count = await cls._count_revision_memories(db, aid=task.worker_aid, task_id=task.task_id) + 1
+        severity = "medium" if revision_count >= 2 else "low"
+        risk = AgentRiskMemory(
+            risk_id=f"risk_{uuid.uuid4().hex[:12]}",
+            aid=task.worker_aid,
+            employer_aid=task.employer_aid,
+            source_task_id=task.task_id,
+            risk_type="revision_requested",
+            severity=severity,
+            category=category,
+            trigger_event="task.completed.revision_requested",
+            status="active",
+            evidence_json={
+                "revision_count": revision_count,
+                "requested_by": actor_aid,
+                "task_status_after_revision": task.status,
+            },
+            cooldown_until=datetime.now(timezone.utc) + timedelta(days=1 if revision_count == 1 else 3),
+        )
+        db.add(risk)
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="task.completed.revision_requested",
+                payload_json=cls._build_task_event_payload(
+                    task,
+                    category=category,
+                    extra={
+                        "revision_count": revision_count,
+                        "severity": severity,
+                        "requested_by": actor_aid,
+                        "risk_id": risk.risk_id,
+                    },
+                ),
+            )
+        )
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="growth.risk_memory.created",
+                payload_json={
+                    "risk_id": risk.risk_id,
+                    "risk_type": risk.risk_type,
+                    "severity": severity,
+                    "status": risk.status,
+                },
+            )
+        )
+        await db.commit()
+        await db.refresh(risk)
+        return risk
+
+    @classmethod
+    async def record_task_cancellation_feedback(
+        cls,
+        db: AsyncSession,
+        task: Task,
+        *,
+        actor_aid: Optional[str] = None,
+        previous_status: Optional[str] = None,
+    ) -> Optional[AgentRiskMemory]:
+        if not task.worker_aid or not task.employer_aid:
+            return None
+
+        category = cls._detect_category(task)
+        cancelled_after_delivery = previous_status == "submitted"
+        trigger_event = "task.cancelled.after_delivery" if cancelled_after_delivery else "task.cancelled.before_delivery"
+        severity = "high" if cancelled_after_delivery or previous_status == "in_progress" else "medium"
+        risk_type = "delivery_cancelled" if cancelled_after_delivery else "assignment_cancelled"
+        cooldown_days = 7 if severity == "high" else 3
+        risk = AgentRiskMemory(
+            risk_id=f"risk_{uuid.uuid4().hex[:12]}",
+            aid=task.worker_aid,
+            employer_aid=task.employer_aid,
+            source_task_id=task.task_id,
+            risk_type=risk_type,
+            severity=severity,
+            category=category,
+            trigger_event=trigger_event,
+            status="active",
+            evidence_json={
+                "cancelled_by": actor_aid,
+                "previous_status": previous_status,
+                "cancelled_at": task.cancelled_at.isoformat() if isinstance(task.cancelled_at, datetime) else None,
+            },
+            cooldown_until=datetime.now(timezone.utc) + timedelta(days=cooldown_days),
+        )
+        db.add(risk)
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type=trigger_event,
+                payload_json=cls._build_task_event_payload(
+                    task,
+                    category=category,
+                    extra={
+                        "risk_id": risk.risk_id,
+                        "risk_type": risk_type,
+                        "severity": severity,
+                        "previous_status": previous_status,
+                        "cancelled_by": actor_aid,
+                    },
+                ),
+            )
+        )
+        db.add(
+            AgentTaskExperienceEvent(
+                aid=task.worker_aid,
+                task_id=task.task_id,
+                event_type="growth.risk_memory.created",
+                payload_json={
+                    "risk_id": risk.risk_id,
+                    "risk_type": risk.risk_type,
+                    "severity": severity,
+                    "status": risk.status,
+                },
+            )
+        )
+        await db.commit()
+        await db.refresh(risk)
+        return risk
 
     @staticmethod
     async def list_skill_drafts(

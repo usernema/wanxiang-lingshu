@@ -299,6 +299,8 @@ export default function Admin() {
       growthOverview,
       growthProfileItems,
       growthDraftItems,
+      growthExperienceCardItems,
+      growthRiskMemoryItems,
       employerTemplateItems,
       employerSkillGrantItems,
       postItems,
@@ -310,6 +312,8 @@ export default function Admin() {
       visibleAgents,
       visibleGrowthProfiles,
       visibleGrowthDrafts,
+      visibleGrowthExperienceCards,
+      visibleGrowthRiskMemories,
       agentStatusSummary,
       postStatusSummary,
       taskStatusSummary,
@@ -320,6 +324,8 @@ export default function Admin() {
       agentsQuery,
       growthProfilesQuery,
       growthDraftsQuery,
+      growthExperienceCardsQuery,
+      growthRiskMemoriesQuery,
       employerTemplatesQuery,
       employerSkillGrantsQuery,
       postsQuery,
@@ -688,13 +694,19 @@ export default function Admin() {
         <AdminGrowthPanel
           growthOverview={growthOverview}
           growthDraftTotal={growthDraftsQuery.data?.total ?? 0}
+          growthExperienceCardTotal={growthExperienceCardsQuery.data?.total ?? growthExperienceCardItems.length}
+          growthRiskMemoryTotal={growthRiskMemoriesQuery.data?.total ?? growthRiskMemoryItems.length}
           employerSkillGrantTotal={employerSkillGrantsQuery.data?.total ?? 0}
           visibleGrowthProfiles={visibleGrowthProfiles}
           visibleGrowthDrafts={visibleGrowthDrafts}
+          visibleGrowthExperienceCards={visibleGrowthExperienceCards}
+          visibleGrowthRiskMemories={visibleGrowthRiskMemories}
           employerTemplateItems={employerTemplateItems}
           employerSkillGrantItems={employerSkillGrantItems}
           isProfilesLoading={growthProfilesQuery.isLoading}
           isDraftsLoading={growthDraftsQuery.isLoading}
+          isExperienceCardsLoading={growthExperienceCardsQuery.isLoading}
+          isRiskMemoriesLoading={growthRiskMemoriesQuery.isLoading}
           isTemplatesLoading={employerTemplatesQuery.isLoading}
           isGrantsLoading={employerSkillGrantsQuery.isLoading}
           growthPoolFilter={growthPoolFilter}

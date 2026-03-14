@@ -613,6 +613,42 @@ def test_complete_endpoint_submits_for_employer_acceptance(monkeypatch):
     assert response["message"] == "Task submitted for employer acceptance"
 
 
+def test_complete_endpoint_records_submission_event_best_effort(monkeypatch):
+    recorded = {"submission_event": None}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
+
+    async def fake_record_task_submission(db, task, result=None):
+        recorded["submission_event"] = {"task_id": task.task_id, "result": result}
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
+    monkeypatch.setattr(task_routes.GrowthService, "record_task_submission", fake_record_task_submission)
+
+    response = run(task_routes.complete_task(
+        task_id="task_123",
+        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="结构化交付结果"),
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert response["status"] == "submitted"
+    assert recorded["submission_event"] == {
+        "task_id": "task_123",
+        "result": "结构化交付结果",
+    }
+
+
 def test_complete_endpoint_submits_assigned_task_for_employer_acceptance(monkeypatch):
     recorded = {}
 
@@ -646,6 +682,57 @@ def test_complete_endpoint_submits_assigned_task_for_employer_acceptance(monkeyp
     assert response["status"] == "submitted"
     assert response["growth_assets"] is None
     assert response["message"] == "Task submitted for employer acceptance"
+
+
+def test_cancel_endpoint_records_cancellation_feedback_best_effort(monkeypatch):
+    recorded = {"risk": None}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_refund_escrow(escrow_id, actor_aid):
+        return {"message": "ok"}
+
+    async def fake_cancel_task(db, task_id, actor_aid):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="cancelled",
+            cancelled_at="now",
+        )
+
+    async def fake_record_task_cancellation_feedback(db, task, actor_aid=None, previous_status=None):
+        recorded["risk"] = {
+            "task_id": task.task_id,
+            "actor_aid": actor_aid,
+            "previous_status": previous_status,
+        }
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "refund_escrow", fake_refund_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "cancel_task", fake_cancel_task)
+    monkeypatch.setattr(task_routes.GrowthService, "record_task_cancellation_feedback", fake_record_task_cancellation_feedback)
+
+    response = run(task_routes.cancel_task(
+        task_id="task_123",
+        db=None,
+        x_agent_id="agent://a2ahub/employer",
+    ))
+
+    assert response.status == "cancelled"
+    assert recorded["risk"] == {
+        "task_id": "task_123",
+        "actor_aid": "agent://a2ahub/employer",
+        "previous_status": "in_progress",
+    }
 
 
 def test_accept_completion_endpoint_returns_growth_asset_ids_when_created(monkeypatch):
@@ -711,6 +798,47 @@ def test_accept_completion_endpoint_returns_growth_asset_ids_when_created(monkey
         "actor_aid": "agent://a2ahub/employer",
     }
     assert recorded["growth"] == {"task_id": "task_123", "result": None}
+
+
+def test_request_revision_endpoint_records_feedback_best_effort(monkeypatch):
+    recorded = {"revision": None}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="submitted",
+        )
+
+    async def fake_request_task_revision(db, task_id, actor_aid):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_record_task_revision_feedback(db, task, actor_aid=None):
+        recorded["revision"] = {"task_id": task.task_id, "actor_aid": actor_aid}
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.TaskService, "request_task_revision", fake_request_task_revision)
+    monkeypatch.setattr(task_routes.GrowthService, "record_task_revision_feedback", fake_record_task_revision_feedback)
+
+    response = run(task_routes.request_task_revision(
+        task_id="task_123",
+        db=None,
+        x_agent_id="agent://a2ahub/employer",
+    ))
+
+    assert response.status == "in_progress"
+    assert recorded["revision"] == {
+        "task_id": "task_123",
+        "actor_aid": "agent://a2ahub/employer",
+    }
 
 
 def test_accept_completion_endpoint_swallows_growth_asset_failures(monkeypatch):

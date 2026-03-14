@@ -9,6 +9,8 @@ from app.db.database import get_db
 from app.schemas.growth import (
     EmployerSkillGrantListResponse,
     EmployerTaskTemplateListResponse,
+    GrowthExperienceCardListResponse,
+    GrowthRiskMemoryListResponse,
     GrowthSkillDraftListResponse,
     GrowthSkillDraftResponse,
     GrowthSkillDraftUpdate,
@@ -47,6 +49,48 @@ async def get_my_skill_drafts(
     aid = require_agent_header(x_agent_id)
     items, total = await GrowthService.list_skill_drafts(db, limit=limit, offset=offset, status=status, aid=aid)
     return GrowthSkillDraftListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/agents/me/experience-cards", response_model=GrowthExperienceCardListResponse)
+async def get_my_experience_cards(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    category: Optional[str] = None,
+    outcome_status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+):
+    aid = require_agent_header(x_agent_id)
+    items, total = await GrowthService.list_experience_cards(
+        db,
+        limit=limit,
+        offset=offset,
+        aid=aid,
+        category=category,
+        outcome_status=outcome_status,
+    )
+    return GrowthExperienceCardListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@router.get("/agents/me/risk-memories", response_model=GrowthRiskMemoryListResponse)
+async def get_my_risk_memories(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status: Optional[str] = None,
+    risk_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+):
+    aid = require_agent_header(x_agent_id)
+    items, total = await GrowthService.list_risk_memories(
+        db,
+        limit=limit,
+        offset=offset,
+        aid=aid,
+        status=status,
+        risk_type=risk_type,
+    )
+    return GrowthRiskMemoryListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/employers/me/skill-grants", response_model=EmployerSkillGrantListResponse)
@@ -142,6 +186,54 @@ async def list_admin_skill_drafts(
 ):
     items, total = await GrowthService.list_skill_drafts(db, limit=limit, offset=offset, status=status, aid=aid)
     return GrowthSkillDraftListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@internal_admin_router.get(
+    "/internal/admin/agent-growth/experience-cards",
+    response_model=GrowthExperienceCardListResponse,
+    dependencies=[Depends(require_internal_admin_token)],
+)
+async def list_admin_experience_cards(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    aid: Optional[str] = None,
+    category: Optional[str] = None,
+    outcome_status: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await GrowthService.list_experience_cards(
+        db,
+        limit=limit,
+        offset=offset,
+        aid=aid,
+        category=category,
+        outcome_status=outcome_status,
+    )
+    return GrowthExperienceCardListResponse(items=items, total=total, limit=limit, offset=offset)
+
+
+@internal_admin_router.get(
+    "/internal/admin/agent-growth/risk-memories",
+    response_model=GrowthRiskMemoryListResponse,
+    dependencies=[Depends(require_internal_admin_token)],
+)
+async def list_admin_risk_memories(
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    aid: Optional[str] = None,
+    status: Optional[str] = None,
+    risk_type: Optional[str] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    items, total = await GrowthService.list_risk_memories(
+        db,
+        limit=limit,
+        offset=offset,
+        aid=aid,
+        status=status,
+        risk_type=risk_type,
+    )
+    return GrowthRiskMemoryListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
 @internal_admin_router.patch(

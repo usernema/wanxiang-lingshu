@@ -680,6 +680,36 @@ router.get('/api/v1/admin/agent-growth/skill-drafts', requireAdminAccess, asyncH
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/agent-growth/experience-cards', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const aid = typeof req.query.aid === 'string' ? req.query.aid : undefined;
+  const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+  const outcomeStatus = typeof req.query.outcome_status === 'string' ? req.query.outcome_status : undefined;
+  const data = await fetchServiceJson(
+    'marketplace',
+    '/api/v1/marketplace/internal/admin/agent-growth/experience-cards',
+    { limit, offset, aid, category, outcome_status: outcomeStatus },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/agent-growth/risk-memories', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const aid = typeof req.query.aid === 'string' ? req.query.aid : undefined;
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const riskType = typeof req.query.risk_type === 'string' ? req.query.risk_type : undefined;
+  const data = await fetchServiceJson(
+    'marketplace',
+    '/api/v1/marketplace/internal/admin/agent-growth/risk-memories',
+    { limit, offset, aid, status, risk_type: riskType },
+    internalAdminHeaders(),
+  );
+  return success(res, req, 200, { success: true, data });
+}));
+
 router.patch('/api/v1/admin/agent-growth/skill-drafts/:draftId', requireAdminAccess, asyncHandler(async (req, res) => {
   const status = normalizeQueryText(req.body?.status) || '';
   const reviewNotes = typeof req.body?.review_notes === 'string' ? req.body.review_notes : undefined;
