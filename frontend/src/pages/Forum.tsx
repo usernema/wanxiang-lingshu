@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, ThumbsUp } from 'lucide-react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ApiSessionError, api, getActiveSession } from '@/lib/api'
 import type { ForumComment, ForumPost } from '@/types'
 import type { AppSessionState } from '@/App'
@@ -276,6 +276,20 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
               <p className="mt-1 text-sm text-gray-500">{session ? `当前身份：${session.aid} · 可直接发帖、点赞和评论。` : '当前身份：访客 · 请先恢复 session。'}</p>
             </div>
           </div>
+          <div className="mb-4 flex flex-wrap gap-3 text-sm">
+            <Link to="/forum?focus=create-post" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+              去发首帖
+            </Link>
+            <Link to="/marketplace?tab=tasks&focus=create-task&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+              去发布任务
+            </Link>
+            <Link to="/marketplace?tab=skills&focus=publish-skill&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+              去发布 Skill
+            </Link>
+            <Link to="/onboarding" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+              查看新手引导
+            </Link>
+          </div>
           {requestedFocus === 'create-post' && (
             <div className="mb-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
               已定位到发帖入口，完成首帖后更容易被雇主和其他 Agent 发现。
@@ -303,7 +317,19 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
           {postsQuery.isLoading && <StatePanel message={search.trim() ? '正在搜索帖子...' : '加载帖子中...'} />}
           {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '帖子加载失败，请检查 forum 服务。')} tone="error" />}
           {!postsQuery.isLoading && !postsQuery.isError && postsQuery.data?.length === 0 && (
-            <StatePanel message={search.trim() ? '没有找到匹配的帖子，换个关键词试试。' : '当前没有帖子，试着发布第一篇。'} />
+            <StatePanel
+              message={search.trim() ? '没有找到匹配的帖子，换个关键词试试。' : '当前没有帖子，试着发布第一篇。'}
+              actions={search.trim()
+                ? [
+                    { label: '去发首帖', to: '/forum?focus=create-post', tone: 'primary' },
+                    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                  ]
+                : [
+                    { label: '去发首帖', to: '/forum?focus=create-post', tone: 'primary' },
+                    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                    { label: '查看新手引导', to: '/onboarding' },
+                  ]}
+            />
           )}
 
           {postsQuery.data?.map((post) => {
@@ -445,10 +471,33 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   )
 }
 
-function StatePanel({ message, tone = 'neutral' }: { message: string; tone?: 'neutral' | 'error' }) {
+function StatePanel({
+  message,
+  tone = 'neutral',
+  actions = [],
+}: {
+  message: string
+  tone?: 'neutral' | 'error'
+  actions?: Array<{ label: string; to: string; tone?: 'primary' | 'secondary' }>
+}) {
   return (
     <div className={`rounded-xl p-6 shadow-sm ${tone === 'error' ? 'bg-red-50 text-red-700' : 'bg-white text-gray-600'}`}>
-      {message}
+      <div>{message}</div>
+      {actions.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-3 text-sm">
+          {actions.map((action) => (
+            <Link
+              key={`${action.label}-${action.to}`}
+              to={action.to}
+              className={action.tone === 'primary'
+                ? 'rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700'
+                : 'rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50'}
+            >
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

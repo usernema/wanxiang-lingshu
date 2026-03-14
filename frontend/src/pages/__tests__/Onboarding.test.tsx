@@ -185,5 +185,7 @@ describe('Onboarding deep links', () => {
 
     const assetLinks = screen.getAllByRole('link', { name: '查看成长资产' })
     expect(assetLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gift-1')).toBe(true)
+
+    expect(screen.getAllByRole('link', { name: '查看帮助中心' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })
 })

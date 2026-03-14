@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
@@ -939,7 +939,17 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <div className="space-y-3">
                 {tasksQuery.isLoading && <PageStateCard message="加载任务中..." compact />}
                 {tasksQuery.isError && <PageStateCard message="任务加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
-                {!tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.data?.length === 0 && <PageStateCard message="当前没有符合筛选条件的任务。" compact />}
+                {!tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.data?.length === 0 && (
+                  <PageStateCard
+                    message="当前没有符合筛选条件的任务。"
+                    compact
+                    actions={[
+                      { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' },
+                      { label: '先去论坛发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
+                      { label: '切到技能市场', to: '/marketplace?tab=skills' },
+                    ]}
+                  />
+                )}
                 {tasksQuery.data?.map((task) => (
                   <button
                     type="button"
@@ -1015,6 +1025,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                     onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
                   />
                   <TaskStateGuide task={selectedTask} />
+                  <TaskSettlementLinks task={selectedTask} />
 
                   {taskWorkspaceOverview && (
                     <div className="space-y-3">
@@ -1160,7 +1171,16 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <div className="grid gap-4 md:grid-cols-2">
               {skillsQuery.isLoading && <PageStateCard message="加载技能中..." compact />}
               {skillsQuery.isError && <PageStateCard message="技能加载失败，请检查 marketplace 服务。" tone="error" compact />}
-              {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && <PageStateCard message="当前暂无技能。" compact />}
+              {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && (
+                <PageStateCard
+                  message="当前暂无技能。"
+                  compact
+                  actions={[
+                    { label: '去发布技能', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
+                    { label: '切到任务市场', to: '/marketplace?tab=tasks' },
+                  ]}
+                />
+              )}
               {skillsQuery.data?.map((skill) => (
                 <div
                   key={skill.skill_id}
@@ -1667,6 +1687,34 @@ function TaskStateGuide({ task }: { task: MarketplaceTask }) {
   )
 }
 
+function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
+  const shouldShow = task.status === 'submitted' || task.status === 'completed' || task.status === 'cancelled' || Boolean(task.escrow_id)
+  if (!shouldShow) return null
+
+  const summary = task.status === 'submitted'
+    ? '当前任务已进入待验收阶段，建议同时盯住钱包通知与 Profile 资金解释，避免放款后信息不同步。'
+    : task.status === 'completed'
+      ? '当前任务已完成，建议立即核对钱包通知、余额变化和 Profile 里的 credit 解释。'
+      : task.status === 'cancelled'
+        ? '当前任务已取消，如有托管，建议核对退款通知和冻结余额是否已回落。'
+        : '当前任务已经涉及托管或结算，建议同步核对钱包和 Profile。'
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+      <div className="font-medium text-slate-900">结算 / 结果核对</div>
+      <div className="mt-2">{summary}</div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Link to="/wallet?focus=notifications&source=marketplace-task" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+          去钱包通知中心
+        </Link>
+        <Link to="/profile?focus=credit-verification&source=marketplace" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50">
+          去 Profile 核对资金
+        </Link>
+      </div>
+    </div>
+  )
+}
+
 function DisabledHint({ children }: { children: ReactNode }) {
   return <div className="text-xs text-gray-500">{children}</div>
 }
@@ -1701,10 +1749,35 @@ function InfoCard({ icon, label, value }: { icon: ReactNode; label: string; valu
   )
 }
 
-function PageStateCard({ message, tone = 'neutral', compact = false }: { message: string; tone?: 'neutral' | 'error'; compact?: boolean }) {
+function PageStateCard({
+  message,
+  tone = 'neutral',
+  compact = false,
+  actions = [],
+}: {
+  message: string
+  tone?: 'neutral' | 'error'
+  compact?: boolean
+  actions?: Array<{ label: string; to: string; tone?: 'primary' | 'secondary' }>
+}) {
   return (
     <div className={`rounded-2xl ${compact ? 'p-4' : 'p-6'} ${tone === 'error' ? 'bg-red-50 text-red-700' : 'bg-white text-gray-600'} shadow-sm`}>
-      {message}
+      <div>{message}</div>
+      {actions.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-3 text-sm">
+          {actions.map((action) => (
+            <Link
+              key={`${action.label}-${action.to}`}
+              to={action.to}
+              className={action.tone === 'primary'
+                ? 'rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700'
+                : 'rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50'}
+            >
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

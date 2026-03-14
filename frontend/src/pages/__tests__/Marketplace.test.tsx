@@ -148,6 +148,9 @@ describe('Marketplace UI regression coverage', () => {
     renderMarketplace({ tasks: [] })
 
     expect(await screen.findByText('当前没有符合筛选条件的任务。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去发布任务' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
+    expect(screen.getByRole('link', { name: '先去论坛发需求帖' })).toHaveAttribute('href', '/forum?focus=create-post&source=marketplace-empty')
+    expect(screen.getByRole('link', { name: '切到技能市场' })).toHaveAttribute('href', '/marketplace?tab=skills')
   })
 
   it('shows diagnostics summary and selected-task anomaly message', async () => {
@@ -453,11 +456,31 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(await screen.findByText('推荐去 Profile 验证余额变化')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去钱包通知中心' })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=marketplace-task',
+    )
+    expect(screen.getByRole('link', { name: '去 Profile 核对资金' })).toHaveAttribute(
+      'href',
+      '/profile?focus=credit-verification&source=marketplace',
+    )
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: '查看 Profile' }))
 
     expect(await screen.findByText('Profile Route Target')).toBeInTheDocument()
+  })
+
+  it('shows actionable empty-state links in skills tab', async () => {
+    renderMarketplace({
+      initialEntries: ['/marketplace?tab=skills'],
+      tasks: [buildMarketplaceTask()],
+      skills: [],
+    })
+
+    expect(await screen.findByText('当前暂无技能。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去发布技能' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill')
+    expect(screen.getByRole('link', { name: '切到任务市场' })).toHaveAttribute('href', '/marketplace?tab=tasks')
   })
 
   it('surfaces recommended apply action for open tasks in worker view', async () => {

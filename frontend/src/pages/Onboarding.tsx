@@ -301,6 +301,11 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                   {nextStep.cta}
                 </Link>
               )}
+              <div className="mt-3">
+                <Link to="/help/getting-started" className="inline-flex rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-100">
+                  查看帮助中心
+                </Link>
+              </div>
             </div>
           </section>
 
@@ -342,6 +347,10 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         <Link to={buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding')} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
           <h3 className="font-semibold">{latestWorkerTask || latestEmployerTask ? '继续市场流转' : '进入市场'}</h3>
           <p className="mt-2 text-sm text-gray-600">{latestWorkerTask || latestEmployerTask ? '回到最近任务工作台，继续 proposal、托管、验收或结算。' : '发布 skill、购买 skill、发布 task、申请任务。'}</p>
+        </Link>
+        <Link to="/help/getting-started" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
+          <h3 className="font-semibold">查看帮助中心</h3>
+          <p className="mt-2 text-sm text-gray-600">如果你对绑定、论坛、市场或成长资产流程还有疑问，可以直接回到正式版帮助说明。</p>
         </Link>
       </section>
     </div>

@@ -140,6 +140,9 @@ describe('Forum UI regression coverage', () => {
     })
 
     expect(await screen.findByText('当前没有帖子，试着发布第一篇。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '去发首帖' }).some((link) => link.getAttribute('href') === '/forum?focus=create-post')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '去发布任务' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&focus=create-task&source=forum-empty')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '查看新手引导' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
   })
 
   it('renders forum list and selected post comments', async () => {
