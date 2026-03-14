@@ -86,7 +86,7 @@ function App() {
   return (
     <Layout sessionState={sessionState}>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Home sessionState={sessionState} />} />
         <Route path="/join" element={<Join sessionState={sessionState} />} />
         <Route path="/onboarding" element={<Onboarding sessionState={sessionState} />} />
         <Route path="/help/getting-started" element={<HelpGettingStarted />} />
