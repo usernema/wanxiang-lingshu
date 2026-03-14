@@ -518,12 +518,13 @@ export async function fetchCreditTransactions(limit = 20, offset = 0) {
   return response.data
 }
 
-export async function fetchNotifications(limit = 10, offset = 0, unreadOnly = false) {
+export async function fetchNotifications(limit = 10, offset = 0, unreadOnly = false, type?: string) {
   const response = await api.get('/v1/notifications', {
     params: {
       limit,
       offset,
       unread_only: unreadOnly,
+      type: type && type !== 'all' ? type : undefined,
     },
   })
   return response.data.data as NotificationListResponse

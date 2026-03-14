@@ -6,12 +6,25 @@ import type { CreditBalance, CreditTransaction, CreditTransactionListResponse, N
 import type { AppSessionState } from '@/App'
 
 const PAGE_SIZE = 20
+const NOTIFICATION_TYPE_OPTIONS = [
+  { value: 'all', label: '全部通知' },
+  { value: 'agent_status_changed', label: '账号状态' },
+  { value: 'forum_post_moderated', label: '帖子审核' },
+  { value: 'forum_comment_moderated', label: '评论审核' },
+  { value: 'credit_in', label: '入账提醒' },
+  { value: 'credit_out', label: '支出提醒' },
+  { value: 'escrow_created', label: '托管创建' },
+  { value: 'escrow_released', label: '托管放款' },
+  { value: 'escrow_refunded', label: '托管退款' },
+] as const
 
 export default function Wallet({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
   const location = useLocation()
   const [offset, setOffset] = useState(0)
   const [notificationError, setNotificationError] = useState<string | null>(null)
+  const [notificationTypeFilter, setNotificationTypeFilter] = useState<(typeof NOTIFICATION_TYPE_OPTIONS)[number]['value']>('all')
+  const [notificationUnreadOnly, setNotificationUnreadOnly] = useState(false)
   const queryClient = useQueryClient()
   const focus = useMemo(() => new URLSearchParams(location.search).get('focus'), [location.search])
   const showNotificationsFocus = focus === 'notifications'
@@ -29,9 +42,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   })
 
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', session?.aid, PAGE_SIZE, 0],
+    queryKey: ['notifications', session?.aid, PAGE_SIZE, 0, notificationUnreadOnly, notificationTypeFilter],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.token),
-    queryFn: async () => (await fetchNotifications(PAGE_SIZE, 0, false)) as NotificationListResponse,
+    queryFn: async () => (await fetchNotifications(PAGE_SIZE, 0, notificationUnreadOnly, notificationTypeFilter)) as NotificationListResponse,
   })
 
   const markNotificationReadMutation = useMutation({
@@ -92,7 +105,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">Notifications</h2>
-            <p className="mt-1 text-sm text-gray-600">托管创建、放款、退款等关键事件会在这里提醒，避免真实流转静默发生。</p>
+            <p className="mt-1 text-sm text-gray-600">托管、账号状态、论坛审核等关键事件会在这里提醒，避免真实流转静默发生。</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">未读 {unreadNotificationCount}</span>
@@ -109,17 +122,63 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
 
         {showNotificationsFocus && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            这里会显示最近与你账号相关的资金与托管提醒，建议优先核对未读通知。
+            这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。
           </div>
         )}
         {notificationError && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{notificationError}</div>}
+
+        <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,220px)_1fr]">
+          <label className="block text-sm text-slate-600">
+            <span className="mb-1 block font-medium text-slate-700">通知类型</span>
+            <select
+              value={notificationTypeFilter}
+              onChange={(event) => setNotificationTypeFilter(event.target.value as (typeof NOTIFICATION_TYPE_OPTIONS)[number]['value'])}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+            >
+              {NOTIFICATION_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-end gap-3">
+            <button
+              type="button"
+              onClick={() => setNotificationUnreadOnly((current) => !current)}
+              className={`rounded-lg px-4 py-2 text-sm font-medium ${
+                notificationUnreadOnly
+                  ? 'bg-primary-600 text-white hover:bg-primary-700'
+                  : 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              {notificationUnreadOnly ? '仅看未读中' : '仅看未读'}
+            </button>
+            {(notificationUnreadOnly || notificationTypeFilter !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNotificationUnreadOnly(false)
+                  setNotificationTypeFilter('all')
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                清空筛选
+              </button>
+            )}
+          </div>
+        </div>
 
         {notificationsQuery.isLoading ? (
           <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载通知...</div>
         ) : notificationsQuery.isError ? (
           <div className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">加载通知失败，请检查 gateway 的 notifications 接口。</div>
         ) : notifications.length === 0 ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有通知。完成首笔购买、托管创建或结算后，这里会出现提醒。</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
+            {notificationUnreadOnly || notificationTypeFilter !== 'all'
+              ? '当前筛选条件下没有通知，试试放宽筛选条件。'
+              : '当前还没有通知。完成首笔购买、托管创建、审核或状态变更后，这里会出现提醒。'}
+          </div>
         ) : (
           <div className="mt-6 space-y-3">
             {notifications.map((notification) => (

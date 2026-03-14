@@ -451,6 +451,9 @@ describe('Admin page', () => {
     expect(await screen.findByText('Agent 总数')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '总览' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('系统健康')).toBeInTheDocument()
+    expect(screen.getByText('审核追踪')).toBeInTheDocument()
+    expect(screen.getByText('Agent 状态变更')).toBeInTheDocument()
+    expect(screen.getByText('帖子审核动作')).toBeInTheDocument()
     expect(screen.queryByText('Agent Growth')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('tab', { name: '成长' }))

@@ -4,6 +4,7 @@ import type {
   AdminAgentGrowthProfile,
   AdminAgentGrowthSkillDraft,
   AdminAgentGrowthSkillDraftStatus,
+  AdminAuditLog,
   AdminDependency,
   AdminEmployerSkillGrant,
   AdminEmployerTemplate,
@@ -12,6 +13,7 @@ import type {
   AdminTask,
   AdminTaskStatus,
 } from '@/lib/admin'
+import { auditActionLabel, auditResourceLabel, readAuditDetailBoolean, readAuditDetailString } from '@/components/admin/adminPresentation'
 import type { AgentProfile } from '@/lib/api'
 
 function SummaryChip({ label, value, tone }: { label: string; value: number; tone: string }) {
@@ -58,6 +60,9 @@ export function AdminOverviewPanel({
   agentStatusSummary,
   postStatusSummary,
   taskStatusSummary,
+  moderationActionSummary,
+  recentModerationItems,
+  formatTime,
   toneClass,
 }: {
   overview?: AdminOverview
@@ -65,6 +70,14 @@ export function AdminOverviewPanel({
   agentStatusSummary: Record<string, number>
   postStatusSummary: Record<string, number>
   taskStatusSummary: Record<string, number>
+  moderationActionSummary: {
+    agentStatusUpdates: number
+    postStatusUpdates: number
+    commentStatusUpdates: number
+    batchActions: number
+  }
+  recentModerationItems: AdminAuditLog[]
+  formatTime: (value?: string | null) => string
   toneClass: (ok: boolean) => string
 }) {
   return (
@@ -135,6 +148,48 @@ export function AdminOverviewPanel({
               <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">审核追踪</h2>
+            <p className="text-sm text-slate-500">基于最近 20 条后台状态变更审计，快速判断运营动作是否正常流转。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            最近动作 {recentModerationItems.length}
+          </span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="Agent 状态变更" value={moderationActionSummary.agentStatusUpdates} tone="amber" />
+          <StatCard title="帖子审核动作" value={moderationActionSummary.postStatusUpdates} />
+          <StatCard title="评论审核动作" value={moderationActionSummary.commentStatusUpdates} tone="emerald" />
+          <StatCard title="批量动作" value={moderationActionSummary.batchActions} tone="rose" />
+        </div>
+        <div className="mt-6 space-y-3">
+          {recentModerationItems.length === 0 ? (
+            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">最近还没有状态变更类审计动作。</p>
+          ) : (
+            recentModerationItems.map((log) => {
+              const status = readAuditDetailString(log.details, 'status')
+              const isBatch = readAuditDetailBoolean(log.details, 'batch')
+              return (
+                <div key={log.log_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">{auditActionLabel(log.action)}</span>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{auditResourceLabel(log.resource_type)}</span>
+                      {status && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">状态 {status}</span>}
+                      {isBatch && <span className="rounded-full bg-sky-100 px-3 py-1 text-xs text-sky-800">批量</span>}
+                    </div>
+                    <p className="text-xs text-slate-500">{formatTime(log.created_at)}</p>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-700">{log.resource_id || '无资源标识'}</p>
+                </div>
+              )
+            })
+          )}
         </div>
       </section>
     </>

@@ -233,6 +233,16 @@ export function useAdminConsoleState() {
     enabled,
   })
 
+  const moderationAuditQuery = useQuery({
+    queryKey: ['admin', 'audit-logs', 'moderation', activeToken],
+    queryFn: () => fetchAdminAuditLogs({
+      limit: 20,
+      offset: 0,
+      action: 'status.updated',
+    }),
+    enabled,
+  })
+
   const refreshAdminData = async () => {
     await Promise.all([
       overviewQuery.refetch(),
@@ -245,6 +255,7 @@ export function useAdminConsoleState() {
       postsQuery.refetch(),
       tasksQuery.refetch(),
       auditLogsQuery.refetch(),
+      moderationAuditQuery.refetch(),
       expandedPostId !== null ? commentsQuery.refetch() : Promise.resolve(),
       expandedTaskId !== null ? taskApplicationsQuery.refetch() : Promise.resolve(),
     ])
@@ -324,7 +335,7 @@ export function useAdminConsoleState() {
     setExpandedTaskId(null)
   }
 
-  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error
+  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error
   const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error
   const displayError = sharedError || mutationError
 
@@ -531,6 +542,7 @@ export function useAdminConsoleState() {
   const postItems = postsQuery.data?.posts || []
   const taskItems = tasksQuery.data?.items || []
   const auditLogItems = auditLogsQuery.data?.items || []
+  const moderationAuditItems = moderationAuditQuery.data?.items || []
 
   const keyword = agentKeyword.trim().toLowerCase()
   const visibleAgents = agentItems.filter((agent) => {
@@ -584,6 +596,22 @@ export function useAdminConsoleState() {
   const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
   const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
   const consistencyExamples = overview?.consistency?.examples || []
+  const moderationActionSummary = moderationAuditItems.reduce(
+    (summary, log) => {
+      if (log.action === 'admin.agent.status.updated') summary.agentStatusUpdates += 1
+      if (log.action === 'admin.forum.post.status.updated') summary.postStatusUpdates += 1
+      if (log.action === 'admin.forum.comment.status.updated') summary.commentStatusUpdates += 1
+      if (typeof log.details?.batch === 'boolean' && log.details.batch) summary.batchActions += 1
+      return summary
+    },
+    {
+      agentStatusUpdates: 0,
+      postStatusUpdates: 0,
+      commentStatusUpdates: 0,
+      batchActions: 0,
+    },
+  )
+  const recentModerationItems = moderationAuditItems.slice(0, 5)
 
   return {
     session: {
@@ -661,6 +689,8 @@ export function useAdminConsoleState() {
       postItems,
       taskItems,
       auditLogItems,
+      moderationActionSummary,
+      recentModerationItems,
       visibleAgents,
       visibleGrowthProfiles,
       visibleGrowthDrafts,
@@ -682,6 +712,7 @@ export function useAdminConsoleState() {
       commentsQuery,
       taskApplicationsQuery,
       auditLogsQuery,
+      moderationAuditQuery,
     },
     actions: {
       handleToggleAgentSelection,

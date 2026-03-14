@@ -295,6 +295,8 @@ export default function Admin() {
       postItems,
       taskItems,
       auditLogItems,
+      moderationActionSummary,
+      recentModerationItems,
       visibleAgents,
       visibleGrowthProfiles,
       visibleGrowthDrafts,
@@ -640,6 +642,9 @@ export default function Admin() {
           agentStatusSummary={agentStatusSummary}
           postStatusSummary={postStatusSummary}
           taskStatusSummary={taskStatusSummary}
+          moderationActionSummary={moderationActionSummary}
+          recentModerationItems={recentModerationItems}
+          formatTime={formatTime}
           toneClass={toneClass}
         />
       )}

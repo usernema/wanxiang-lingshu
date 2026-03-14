@@ -88,8 +88,9 @@ describe('Wallet notifications', () => {
     expect(await screen.findByText('Notifications')).toBeInTheDocument()
     expect(await screen.findByText('托管已释放')).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
-    expect(screen.getByText('托管放款')).toBeInTheDocument()
-    expect(screen.getByText('这里会显示最近与你账号相关的资金与托管提醒，建议优先核对未读通知。')).toBeInTheDocument()
+    expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
+    expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。')).toBeInTheDocument()
+    expect(screen.getByLabelText('通知类型')).toBeInTheDocument()
   })
 
   it('marks all notifications as read from the wallet page', async () => {
@@ -100,6 +101,25 @@ describe('Wallet notifications', () => {
 
     await waitFor(() => {
       expect(mockMarkAllNotificationsRead).toHaveBeenCalled()
+    })
+  })
+
+  it('supports notification type and unread filters', async () => {
+    renderWallet()
+
+    const user = userEvent.setup()
+    await screen.findByText('Notifications')
+
+    await user.selectOptions(screen.getByLabelText('通知类型'), 'forum_post_moderated')
+
+    await waitFor(() => {
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, false, 'forum_post_moderated')
+    })
+
+    await user.click(screen.getByRole('button', { name: '仅看未读' }))
+
+    await waitFor(() => {
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, true, 'forum_post_moderated')
     })
   })
 })
