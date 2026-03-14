@@ -53,6 +53,18 @@ type TaskOutcomeAction = {
   tone: 'primary' | 'secondary'
 }
 
+type QueueGuideAction = {
+  label: string
+  href: string
+  tone: 'primary' | 'secondary'
+}
+
+type TaskQueueGuideDescriptor = {
+  title: string
+  summary: string
+  actions: QueueGuideAction[]
+}
+
 type ApplicantInsight = {
   proposal: string
   proposalStrength: 'strong' | 'medium' | 'light'
@@ -381,6 +393,134 @@ function matchesTaskQueue(
   return task.status === 'completed' && Boolean(employerSession && task.employer_aid === employerSession.aid)
 }
 
+function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQueueGuideDescriptor {
+  if (queue === 'open') {
+    if (role === 'worker') {
+      return {
+        title: '公开任务要尽快转成真实申请',
+        summary: count > 0
+          ? `当前还有 ${count} 个可申请任务，建议优先挑一个投递 proposal，尽快拿到下一单。`
+          : '当前没有可申请任务，建议先优化公开主页和论坛曝光，等待新的真实需求进入市场。',
+        actions: [
+          { label: '去个人中心优化主页', href: '/profile?source=marketplace-open', tone: 'primary' },
+          { label: '去论坛发合作帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
+        ],
+      }
+    }
+
+    return {
+      title: '开放任务要尽快转成分配',
+      summary: count > 0
+        ? `当前有 ${count} 个开放招募任务，建议优先查看申请并尽快完成分配。`
+        : '当前没有开放招募中的任务，可以继续发布新的真实需求，保持供给不断档。',
+      actions: [
+        { label: '继续发布任务', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-open', tone: 'primary' },
+        { label: '去论坛补需求帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
+      ],
+    }
+  }
+
+  if (queue === 'execution') {
+    if (role === 'worker') {
+      return {
+        title: '执行中任务要尽快推进到可验收',
+        summary: count > 0
+          ? `当前有 ${count} 个执行中任务，建议优先把交付物补齐并推进到提交验收。`
+          : '当前没有执行中任务，可以回公开任务队列继续申请新的真实任务。',
+        actions: [
+          { label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
+          { label: '回公开任务队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
+        ],
+      }
+    }
+
+    return {
+      title: '执行中任务要盯托管与交付节奏',
+      summary: count > 0
+        ? `当前有 ${count} 个执行中任务，建议重点盯托管状态、交付节奏和潜在阻塞。`
+        : '当前没有执行中任务，可以回开放队列继续发布或分配任务。',
+      actions: [
+        { label: '去钱包核对托管', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
+        { label: '回开放招募队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
+      ],
+    }
+  }
+
+  if (queue === 'review') {
+    if (role === 'worker') {
+      return {
+        title: '待验收任务要盯住结算反馈',
+        summary: count > 0
+          ? `当前有 ${count} 个待雇主验收任务，建议同步关注钱包通知与验收结果。`
+          : '当前没有待验收任务，说明交付暂时没有卡在雇主确认这一环。',
+        actions: [
+          { label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
+          { label: '去个人中心看成长档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
+        ],
+      }
+    }
+
+    return {
+      title: '待验收任务优先别堆积',
+      summary: count > 0
+        ? `当前有 ${count} 个等待验收任务，建议优先完成验收，别让放款和复购卡住。`
+        : '当前没有待验收任务，说明当前没有卡在放款前最后一步。',
+      actions: [
+        { label: '去钱包核对放款', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
+        { label: '去个人中心复盘结果', href: '/profile?source=marketplace-review', tone: 'secondary' },
+      ],
+    }
+  }
+
+  if (role === 'worker') {
+    return {
+      title: '完成交付后要把经验沉淀成资产',
+      summary: count > 0
+        ? `当前 completed 队列里有 ${count} 个已完成交付任务，建议优先核对收入，并把成功经验整理成公开 Skill。`
+        : '当前还没有已完成交付任务，完成首单后这里会成为你的复盘与资产沉淀入口。',
+      actions: [
+        { label: '去发布 Skill', href: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' },
+        { label: '去个人中心看成长档案', href: '/profile?source=marketplace-completed', tone: 'secondary' },
+        { label: '去钱包核对收入', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
+      ],
+    }
+  }
+
+  return {
+    title: '完成验收后要把结果转成复购资产',
+    summary: count > 0
+      ? `当前 completed 队列里有 ${count} 个已完成验收任务，建议优先核对放款结果，再把需求模式整理成可复用模板。`
+      : '当前还没有已完成验收任务，闭环跑起来后这里会成为你的复盘与复购入口。',
+    actions: [
+      { label: '去个人中心复盘模板', href: '/profile?source=marketplace-completed', tone: 'primary' },
+      { label: '去钱包核对放款', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
+      { label: '继续发布任务', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed', tone: 'secondary' },
+    ],
+  }
+}
+
+function getTaskQueueEmptyStateActions(queue: TaskQueue | null, role: Role) {
+  if (queue === 'completed') {
+    return role === 'worker'
+      ? [
+          { label: '去发布 Skill', to: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' as const },
+          { label: '去个人中心看成长档案', to: '/profile?source=marketplace-completed' },
+          { label: '去钱包核对收入', to: '/wallet?focus=notifications&source=marketplace-completed' },
+        ]
+      : [
+          { label: '去个人中心复盘模板', to: '/profile?source=marketplace-completed', tone: 'primary' as const },
+          { label: '去钱包核对放款', to: '/wallet?focus=notifications&source=marketplace-completed' },
+          { label: '继续发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed' },
+        ]
+  }
+
+  return [
+    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' as const },
+    { label: '先去论坛发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
+    { label: '切到技能市场', to: '/marketplace?tab=skills' },
+  ]
+}
+
 function SectionHint({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -554,6 +694,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const taskQueueBannerCopy = useMemo(
     () => (focusedTaskQueue ? getTaskQueueBannerCopy(focusedTaskQueue, role, visibleTasks.length) : null),
     [focusedTaskQueue, role, visibleTasks.length],
+  )
+  const taskQueueGuide = useMemo(
+    () => (focusedTaskQueue ? getTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length) : null),
+    [focusedTaskQueue, role, visibleTasks.length],
+  )
+  const taskEmptyStateActions = useMemo(
+    () => getTaskQueueEmptyStateActions(focusedTaskQueue, role),
+    [focusedTaskQueue, role],
   )
 
   const selectedTask = useMemo(
@@ -1073,11 +1221,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   <PageStateCard
                     message={focusedTaskQueue ? '当前阶段队列里没有符合条件的任务。' : '当前没有符合筛选条件的任务。'}
                     compact
-                    actions={[
-                      { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' },
-                      { label: '先去论坛发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
-                      { label: '切到技能市场', to: '/marketplace?tab=skills' },
-                    ]}
+                    actions={taskEmptyStateActions}
                   />
                 )}
                 {visibleTasks.map((task) => (
@@ -1123,6 +1267,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           <div className="space-y-6">
             <div ref={taskWorkspaceRef} className="rounded-2xl bg-white p-6 shadow-sm">
               <h2 className="mb-4 text-xl font-semibold">任务详情</h2>
+              {taskQueueGuide && (
+                <div className="mb-4">
+                  <TaskQueueGuideCard guide={taskQueueGuide} />
+                </div>
+              )}
               {selectedTask ? (
                 <div className="space-y-4 text-sm text-gray-700">
                   <div>
@@ -1291,7 +1440,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-gray-500">请选择一个任务查看详情、申请列表与后续操作。</p>
+                <p className="text-sm text-gray-500">
+                  {focusedTaskQueue ? '当前队列里暂时没有可选任务，可先按上方建议继续推进。' : '请选择一个任务查看详情、申请列表与后续操作。'}
+                </p>
               )}
             </div>
           </div>
@@ -1767,6 +1918,29 @@ function TaskLifecycleStageCard({ stageGuide }: { stageGuide: TaskStageGuide }) 
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function TaskQueueGuideCard({ guide }: { guide: TaskQueueGuideDescriptor }) {
+  return (
+    <div className="rounded-2xl border border-primary-200 bg-primary-50 p-5 text-sm text-primary-900">
+      <div className="text-xs font-medium uppercase tracking-wide text-primary-700">当前队列运营建议</div>
+      <div className="mt-1 text-lg font-semibold">{guide.title}</div>
+      <div className="mt-2 text-primary-800">{guide.summary}</div>
+      <div className="mt-4 flex flex-wrap gap-3">
+        {guide.actions.map((action) => (
+          <Link
+            key={`${action.label}-${action.href}`}
+            to={action.href}
+            className={action.tone === 'primary'
+              ? 'rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700'
+              : 'rounded-lg border border-primary-200 bg-white px-4 py-2 text-primary-800 hover:bg-primary-100'}
+          >
+            {action.label}
+          </Link>
+        ))}
+      </div>
     </div>
   )
 }

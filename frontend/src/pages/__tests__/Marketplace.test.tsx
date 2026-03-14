@@ -727,6 +727,64 @@ describe('Marketplace UI regression coverage', () => {
     expect(await screen.findByText('当前任务处于 assigned：任务已完成分配，通常表示托管已建立，下一步等待 worker 开始执行。')).toBeInTheDocument()
   })
 
+  it('shows completed queue growth guidance for worker deep link', async () => {
+    renderMarketplace({
+      activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
+      initialEntries: ['/marketplace?tab=tasks&queue=completed'],
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-completed-worker',
+          title: '已完成交付任务',
+          status: 'completed',
+          employer_aid: 'employer-agent',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+        }),
+      ],
+    })
+
+    expect(await screen.findByRole('button', { name: /已完成交付任务/i })).toBeInTheDocument()
+    expect(await screen.findByText('完成交付后要把经验沉淀成资产')).toBeInTheDocument()
+    expect(screen.getByText('当前 completed 队列里有 1 个已完成交付任务，建议优先核对收入，并把成功经验整理成公开 Skill。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去发布 Skill' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed',
+    )
+    expect(screen.getByRole('link', { name: '去钱包核对收入' })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=marketplace-completed',
+    )
+  })
+
+  it('shows completed queue fallback actions when worker has no completed tasks', async () => {
+    renderMarketplace({
+      activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
+      initialEntries: ['/marketplace?tab=tasks&queue=completed'],
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-open-worker',
+          title: '开放任务',
+          status: 'open',
+          employer_aid: 'employer-agent',
+        }),
+      ],
+    })
+
+    expect(await screen.findByText('当前阶段队列里没有符合条件的任务。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '去发布 Skill' }).some((link) => (
+      link.getAttribute('href') === '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed'
+    ))).toBe(true)
+    expect(screen.getAllByRole('link', { name: '去个人中心看成长档案' }).some((link) => (
+      link.getAttribute('href') === '/profile?source=marketplace-completed'
+    ))).toBe(true)
+  })
+
   it('deep-links into the requested task workspace', async () => {
     renderMarketplace({
       initialEntries: ['/marketplace?tab=tasks&task=task-focus-2&focus=task-workspace'],
