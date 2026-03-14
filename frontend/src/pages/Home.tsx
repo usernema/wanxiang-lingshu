@@ -22,6 +22,15 @@ type RoadmapItem = {
   cta: string
 }
 
+type HomeFunnelCard = {
+  key: string
+  stage: string
+  count: number
+  summary: string
+  href: string
+  cta: string
+}
+
 type HomeWorkRole = 'employer' | 'worker'
 
 export default function Home({ sessionState }: { sessionState?: AppSessionState }) {
@@ -86,6 +95,14 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       return response.data as MarketplaceTask[]
     },
   })
+  const marketTasksQuery = useQuery({
+    queryKey: ['home-market-tasks', session?.aid, workRole],
+    enabled: dashboardEnabled && workRole === 'worker',
+    queryFn: async () => {
+      const response = await api.get('/v1/marketplace/tasks')
+      return response.data as MarketplaceTask[]
+    },
+  })
   const notificationsQuery = useQuery({
     queryKey: ['home-notifications', session?.aid],
     enabled: dashboardEnabled,
@@ -111,6 +128,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const skills = skillsQuery.data || []
   const employerTasks = employerTasksQuery.data || []
   const workerTasks = workerTasksQuery.data || []
+  const marketTasks = marketTasksQuery.data || []
   const unreadCount = notificationsQuery.data?.unread_count || 0
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
   const employerActiveTask = useMemo(() => getPriorityTask(employerTasks), [employerTasks])
@@ -135,9 +153,24 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     () => employerTasks.filter((task) => ['open', 'assigned', 'in_progress', 'submitted'].includes(task.status)).length,
     [employerTasks],
   )
+  const employerOpenTasks = useMemo(() => employerTasks.filter((task) => task.status === 'open'), [employerTasks])
+  const employerExecutionTasks = useMemo(
+    () => employerTasks.filter((task) => ['assigned', 'in_progress'].includes(task.status)),
+    [employerTasks],
+  )
+  const employerReviewTasks = useMemo(() => employerTasks.filter((task) => task.status === 'submitted'), [employerTasks])
   const workerOpenLoopCount = useMemo(
     () => workerTasks.filter((task) => ['assigned', 'in_progress', 'submitted'].includes(task.status)).length,
     [workerTasks],
+  )
+  const workerExecutionTasks = useMemo(
+    () => workerTasks.filter((task) => ['assigned', 'in_progress'].includes(task.status)),
+    [workerTasks],
+  )
+  const workerReviewTasks = useMemo(() => workerTasks.filter((task) => task.status === 'submitted'), [workerTasks])
+  const workerAvailableTasks = useMemo(
+    () => marketTasks.filter((task) => task.status === 'open' && task.employer_aid !== session?.aid),
+    [marketTasks, session?.aid],
   )
   const employerCompletedCount = useMemo(
     () => employerTasks.filter((task) => task.status === 'completed').length,
@@ -173,6 +206,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     skillsQuery.isLoading,
     employerTasksQuery.isLoading,
     workerTasksQuery.isLoading,
+    marketTasksQuery.isLoading,
     notificationsQuery.isLoading,
   ].some(Boolean)
   const recommendations = useMemo<HomeRecommendation[]>(() => {
@@ -326,6 +360,128 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     workerOpenLoopCount,
     workerTaskWorkspaceHref,
     workerTasks.length,
+  ])
+  const funnelCards = useMemo<HomeFunnelCard[]>(() => {
+    if (workRole === 'employer') {
+      const latestOpenEmployerTask = getLatestTask(employerOpenTasks)
+      const latestEmployerExecutionTask = getLatestTask(employerExecutionTasks)
+      const latestEmployerReviewTask = getLatestTask(employerReviewTasks)
+
+      return [
+        {
+          key: 'employer-open',
+          stage: '开放招募',
+          count: employerOpenTasks.length,
+          summary: employerOpenTasks.length > 0
+            ? '这些任务还在等待申请人或等待你尽快指派。'
+            : '还没有开放招募中的任务，可以继续发布新的真实需求。',
+          href: latestOpenEmployerTask
+            ? buildTaskWorkspaceHref(latestOpenEmployerTask, 'home-employer-funnel-open')
+            : '/marketplace?tab=tasks&focus=create-task&source=home-employer-funnel',
+          cta: latestOpenEmployerTask ? '去看待指派任务' : '去发布任务',
+        },
+        {
+          key: 'employer-execution',
+          stage: '执行中',
+          count: employerExecutionTasks.length,
+          summary: employerExecutionTasks.length > 0
+            ? '这些任务已经进入执行或托管阶段，建议优先盯进度和交付节奏。'
+            : '当前没有执行中的雇主任务。',
+          href: latestEmployerExecutionTask
+            ? buildTaskWorkspaceHref(latestEmployerExecutionTask, 'home-employer-funnel-active')
+            : '/marketplace?tab=tasks&source=home-employer-funnel',
+          cta: latestEmployerExecutionTask ? '去看执行任务' : '去市场查看',
+        },
+        {
+          key: 'employer-review',
+          stage: '等待验收',
+          count: employerReviewTasks.length,
+          summary: employerReviewTasks.length > 0
+            ? '这些任务已经提交交付，建议优先验收，别让结算和复购卡住。'
+            : '当前没有待你验收的任务。',
+          href: latestEmployerReviewTask
+            ? buildTaskWorkspaceHref(latestEmployerReviewTask, 'home-employer-funnel-review')
+            : '/wallet?focus=notifications&source=home-employer-funnel',
+          cta: latestEmployerReviewTask ? '去验收任务' : '去看通知',
+        },
+        {
+          key: 'employer-completed',
+          stage: '已完成验收',
+          count: employerCompletedCount,
+          summary: employerCompletedCount > 0
+            ? '这些任务已经完成结算，下一步适合继续复用流程资产或发布新单。'
+            : '完成验收后，这里会成为你的复购和运营基础盘。',
+          href: employerCompletedTask
+            ? buildTaskWorkspaceHref(employerCompletedTask, 'home-employer-funnel-completed')
+            : '/marketplace?tab=tasks&focus=create-task&source=home-employer-funnel',
+          cta: employerCompletedTask ? '回看已完成任务' : '继续发布任务',
+        },
+      ]
+    }
+
+    const latestWorkerExecutionTask = getLatestTask(workerExecutionTasks)
+    const latestWorkerReviewTask = getLatestTask(workerReviewTasks)
+
+    return [
+      {
+        key: 'worker-open',
+        stage: '可申请任务',
+        count: workerAvailableTasks.length,
+        summary: workerAvailableTasks.length > 0
+          ? '市场里还有开放任务可申请，首页可以直接提醒你去抢首单或下一单。'
+          : '当前没有可申请的公开任务，稍后可回市场继续看机会。',
+        href: '/marketplace?tab=tasks&source=home-worker-funnel',
+        cta: '去浏览任务',
+      },
+      {
+        key: 'worker-execution',
+        stage: '执行中',
+        count: workerExecutionTasks.length,
+        summary: workerExecutionTasks.length > 0
+          ? '这些任务已经到你手里了，优先把交付推进到可提交状态。'
+          : '当前没有执行中的任务。',
+        href: latestWorkerExecutionTask
+          ? buildTaskWorkspaceHref(latestWorkerExecutionTask, 'home-worker-funnel-active')
+          : '/marketplace?tab=tasks&source=home-worker-funnel',
+        cta: latestWorkerExecutionTask ? '去推进交付' : '去看任务市场',
+      },
+      {
+        key: 'worker-review',
+        stage: '待雇主验收',
+        count: workerReviewTasks.length,
+        summary: workerReviewTasks.length > 0
+          ? '这些任务已经提交，建议盯紧验收和钱包提醒，别错过结算反馈。'
+          : '当前没有等待雇主验收的任务。',
+        href: latestWorkerReviewTask
+          ? buildTaskWorkspaceHref(latestWorkerReviewTask, 'home-worker-funnel-review')
+          : '/wallet?focus=notifications&source=home-worker-funnel',
+        cta: latestWorkerReviewTask ? '去盯验收结果' : '去看通知',
+      },
+      {
+        key: 'worker-completed',
+        stage: '已完成交付',
+        count: workerCompletedCount,
+        summary: workerCompletedCount > 0
+          ? '这些交付已经完成，下一步适合把经验沉淀为公开 Skill。'
+          : '完成交付后，这里会成为你的成长资产入口。',
+        href: workerCompletedTask
+          ? buildTaskWorkspaceHref(workerCompletedTask, 'home-worker-funnel-completed')
+          : '/marketplace?tab=skills&focus=publish-skill&source=home-worker-funnel',
+        cta: workerCompletedTask ? '回看已完成交付' : '去发布 Skill',
+      },
+    ]
+  }, [
+    employerCompletedCount,
+    employerCompletedTask,
+    employerExecutionTasks,
+    employerOpenTasks,
+    employerReviewTasks,
+    workRole,
+    workerAvailableTasks.length,
+    workerCompletedCount,
+    workerCompletedTask,
+    workerExecutionTasks,
+    workerReviewTasks,
   ])
   const roadmap = useMemo<RoadmapItem[]>(() => [
     {
@@ -537,6 +693,33 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   <MilestoneRow label="Wallet" value={balance ? `balance ${balance.balance}` : '钱包尚未加载'} />
                 </div>
               </section>
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">角色任务漏斗</h2>
+                <p className="text-sm text-gray-600">直接看你卡在哪个节点，再从首页一跳进入对应任务工作台。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{roleLabel}</span>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {funnelCards.map((card) => (
+                <div key={card.key} className={`rounded-2xl border p-4 ${card.count > 0 ? 'border-primary-200 bg-primary-50' : 'border-gray-200 bg-gray-50'}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-700">{card.stage}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${card.count > 0 ? 'bg-primary-100 text-primary-700' : 'bg-slate-200 text-slate-700'}`}>
+                      {card.count > 0 ? '待处理' : '空闲'}
+                    </span>
+                  </div>
+                  <div className="mt-4 text-3xl font-semibold text-gray-900">{card.count}</div>
+                  <p className="mt-3 text-sm text-gray-600">{card.summary}</p>
+                  <Link to={card.href} className="mt-4 inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    {card.cta}
+                  </Link>
+                </div>
+              ))}
             </div>
           </section>
 

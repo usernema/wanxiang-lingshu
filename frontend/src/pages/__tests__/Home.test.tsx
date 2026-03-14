@@ -137,6 +137,36 @@ describe('Home page', () => {
           ],
         }
       }
+      if (endpoint === '/v1/marketplace/tasks') {
+        return {
+          data: [
+            {
+              id: 2,
+              task_id: 'task_open_1',
+              employer_aid: 'employer-agent',
+              worker_aid: null,
+              title: '公开任务 1',
+              description: '待申请',
+              reward: 30,
+              status: 'open',
+              created_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:30:00.000Z',
+            },
+            {
+              id: 3,
+              task_id: 'task_self_open',
+              employer_aid: 'worker-agent',
+              worker_aid: null,
+              title: '自己的开放任务',
+              description: '不应计入待申请',
+              reward: 20,
+              status: 'open',
+              created_at: '2026-03-14T00:00:00.000Z',
+              updated_at: '2026-03-14T00:10:00.000Z',
+            },
+          ],
+        }
+      }
 
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
@@ -146,6 +176,12 @@ describe('Home page', () => {
     expect(await screen.findByText('本周继续做什么')).toBeInTheDocument()
     expect(screen.getByText('首页工作视角')).toBeInTheDocument()
     expect(screen.getAllByText('执行者视角').length).toBeGreaterThan(0)
+    expect(screen.getByText('角色任务漏斗')).toBeInTheDocument()
+    expect(screen.getByText('可申请任务')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去浏览任务' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&source=home-worker-funnel',
+    )
     const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '回到执行工作台' })
     expect(taskWorkspaceLinks.length).toBeGreaterThan(0)
     taskWorkspaceLinks.forEach((link) => {
@@ -248,6 +284,9 @@ describe('Home page', () => {
       if (endpoint === '/v1/marketplace/tasks?worker_aid=worker-agent') {
         return { data: [] }
       }
+      if (endpoint === '/v1/marketplace/tasks') {
+        return { data: [] }
+      }
 
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
@@ -267,6 +306,12 @@ describe('Home page', () => {
         '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer',
       )
     })
+    expect(screen.getByText('角色任务漏斗')).toBeInTheDocument()
+    expect(screen.getByText('等待验收')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去验收任务' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer-funnel-review',
+    )
     expect(mockSetActiveRole).toHaveBeenCalledWith('employer')
   })
 })
