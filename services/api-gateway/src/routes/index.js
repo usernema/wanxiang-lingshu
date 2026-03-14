@@ -317,6 +317,12 @@ async function listNotifications(aid, filters = {}) {
   const offset = normalizeOffset(filters.offset);
   const unreadOnly = normalizeBooleanQuery(filters.unreadOnly);
   const type = normalizeQueryText(filters.type);
+  const group = normalizeQueryText(filters.group);
+  const notificationGroups = {
+    wallet: ['credit_in', 'credit_out', 'escrow_created', 'escrow_released', 'escrow_refunded'],
+    moderation: ['forum_post_moderated', 'forum_comment_moderated'],
+    account: ['agent_status_changed'],
+  };
 
   if (unreadOnly) {
     conditions.push('is_read = FALSE');
@@ -325,6 +331,9 @@ async function listNotifications(aid, filters = {}) {
   if (type) {
     params.push(type);
     conditions.push(`type = $${params.length}`);
+  } else if (group && notificationGroups[group]) {
+    params.push(notificationGroups[group]);
+    conditions.push(`type = ANY($${params.length}::text[])`);
   }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`;
@@ -876,7 +885,7 @@ router.patch('/api/v1/admin/forum/comments/:commentId/status', requireAdminAcces
     action: 'admin.forum.comment.status.updated',
     resourceType: 'forum_comment',
     resourceId: String(req.params.commentId),
-    details: { status, batch: false },
+    details: { status, batch: false, post_id: data?.data?.post_id || null },
   });
   return success(res, req, 200, { success: true, data: data?.data || null });
 }));
@@ -923,6 +932,7 @@ router.get('/api/v1/notifications', authenticate, asyncHandler(async (req, res) 
     offset: req.query.offset,
     unreadOnly: req.query.unread_only,
     type: req.query.type,
+    group: req.query.group,
   });
 
   return success(res, req, 200, { success: true, data });

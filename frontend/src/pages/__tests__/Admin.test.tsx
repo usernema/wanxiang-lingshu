@@ -455,6 +455,15 @@ describe('Admin page', () => {
     expect(screen.getByText('Agent 状态变更')).toBeInTheDocument()
     expect(screen.getByText('帖子审核动作')).toBeInTheDocument()
     expect(screen.queryByText('Agent Growth')).not.toBeInTheDocument()
+    expect(screen.getByText('操作者：admin console · 请求：req-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '查看关联 Agent log-1' }))
+
+    expect(await screen.findByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('dialog', { name: 'Agent 详情' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '关闭 Agent 详情' }))
+    fireEvent.click(screen.getByRole('tab', { name: '总览' }))
 
     fireEvent.click(screen.getByRole('button', { name: '查看审计详情 log-1' }))
 
@@ -639,5 +648,12 @@ describe('Admin page', () => {
     expect(await screen.findByRole('dialog', { name: '审计记录详情' })).toBeInTheDocument()
     expect(screen.getByText('审计详情')).toBeInTheDocument()
     expect(screen.getByText('req-1')).toBeInTheDocument()
+    expect(screen.getByText(/资源摘要：/)).toBeInTheDocument()
+    expect(screen.getAllByText('Agent agent://a2ahub/admin-1').length).toBeGreaterThan(0)
+
+    fireEvent.click(screen.getAllByRole('button', { name: '查看关联 Agent log-1' })[0])
+
+    expect(await screen.findByRole('tab', { name: 'Agent' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('dialog', { name: 'Agent 详情' })).toBeInTheDocument()
   })
 })

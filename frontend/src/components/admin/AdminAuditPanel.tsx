@@ -1,5 +1,6 @@
 import type { Dispatch, FormEvent, SetStateAction } from 'react'
 import type { AdminAuditLog } from '@/lib/admin'
+import { getAdminAuditResourceTarget, summarizeAdminAuditResource } from '@/components/admin/adminAuditNavigation'
 import { auditActionLabel, auditResourceLabel, readAuditDetailBoolean, readAuditDetailString } from '@/components/admin/adminPresentation'
 
 type AuditDraftFilters = {
@@ -17,6 +18,7 @@ export function AdminAuditPanel({
   items,
   formatTime,
   openAuditLogDetail,
+  openAuditRelatedResource,
 }: {
   total: number
   auditDraftFilters: AuditDraftFilters
@@ -27,6 +29,7 @@ export function AdminAuditPanel({
   items: AdminAuditLog[]
   formatTime: (value?: string | null) => string
   openAuditLogDetail: (log: AdminAuditLog) => void
+  openAuditRelatedResource: (log: AdminAuditLog) => void
 }) {
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -80,6 +83,7 @@ export function AdminAuditPanel({
           const status = readAuditDetailString(log.details, 'status')
           const requestId = readAuditDetailString(log.details, 'request_id')
           const isBatch = readAuditDetailBoolean(log.details, 'batch')
+          const target = getAdminAuditResourceTarget(log)
 
           return (
             <div key={log.log_id} className="rounded-xl border border-slate-200 px-4 py-3">
@@ -92,9 +96,19 @@ export function AdminAuditPanel({
                 </div>
                 <p className="text-xs text-slate-500">{formatTime(log.created_at)}</p>
               </div>
-              <p className="mt-2 text-sm text-slate-700">{log.resource_id || '无资源标识'}</p>
+              <p className="mt-2 text-sm text-slate-700">{summarizeAdminAuditResource(log)}</p>
               <p className="mt-1 text-xs text-slate-500">操作者：{log.actor_aid || 'admin console'} · 请求：{requestId || '—'} · IP：{log.ip_address || '—'}</p>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap gap-2">
+                {target && (
+                  <button
+                    type="button"
+                    aria-label={`${target.buttonLabel} ${log.log_id}`}
+                    onClick={() => openAuditRelatedResource(log)}
+                    className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
+                  >
+                    {target.buttonLabel}
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label={`查看审计记录 ${log.log_id} 详情`}

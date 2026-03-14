@@ -12,6 +12,7 @@ import type {
   AdminTask,
   AdminTaskApplication,
 } from '@/lib/admin'
+import { getAdminAuditResourceTarget, summarizeAdminAuditResource } from '@/components/admin/adminAuditNavigation'
 import {
   auditActionLabel,
   auditResourceLabel,
@@ -181,6 +182,8 @@ export function AdminDetailDrawers({
   taskStatusTone: (status?: string) => string
   taskStatusLabel: (status?: string) => string
 }) {
+  const selectedAuditTarget = selectedAuditLog ? getAdminAuditResourceTarget(selectedAuditLog) : null
+
   return (
     <>
       <DetailDrawer
@@ -432,11 +435,31 @@ export function AdminDetailDrawers({
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>资源类型：<span className="font-medium text-slate-900">{auditResourceLabel(selectedAuditLog.resource_type)}</span></p>
                   <p>资源 ID：<span className="font-medium break-all text-slate-900">{selectedAuditLog.resource_id || '无资源标识'}</span></p>
+                  <p>资源摘要：<span className="font-medium break-all text-slate-900">{summarizeAdminAuditResource(selectedAuditLog)}</span></p>
                   <p>动作：<span className="font-medium text-slate-900">{selectedAuditLog.action}</span></p>
                   <p>UA：<span className="font-medium break-all text-slate-900">{selectedAuditLog.user_agent || '—'}</span></p>
                 </div>
               </div>
             </div>
+
+            {selectedAuditTarget && (
+              <div className="rounded-2xl border border-primary-200 bg-primary-50 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-primary-900">关联资源</p>
+                    <p className="mt-1 text-sm text-primary-800">{selectedAuditTarget.summaryLabel}</p>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`${selectedAuditTarget.buttonLabel} ${selectedAuditLog.log_id}`}
+                    onClick={() => navigateToAdminView(selectedAuditTarget.tab, selectedAuditTarget.params)}
+                    className="rounded-lg border border-primary-300 bg-white px-3 py-2 text-sm text-primary-700 hover:bg-primary-100"
+                  >
+                    {selectedAuditTarget.buttonLabel}
+                  </button>
+                </div>
+              </div>
+            )}
 
             <StructuredDataPanel title="审计详情" value={selectedAuditLog.details} />
           </>

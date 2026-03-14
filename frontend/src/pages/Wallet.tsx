@@ -6,16 +6,22 @@ import type { CreditBalance, CreditTransaction, CreditTransactionListResponse, N
 import type { AppSessionState } from '@/App'
 
 const PAGE_SIZE = 20
+const NOTIFICATION_GROUP_OPTIONS = [
+  { value: 'all', label: '全部分组' },
+  { value: 'wallet', label: '资金与托管' },
+  { value: 'moderation', label: '内容审核' },
+  { value: 'account', label: '账号状态' },
+] as const
 const NOTIFICATION_TYPE_OPTIONS = [
-  { value: 'all', label: '全部通知' },
-  { value: 'agent_status_changed', label: '账号状态' },
-  { value: 'forum_post_moderated', label: '帖子审核' },
-  { value: 'forum_comment_moderated', label: '评论审核' },
-  { value: 'credit_in', label: '入账提醒' },
-  { value: 'credit_out', label: '支出提醒' },
-  { value: 'escrow_created', label: '托管创建' },
-  { value: 'escrow_released', label: '托管放款' },
-  { value: 'escrow_refunded', label: '托管退款' },
+  { value: 'all', label: '全部通知', group: 'all' },
+  { value: 'agent_status_changed', label: '账号状态', group: 'account' },
+  { value: 'forum_post_moderated', label: '帖子审核', group: 'moderation' },
+  { value: 'forum_comment_moderated', label: '评论审核', group: 'moderation' },
+  { value: 'credit_in', label: '入账提醒', group: 'wallet' },
+  { value: 'credit_out', label: '支出提醒', group: 'wallet' },
+  { value: 'escrow_created', label: '托管创建', group: 'wallet' },
+  { value: 'escrow_released', label: '托管放款', group: 'wallet' },
+  { value: 'escrow_refunded', label: '托管退款', group: 'wallet' },
 ] as const
 
 export default function Wallet({ sessionState }: { sessionState: AppSessionState }) {
@@ -24,6 +30,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const [offset, setOffset] = useState(0)
   const [notificationOffset, setNotificationOffset] = useState(0)
   const [notificationError, setNotificationError] = useState<string | null>(null)
+  const [notificationGroupFilter, setNotificationGroupFilter] = useState<(typeof NOTIFICATION_GROUP_OPTIONS)[number]['value']>('all')
   const [notificationTypeFilter, setNotificationTypeFilter] = useState<(typeof NOTIFICATION_TYPE_OPTIONS)[number]['value']>('all')
   const [notificationUnreadOnly, setNotificationUnreadOnly] = useState(false)
   const queryClient = useQueryClient()
@@ -32,7 +39,15 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
 
   useEffect(() => {
     setNotificationOffset(0)
-  }, [notificationTypeFilter, notificationUnreadOnly])
+  }, [notificationGroupFilter, notificationTypeFilter, notificationUnreadOnly])
+
+  useEffect(() => {
+    if (notificationGroupFilter === 'all') return
+    const selectedType = NOTIFICATION_TYPE_OPTIONS.find((option) => option.value === notificationTypeFilter)
+    if (selectedType?.group && selectedType.group !== 'all' && selectedType.group !== notificationGroupFilter) {
+      setNotificationTypeFilter('all')
+    }
+  }, [notificationGroupFilter, notificationTypeFilter])
 
   const balanceQuery = useQuery({
     queryKey: ['wallet-balance', session?.aid],
@@ -47,9 +62,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   })
 
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', session?.aid, PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter],
+    queryKey: ['notifications', session?.aid, PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter, notificationGroupFilter],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.token),
-    queryFn: async () => (await fetchNotifications(PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter)) as NotificationListResponse,
+    queryFn: async () => (await fetchNotifications(PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter, notificationGroupFilter)) as NotificationListResponse,
   })
 
   const markNotificationReadMutation = useMutation({
@@ -80,7 +95,11 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const filteredNotificationTotal = notificationsQuery.data?.total ?? 0
   const currentPageUnreadCount = notifications.filter((notification) => !notification.is_read).length
   const currentPageReadCount = notifications.filter((notification) => notification.is_read).length
+  const filteredNotificationGroupLabel = NOTIFICATION_GROUP_OPTIONS.find((option) => option.value === notificationGroupFilter)?.label ?? '全部分组'
   const selectedNotificationTypeLabel = NOTIFICATION_TYPE_OPTIONS.find((option) => option.value === notificationTypeFilter)?.label ?? '全部通知'
+  const availableNotificationTypeOptions = NOTIFICATION_TYPE_OPTIONS.filter(
+    (option) => option.group === 'all' || notificationGroupFilter === 'all' || option.group === notificationGroupFilter,
+  )
   const hasPreviousPage = offset > 0
   const hasNextPage = transactions.length === PAGE_SIZE
   const hasPreviousNotificationPage = notificationOffset > 0
@@ -99,23 +118,23 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
 
       {balanceQuery.data && (
         <section className="grid gap-6 md:grid-cols-4">
-          <Card label="Balance" value={balanceQuery.data.balance} tone="primary" />
-          <Card label="Frozen" value={balanceQuery.data.frozen_balance} tone="amber" />
-          <Card label="Earned" value={balanceQuery.data.total_earned} tone="green" />
-          <Card label="Spent" value={balanceQuery.data.total_spent} tone="slate" />
+          <Card label="可用余额" value={balanceQuery.data.balance} tone="primary" />
+          <Card label="冻结中" value={balanceQuery.data.frozen_balance} tone="amber" />
+          <Card label="累计收入" value={balanceQuery.data.total_earned} tone="green" />
+          <Card label="累计支出" value={balanceQuery.data.total_spent} tone="slate" />
         </section>
       )}
 
       <section className="grid gap-6 md:grid-cols-3">
-        <Card label="Incoming tx" value={flowSummary.incoming} tone="green" />
-        <Card label="Outgoing tx" value={flowSummary.outgoing} tone="slate" />
-        <Card label="Escrow-related" value={flowSummary.escrowRelated} tone="amber" />
+        <Card label="入账笔数" value={flowSummary.incoming} tone="green" />
+        <Card label="出账笔数" value={flowSummary.outgoing} tone="slate" />
+        <Card label="托管相关" value={flowSummary.escrowRelated} tone="amber" />
       </section>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Notifications</h2>
+            <h2 className="text-xl font-semibold">通知中心</h2>
             <p className="mt-1 text-sm text-gray-600">托管、账号状态、论坛审核等关键事件会在这里提醒，避免真实流转静默发生。</p>
           </div>
           <div className="flex items-center gap-3">
@@ -138,7 +157,21 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         )}
         {notificationError && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{notificationError}</div>}
 
-        <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[minmax(0,220px)_1fr]">
+        <div className="mt-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-2">
+          <label className="block text-sm text-slate-600">
+            <span className="mb-1 block font-medium text-slate-700">通知分组</span>
+            <select
+              value={notificationGroupFilter}
+              onChange={(event) => setNotificationGroupFilter(event.target.value as (typeof NOTIFICATION_GROUP_OPTIONS)[number]['value'])}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+            >
+              {NOTIFICATION_GROUP_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="block text-sm text-slate-600">
             <span className="mb-1 block font-medium text-slate-700">通知类型</span>
             <select
@@ -146,14 +179,14 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
               onChange={(event) => setNotificationTypeFilter(event.target.value as (typeof NOTIFICATION_TYPE_OPTIONS)[number]['value'])}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
             >
-              {NOTIFICATION_TYPE_OPTIONS.map((option) => (
+              {availableNotificationTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {option.value === 'all' && notificationGroupFilter !== 'all' ? `${filteredNotificationGroupLabel}内全部类型` : option.label}
                 </option>
               ))}
             </select>
           </label>
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="md:col-span-2 flex flex-wrap items-end gap-3">
             <button
               type="button"
               onClick={() => setNotificationUnreadOnly((current) => !current)}
@@ -165,10 +198,11 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
             >
               {notificationUnreadOnly ? '仅看未读中' : '仅看未读'}
             </button>
-            {(notificationUnreadOnly || notificationTypeFilter !== 'all') && (
+            {(notificationUnreadOnly || notificationGroupFilter !== 'all' || notificationTypeFilter !== 'all') && (
               <button
                 type="button"
                 onClick={() => {
+                  setNotificationGroupFilter('all')
                   setNotificationUnreadOnly(false)
                   setNotificationTypeFilter('all')
                 }}
@@ -181,10 +215,10 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </div>
 
         <div className="mt-4 grid gap-3 md:grid-cols-4">
-          <Card label="Filtered total" value={filteredNotificationTotal} tone="slate" />
-          <Card label="Page unread" value={currentPageUnreadCount} tone="amber" />
-          <Card label="Page read" value={currentPageReadCount} tone="green" />
-          <Card label="Current type" value={selectedNotificationTypeLabel} tone="primary" />
+          <Card label="筛选后总数" value={filteredNotificationTotal} tone="slate" />
+          <Card label="本页未读" value={currentPageUnreadCount} tone="amber" />
+          <Card label="本页已读" value={currentPageReadCount} tone="green" />
+          <Card label="当前类型" value={notificationTypeFilter === 'all' ? filteredNotificationGroupLabel : selectedNotificationTypeLabel} tone="primary" />
         </div>
 
         {notificationsQuery.isLoading ? (
@@ -193,7 +227,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           <div className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">加载通知失败，请检查 gateway 的 notifications 接口。</div>
         ) : notifications.length === 0 ? (
           <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
-            {notificationUnreadOnly || notificationTypeFilter !== 'all'
+            {notificationUnreadOnly || notificationGroupFilter !== 'all' || notificationTypeFilter !== 'all'
               ? '当前筛选条件下没有通知，试试放宽筛选条件。'
               : '当前还没有通知。完成首笔购买、托管创建、审核或状态变更后，这里会出现提醒。'}
           </div>
@@ -216,6 +250,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
                       {!notification.is_read && <span className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-medium text-rose-700">未读</span>}
                     </div>
                     {notification.content && <p className="mt-2 text-sm text-gray-700">{notification.content}</p>}
+                    {getNotificationContextSummary(notification) && (
+                      <div className="mt-2 text-xs text-slate-500">来源：{getNotificationContextSummary(notification)}</div>
+                    )}
                     <div className="mt-2 text-xs text-gray-500">{formatDateTime(notification.created_at)}</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -264,7 +301,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Transaction history</h2>
+            <h2 className="text-xl font-semibold">流水记录</h2>
             <p className="mt-1 text-sm text-gray-600">按时间倒序展示与你当前 agent 相关的积分流转，帮助核对购买、托管与结算是否一致。</p>
           </div>
           <div className="flex items-center gap-2 text-sm">
@@ -419,6 +456,13 @@ function formatNotificationType(type: string) {
   }
 }
 
+function formatNotificationGroup(group: string) {
+  if (group === 'wallet') return '资金与托管'
+  if (group === 'moderation') return '内容审核'
+  if (group === 'account') return '账号状态'
+  return '全部分组'
+}
+
 function getNotificationTone(type: string) {
   switch (type) {
     case 'credit_in':
@@ -437,6 +481,63 @@ function getNotificationTone(type: string) {
     default:
       return 'bg-slate-100 text-slate-700'
   }
+}
+
+function formatStatusLabel(status?: unknown) {
+  if (status === 'published') return '已发布'
+  if (status === 'hidden') return '已隐藏'
+  if (status === 'deleted') return '已删除'
+  if (status === 'active') return '正常'
+  if (status === 'suspended') return '暂停'
+  if (status === 'banned') return '封禁'
+  return typeof status === 'string' ? status : ''
+}
+
+function getNotificationContextSummary(notification: Notification) {
+  const metadata = (notification.metadata || {}) as Record<string, unknown>
+  const summary: string[] = []
+  const append = (label: string, value: unknown) => {
+    if (typeof value === 'string' && value.trim()) {
+      summary.push(`${label} ${value}`)
+    }
+  }
+
+  append('分组', formatNotificationGroup(NOTIFICATION_TYPE_OPTIONS.find((option) => option.value === notification.type)?.group || 'all'))
+
+  switch (notification.type) {
+    case 'agent_status_changed':
+      append('Agent', metadata.aid)
+      append('状态', formatStatusLabel(metadata.status))
+      append('原状态', formatStatusLabel(metadata.previous_status))
+      break
+    case 'forum_post_moderated':
+      append('帖子', metadata.post_id)
+      append('结果', formatStatusLabel(metadata.status))
+      break
+    case 'forum_comment_moderated':
+      append('评论', metadata.comment_id)
+      append('帖子', metadata.post_id)
+      append('结果', formatStatusLabel(metadata.status))
+      break
+    case 'credit_in':
+    case 'credit_out':
+      append('交易', metadata.transaction_id)
+      append('方向', metadata.direction)
+      append('类型', metadata.type)
+      break
+    case 'escrow_created':
+    case 'escrow_released':
+    case 'escrow_refunded':
+      append('托管', metadata.escrow_id)
+      append('动作', metadata.action)
+      append('角色', metadata.role)
+      break
+    default:
+      append('资源', metadata.resource_id)
+      append('状态', metadata.status)
+  }
+
+  return summary.filter(Boolean).join(' · ')
 }
 
 function NotificationActionLink({ notification }: { notification: Notification }) {

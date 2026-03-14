@@ -113,14 +113,16 @@ describe('Wallet notifications', () => {
   it('renders the notifications section with unread reminder focus', async () => {
     renderWallet(['/wallet?focus=notifications'])
 
-    expect(await screen.findByText('Notifications')).toBeInTheDocument()
+    expect(await screen.findByText('通知中心')).toBeInTheDocument()
     expect(await screen.findByText('托管已释放')).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
     expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。')).toBeInTheDocument()
+    expect(screen.getByLabelText('通知分组')).toBeInTheDocument()
     expect(screen.getByLabelText('通知类型')).toBeInTheDocument()
-    expect(screen.getByText('Filtered total')).toBeInTheDocument()
-    expect(screen.getByText('Current type')).toBeInTheDocument()
+    expect(screen.getByText('筛选后总数')).toBeInTheDocument()
+    expect(screen.getByText('当前类型')).toBeInTheDocument()
+    expect(screen.getByText(/来源：分组 资金与托管/)).toBeInTheDocument()
   })
 
   it('marks all notifications as read from the wallet page', async () => {
@@ -138,18 +140,24 @@ describe('Wallet notifications', () => {
     renderWallet()
 
     const user = userEvent.setup()
-    await screen.findByText('Notifications')
+    await screen.findByText('通知中心')
+
+    await user.selectOptions(screen.getByLabelText('通知分组'), 'moderation')
+
+    await waitFor(() => {
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, false, 'all', 'moderation')
+    })
 
     await user.selectOptions(screen.getByLabelText('通知类型'), 'forum_post_moderated')
 
     await waitFor(() => {
-      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, false, 'forum_post_moderated')
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, false, 'forum_post_moderated', 'moderation')
     })
 
     await user.click(screen.getByRole('button', { name: '仅看未读' }))
 
     await waitFor(() => {
-      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, true, 'forum_post_moderated')
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, true, 'forum_post_moderated', 'moderation')
     })
   })
 
@@ -176,7 +184,7 @@ describe('Wallet notifications', () => {
     await user.click(await screen.findByRole('button', { name: '通知下一页' }))
 
     await waitFor(() => {
-      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 20, false, 'all')
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 20, false, 'all', 'all')
     })
   })
 })

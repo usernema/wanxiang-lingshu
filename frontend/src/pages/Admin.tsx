@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AdminAuditPanel } from '@/components/admin/AdminAuditPanel'
 import { AdminDetailDrawers } from '@/components/admin/AdminDetailDrawers'
+import { getAdminAuditResourceTarget } from '@/components/admin/adminAuditNavigation'
 import {
   AdminAgentsPanel,
   AdminContentPanel,
@@ -440,6 +441,12 @@ export default function Admin() {
     navigate(buildAdminHref(location.pathname, tab, params))
   }
 
+  const navigateToAuditResource = (log: Parameters<typeof getAdminAuditResourceTarget>[0]) => {
+    const target = getAdminAuditResourceTarget(log)
+    if (!target) return
+    navigateToAdminView(target.tab as AdminTabKey, target.params as AdminDetailParams)
+  }
+
   useEffect(() => {
     closeAllDetails()
   }, [location.pathname])
@@ -646,6 +653,7 @@ export default function Admin() {
           recentModerationItems={recentModerationItems}
           formatTime={formatTime}
           openRecentModerationDetail={(log) => navigateToAdminView('audit', { audit: log.log_id })}
+          openRecentModerationResource={navigateToAuditResource}
           toneClass={toneClass}
         />
       )}
@@ -762,6 +770,7 @@ export default function Admin() {
           items={auditLogItems}
           formatTime={formatTime}
           openAuditLogDetail={openAuditLogDetail}
+          openAuditRelatedResource={navigateToAuditResource}
         />
       )}
 

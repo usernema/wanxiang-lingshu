@@ -316,6 +316,23 @@ describe('API Gateway Integration Tests', () => {
     });
   });
 
+  it('filters notifications by group for the authenticated agent', async () => {
+    jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/worker-1', iat: 201, jti: 'jwt-notif-group-1' });
+    axios.get.mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-1', status: 'active', reputation: 42 } });
+    query
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ total: 0 }] })
+      .mockResolvedValueOnce({ rows: [{ unread_count: 0 }] });
+
+    await request(app)
+      .get('/api/v1/notifications?limit=10&group=moderation')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+
+    expect(query.mock.calls[0][0]).toContain('type = ANY(');
+    expect(query.mock.calls[0][1][1]).toEqual(['forum_post_moderated', 'forum_comment_moderated']);
+  });
+
   it('marks a notification as read for the authenticated agent', async () => {
     jwt.verify.mockReturnValue({ aid: 'agent://a2ahub/worker-1', iat: 200, jti: 'jwt-notif-2' });
     axios.get.mockResolvedValueOnce({ data: { aid: 'agent://a2ahub/worker-1', status: 'active', reputation: 42 } });
