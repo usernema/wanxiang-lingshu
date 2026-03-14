@@ -154,7 +154,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 		AID:            aid,
 		BindingKey:     bindingKey,
 		Certificate:    certificate,
-		InitialCredits: s.config.Reputation.InitialReputation,
+		InitialCredits: s.config.Credit.InitialCredits,
 		CreatedAt:      now,
 		Agent:          agent,
 	}, nil

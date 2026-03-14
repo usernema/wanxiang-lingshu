@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
@@ -384,10 +384,21 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
+  const marketplaceSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const requestedTab = marketplaceSearchParams.get('tab')
+  const focusedSkillId = marketplaceSearchParams.get('skill_id')
+  const focusedSkillSource = marketplaceSearchParams.get('source')
 
   useEffect(() => {
     setActiveRole(role)
   }, [role])
+
+  useEffect(() => {
+    if (requestedTab === 'tasks' || requestedTab === 'skills') {
+      setMarketTab(requestedTab)
+    }
+  }, [requestedTab])
 
   const currentSession = getSession('default')
   const employerSession = currentSession
@@ -426,6 +437,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const selectedTask = useMemo(
     () => tasksQuery.data?.find((task) => task.task_id === selectedTaskId) ?? null,
     [tasksQuery.data, selectedTaskId],
+  )
+  const focusedSkill = useMemo(
+    () => skillsQuery.data?.find((skill) => skill.skill_id === focusedSkillId) ?? null,
+    [skillsQuery.data, focusedSkillId],
   )
 
   useEffect(() => {
@@ -791,6 +806,22 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         </button>
       </div>
 
+      {marketTab === 'skills' && focusedSkillId && (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${
+          focusedSkill
+            ? 'border-primary-200 bg-primary-50 text-primary-800'
+            : skillsQuery.isLoading
+              ? 'border-slate-200 bg-slate-50 text-slate-700'
+              : 'border-amber-200 bg-amber-50 text-amber-800'
+        }`}>
+          {skillsQuery.isLoading
+            ? '正在定位指定 Skill...'
+            : focusedSkill
+              ? `${focusedSkillSource === 'gifted-grant' ? '已定位到获赠 Skill' : '已定位到指定 Skill'}：${focusedSkill.name}。你可以在这里继续查看公开 listing、定价和市场反馈。`
+              : '目标 Skill 当前不在公开市场，可能已下架、未发布或尚未同步。'}
+        </div>
+      )}
+
       {marketTab === 'tasks' ? (
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr]">
           <div className="space-y-4">
@@ -1042,9 +1073,24 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               {skillsQuery.isError && <PageStateCard message="技能加载失败，请检查 marketplace 服务。" tone="error" compact />}
               {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && <PageStateCard message="当前暂无技能。" compact />}
               {skillsQuery.data?.map((skill) => (
-                <div key={skill.skill_id} className="rounded-2xl bg-white p-6 shadow-sm">
+                <div
+                  key={skill.skill_id}
+                  id={`skill-${skill.skill_id}`}
+                  className={`rounded-2xl p-6 shadow-sm ${
+                    skill.skill_id === focusedSkillId
+                      ? 'border border-primary-300 bg-primary-50'
+                      : 'bg-white'
+                  }`}
+                >
                   <div className="mb-2 flex items-start justify-between gap-3">
-                    <h2 className="text-lg font-semibold">{skill.name}</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold">{skill.name}</h2>
+                      {skill.skill_id === focusedSkillId && (
+                        <span className="rounded-full bg-primary-100 px-2 py-1 text-xs text-primary-700">
+                          {focusedSkillSource === 'gifted-grant' ? '获赠来源' : '当前定位'}
+                        </span>
+                      )}
+                    </div>
                     <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">{skill.category || 'general'}</span>
                   </div>
                   <p className="mb-4 text-sm text-gray-600">{skill.description || '暂无描述'}</p>

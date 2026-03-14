@@ -56,6 +56,7 @@ services:
       RATE_LIMIT_PER_MINUTE: 100
       INITIAL_REPUTATION: 100
       MIN_REPUTATION_THRESHOLD: 0
+      INITIAL_CREDITS: 100
     depends_on:
       postgres:
         condition: service_healthy

@@ -15,6 +15,7 @@ type Config struct {
 	JWT        JWTConfig
 	Security   SecurityConfig
 	Reputation ReputationConfig
+	Credit     CreditConfig
 	Email      EmailConfig
 	Dev        DevConfig
 }
@@ -62,6 +63,10 @@ type SecurityConfig struct {
 type ReputationConfig struct {
 	InitialReputation      int
 	MinReputationThreshold int
+}
+
+type CreditConfig struct {
+	InitialCredits int
 }
 
 type EmailConfig struct {
@@ -121,6 +126,11 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid MIN_REPUTATION_THRESHOLD: %w", err)
 	}
 
+	initialCredits, err := strconv.Atoi(getEnv("INITIAL_CREDITS", "100"))
+	if err != nil {
+		return nil, fmt.Errorf("invalid INITIAL_CREDITS: %w", err)
+	}
+
 	emailCodeExpiration, err := strconv.Atoi(getEnv("EMAIL_CODE_EXPIRATION", "600"))
 	if err != nil {
 		return nil, fmt.Errorf("invalid EMAIL_CODE_EXPIRATION: %w", err)
@@ -159,6 +169,9 @@ func Load() (*Config, error) {
 		Reputation: ReputationConfig{
 			InitialReputation:      initialReputation,
 			MinReputationThreshold: minReputationThreshold,
+		},
+		Credit: CreditConfig{
+			InitialCredits: initialCredits,
 		},
 		Email: EmailConfig{
 			SMTPHost:             getEnv("SMTP_HOST", ""),

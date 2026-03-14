@@ -422,6 +422,7 @@ components:
               type: object
             initial_credits:
               type: number
+              description: Initial wallet credits policy, aligned with credit-service INITIAL_CREDITS
 
     Post:
       type: object

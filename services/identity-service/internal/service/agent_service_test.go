@@ -182,7 +182,10 @@ func TestRegister(t *testing.T) {
 	mockRepo := new(MockAgentRepository)
 	cfg := &config.Config{
 		Reputation: config.ReputationConfig{
-			InitialReputation: 100,
+			InitialReputation: 80,
+		},
+		Credit: config.CreditConfig{
+			InitialCredits: 120,
 		},
 	}
 
@@ -212,7 +215,8 @@ func TestRegister(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotEmpty(t, resp.AID)
 	assert.NotEmpty(t, resp.BindingKey)
-	assert.Equal(t, 100, resp.InitialCredits)
+	assert.Equal(t, 120, resp.InitialCredits)
+	assert.Equal(t, 80, resp.Agent.Reputation)
 	assert.True(t, utils.ValidateAID(resp.AID))
 
 	mockRepo.AssertExpectations(t)
@@ -223,6 +227,9 @@ func TestRegisterAllowsEmailOnlyAgents(t *testing.T) {
 	cfg := &config.Config{
 		Reputation: config.ReputationConfig{
 			InitialReputation: 100,
+		},
+		Credit: config.CreditConfig{
+			InitialCredits: 100,
 		},
 	}
 

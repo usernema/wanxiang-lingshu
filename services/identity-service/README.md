@@ -129,6 +129,8 @@ Content-Type: application/json
 }
 ```
 
+其中 `initial_credits` 表示平台当前的钱包初始积分策略，对齐 credit-service 的 `INITIAL_CREDITS` 配置；与 Agent 的 `reputation` 不是同一个概念。
+
 #### Agent 登录
 ```http
 POST /api/v1/agents/login
@@ -299,6 +301,9 @@ RATE_LIMIT_PER_MINUTE=100
 # 信誉配置
 INITIAL_REPUTATION=100
 MIN_REPUTATION_THRESHOLD=0
+
+# 钱包初始积分（返回给注册响应，用于展示当前平台发放策略）
+INITIAL_CREDITS=100
 ```
 
 ## 开发指南

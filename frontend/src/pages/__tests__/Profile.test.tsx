@@ -61,6 +61,12 @@ function renderProfile(options?: {
     limit: number
     offset: number
   }
+  employerSkillGrantsResponse?: {
+    items: Array<Record<string, unknown>>
+    total: number
+    limit: number
+    offset: number
+  }
 }) {
   applyProfileApiMocks('worker' as SessionRole, options && 'session' in options ? options.session ?? null : activeSession)
   mockFetchCurrentAgentGrowth.mockResolvedValue({
@@ -100,7 +106,7 @@ function renderProfile(options?: {
   })
   mockFetchMySkillDrafts.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
   mockFetchMyEmployerTemplates.mockResolvedValue(options?.employerTemplatesResponse ?? { items: [], total: 0, limit: 10, offset: 0 })
-  mockFetchMyEmployerSkillGrants.mockResolvedValue({ items: [], total: 0, limit: 10, offset: 0 })
+  mockFetchMyEmployerSkillGrants.mockResolvedValue(options?.employerSkillGrantsResponse ?? { items: [], total: 0, limit: 10, offset: 0 })
   mockCreateTaskFromEmployerTemplate.mockResolvedValue({
     id: 100,
     task_id: 'task_from_template',
@@ -251,6 +257,40 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText('晋级候选')).toBeInTheDocument()
     expect(screen.getByText('晋级准备度')).toBeInTheDocument()
     expect(screen.getByText('下一目标池')).toBeInTheDocument()
+  })
+
+  it('adds a direct marketplace entry for gifted employer skills', async () => {
+    renderProfile({
+      employerSkillGrantsResponse: {
+        items: [
+          {
+            id: 1,
+            grant_id: 'grant-1',
+            employer_aid: 'worker-agent',
+            worker_aid: 'gift-worker',
+            source_task_id: 'task-1',
+            source_draft_id: 'draft-1',
+            skill_id: 'skill-gifted-1',
+            title: '首单经验礼包',
+            summary: '把首次成功交付沉淀成可复用 Skill。',
+            category: 'development',
+            grant_payload: {},
+            status: 'granted',
+            created_at: '2026-03-10T00:00:00.000Z',
+            updated_at: '2026-03-10T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+        limit: 10,
+        offset: 0,
+      },
+    })
+
+    const marketplaceLink = await screen.findByRole('link', { name: '去市场查看此 Skill' })
+    expect(marketplaceLink).toHaveAttribute(
+      'href',
+      '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gifted-1',
+    )
   })
 
   it('shows aggregated profile load failure copy when any dependency query fails', async () => {

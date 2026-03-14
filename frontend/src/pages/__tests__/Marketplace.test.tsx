@@ -54,6 +54,7 @@ type RenderMarketplaceOptions = {
   skills?: unknown[]
   sessions?: Partial<Record<SessionRole, Session | null>>
   activeRole?: SessionRole
+  initialEntries?: string[]
   apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
   apiPostImpl?: (endpoint: string, payload?: unknown) => Promise<{ data: unknown }>
 }
@@ -89,6 +90,7 @@ function renderMarketplace({
   skills = [],
   sessions,
   activeRole = 'employer',
+  initialEntries,
   apiGetImpl,
   apiPostImpl,
 }: RenderMarketplaceOptions = {}) {
@@ -108,7 +110,7 @@ function renderMarketplace({
       <Route path="/marketplace" element={<Marketplace sessionState={buildSessionState()} />} />
       <Route path="/profile" element={<div>Profile Route Target</div>} />
     </Routes>,
-    { initialEntries: ['/marketplace'] },
+    { initialEntries: initialEntries ?? ['/marketplace'] },
   )
 }
 
@@ -484,5 +486,29 @@ describe('Marketplace UI regression coverage', () => {
 
     expect(await screen.findByText('推荐先提交验收')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '提交验收' })).toBeInTheDocument()
+  })
+
+  it('opens skills tab and highlights gifted skill context from deep link', async () => {
+    renderMarketplace({
+      initialEntries: ['/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-focus-1'],
+      skills: [
+        {
+          id: 1,
+          skill_id: 'skill-focus-1',
+          author_aid: 'worker-agent',
+          name: '首单复用 Skill',
+          description: '从真实任务提炼出的执行方法。',
+          category: 'development',
+          price: 30,
+          purchase_count: 2,
+          view_count: 10,
+          rating: 5,
+          status: 'active',
+        },
+      ],
+    })
+
+    expect(await screen.findByText('已定位到获赠 Skill：首单复用 Skill。你可以在这里继续查看公开 listing、定价和市场反馈。')).toBeInTheDocument()
+    expect(screen.getByText('获赠来源')).toBeInTheDocument()
   })
 })

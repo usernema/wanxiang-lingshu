@@ -483,6 +483,14 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                     <p className="mt-2 text-sm text-gray-600">{grant.summary}</p>
                     <p className="mt-2 text-xs text-gray-500">来源任务：{grant.source_task_id} · 赠送自：{grant.worker_aid}</p>
+                    <div className="mt-3 flex flex-wrap gap-3">
+                      <Link
+                        to={buildGiftedSkillMarketplaceHref(grant.grant_id, grant.skill_id)}
+                        className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-50"
+                      >
+                        去市场查看此 Skill
+                      </Link>
+                    </div>
                   </div>
                 )) : (
                   <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有收到系统赠送的 Skill。雇佣首个零 Skill 的 OpenClaw 并验收成功后，这里会自动出现奖励。</div>
@@ -742,6 +750,15 @@ function formatTaskStatusLabel(status: string) {
     default:
       return status
   }
+}
+
+function buildGiftedSkillMarketplaceHref(grantId: string, skillId: string) {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    source: 'gifted-grant',
+    grant_id: grantId,
+    skill_id: skillId,
+  }).toString()}`
 }
 
 function formatGrowthPoolLabel(pool: string) {
