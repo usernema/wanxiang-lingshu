@@ -68,6 +68,12 @@ func scanGrowthProfile(scanner growthScannable) (*models.AgentGrowthProfile, err
 		&profile.PublishedDraftCount,
 		&profile.EmployerTemplateCount,
 		&profile.TemplateReuseCount,
+		&profile.ExperienceCardCount,
+		&profile.CrossEmployerValidatedCount,
+		&profile.ActiveRiskMemoryCount,
+		&profile.HighRiskMemoryCount,
+		&profile.GrowthScore,
+		&profile.RiskScore,
 		&profile.PromotionReadinessScore,
 		&profile.RecommendedNextPool,
 		&profile.PromotionCandidate,
@@ -118,11 +124,13 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 			recommended_task_scope, auto_growth_eligible, completed_task_count,
 			active_skill_count, total_task_count, incubating_draft_count,
 			validated_draft_count, published_draft_count, employer_template_count,
-			template_reuse_count, promotion_readiness_score, recommended_next_pool,
+			template_reuse_count, experience_card_count, cross_employer_validated_count,
+			active_risk_memory_count, high_risk_memory_count, growth_score, risk_score,
+			promotion_readiness_score, recommended_next_pool,
 			promotion_candidate, suggested_actions, risk_flags, evaluation_summary,
 			last_evaluated_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19::jsonb, $20::jsonb, $21, $22, $23, $24)
+		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb, $26::jsonb, $27, $28, $29, $30)
 		ON CONFLICT (aid) DO UPDATE SET
 			owner_email = EXCLUDED.owner_email,
 			primary_domain = EXCLUDED.primary_domain,
@@ -138,6 +146,12 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 			published_draft_count = EXCLUDED.published_draft_count,
 			employer_template_count = EXCLUDED.employer_template_count,
 			template_reuse_count = EXCLUDED.template_reuse_count,
+			experience_card_count = EXCLUDED.experience_card_count,
+			cross_employer_validated_count = EXCLUDED.cross_employer_validated_count,
+			active_risk_memory_count = EXCLUDED.active_risk_memory_count,
+			high_risk_memory_count = EXCLUDED.high_risk_memory_count,
+			growth_score = EXCLUDED.growth_score,
+			risk_score = EXCLUDED.risk_score,
 			promotion_readiness_score = EXCLUDED.promotion_readiness_score,
 			recommended_next_pool = EXCLUDED.recommended_next_pool,
 			promotion_candidate = EXCLUDED.promotion_candidate,
@@ -164,6 +178,12 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 		profile.PublishedDraftCount,
 		profile.EmployerTemplateCount,
 		profile.TemplateReuseCount,
+		profile.ExperienceCardCount,
+		profile.CrossEmployerValidatedCount,
+		profile.ActiveRiskMemoryCount,
+		profile.HighRiskMemoryCount,
+		profile.GrowthScore,
+		profile.RiskScore,
 		profile.PromotionReadinessScore,
 		profile.RecommendedNextPool,
 		profile.PromotionCandidate,
@@ -284,6 +304,12 @@ func (r *growthRepository) GetProfile(ctx context.Context, aid string) (*models.
 			p.published_draft_count,
 			p.employer_template_count,
 			p.template_reuse_count,
+			p.experience_card_count,
+			p.cross_employer_validated_count,
+			p.active_risk_memory_count,
+			p.high_risk_memory_count,
+			p.growth_score,
+			p.risk_score,
 			p.promotion_readiness_score,
 			p.recommended_next_pool,
 			p.promotion_candidate,
@@ -363,6 +389,12 @@ func (r *growthRepository) ListProfiles(ctx context.Context, limit, offset int, 
 			p.published_draft_count,
 			p.employer_template_count,
 			p.template_reuse_count,
+			p.experience_card_count,
+			p.cross_employer_validated_count,
+			p.active_risk_memory_count,
+			p.high_risk_memory_count,
+			p.growth_score,
+			p.risk_score,
 			p.promotion_readiness_score,
 			p.recommended_next_pool,
 			p.promotion_candidate,
@@ -478,16 +510,36 @@ func (r *growthRepository) GetStats(ctx context.Context, aid string) (*models.Ag
 	if err != nil {
 		return nil, fmt.Errorf("failed to count template reuse: %w", err)
 	}
+	experienceCardCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM agent_experience_cards WHERE aid = $1`, aid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count experience cards: %w", err)
+	}
+	crossEmployerValidatedCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM agent_experience_cards WHERE aid = $1 AND is_cross_employer_validated = true`, aid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count cross-employer validated cards: %w", err)
+	}
+	activeRiskMemoryCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM agent_risk_memories WHERE aid = $1 AND status IN ('active', 'cooldown')`, aid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count active risk memories: %w", err)
+	}
+	highRiskMemoryCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM agent_risk_memories WHERE aid = $1 AND status IN ('active', 'cooldown') AND severity = 'high'`, aid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count high risk memories: %w", err)
+	}
 
 	return &models.AgentGrowthStats{
-		CompletedTaskCount:    completedTaskCount,
-		ActiveSkillCount:      activeSkillCount,
-		TotalTaskCount:        totalTaskCount,
-		IncubatingDraftCount:  incubatingDraftCount,
-		ValidatedDraftCount:   validatedDraftCount,
-		PublishedDraftCount:   publishedDraftCount,
-		EmployerTemplateCount: employerTemplateCount,
-		TemplateReuseCount:    templateReuseCount,
+		CompletedTaskCount:          completedTaskCount,
+		ActiveSkillCount:            activeSkillCount,
+		TotalTaskCount:              totalTaskCount,
+		IncubatingDraftCount:        incubatingDraftCount,
+		ValidatedDraftCount:         validatedDraftCount,
+		PublishedDraftCount:         publishedDraftCount,
+		EmployerTemplateCount:       employerTemplateCount,
+		TemplateReuseCount:          templateReuseCount,
+		ExperienceCardCount:         experienceCardCount,
+		CrossEmployerValidatedCount: crossEmployerValidatedCount,
+		ActiveRiskMemoryCount:       activeRiskMemoryCount,
+		HighRiskMemoryCount:         highRiskMemoryCount,
 	}, nil
 }
 

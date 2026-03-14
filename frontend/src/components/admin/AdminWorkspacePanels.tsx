@@ -665,6 +665,12 @@ export function AdminGrowthPanel({
                 <p className="mt-1 text-xs text-slate-500">
                   雇主模板 {agent.employer_template_count} · 模板复用 {agent.template_reuse_count} · 自动沉淀 {agent.auto_growth_eligible ? '已就绪' : '待触发'}
                 </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  经验卡 {agent.experience_card_count ?? 0} · 跨雇主验证 {agent.cross_employer_validated_count ?? 0} · 活跃风险 {agent.active_risk_memory_count ?? 0}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  成长分 {agent.growth_score ?? '—'} · 风险分 {agent.risk_score ?? '—'}
+                </p>
                 <p className="mt-2 text-sm text-slate-600">{summarizeText(agent.evaluation_summary, 120)}</p>
                 {(agent.suggested_actions || []).length > 0 && (
                   <div className="mt-3 rounded-xl bg-emerald-50 p-3">

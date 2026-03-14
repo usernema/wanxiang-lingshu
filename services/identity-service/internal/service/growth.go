@@ -183,14 +183,29 @@ func selectPrimaryGrowthDomain(agent *models.Agent, scores models.DomainScores) 
 }
 
 func deriveGrowthMaturityPool(agent *models.Agent, stats *models.AgentGrowthStats) string {
-	if (stats.CompletedTaskCount >= 5 && stats.ActiveSkillCount >= 3 && agent.Reputation >= 120) ||
-		(stats.CompletedTaskCount >= 4 && stats.ActiveSkillCount >= 2 && stats.PublishedDraftCount > 0 && stats.TemplateReuseCount > 0) {
+	if (stats.CompletedTaskCount >= 5 &&
+		stats.ActiveSkillCount >= 2 &&
+		stats.CrossEmployerValidatedCount >= 2 &&
+		stats.HighRiskMemoryCount == 0 &&
+		agent.Reputation >= 120) ||
+		(stats.CompletedTaskCount >= 4 &&
+			stats.ActiveSkillCount >= 2 &&
+			stats.PublishedDraftCount > 0 &&
+			stats.TemplateReuseCount > 0 &&
+			stats.ExperienceCardCount >= 3 &&
+			stats.ActiveRiskMemoryCount == 0) {
 		return "preferred"
 	}
-	if stats.CompletedTaskCount >= 2 || stats.ActiveSkillCount >= 1 || stats.ValidatedDraftCount > 0 || stats.PublishedDraftCount > 0 || stats.EmployerTemplateCount > 0 {
+	if stats.CompletedTaskCount >= 2 ||
+		stats.ActiveSkillCount >= 1 ||
+		stats.ValidatedDraftCount > 0 ||
+		stats.PublishedDraftCount > 0 ||
+		stats.EmployerTemplateCount > 0 ||
+		stats.ExperienceCardCount >= 2 ||
+		stats.CrossEmployerValidatedCount > 0 {
 		return "standard"
 	}
-	if stats.CompletedTaskCount >= 1 || stats.IncubatingDraftCount > 0 {
+	if stats.CompletedTaskCount >= 1 || stats.IncubatingDraftCount > 0 || stats.ExperienceCardCount > 0 {
 		return "observed"
 	}
 	return "cold_start"
@@ -267,12 +282,24 @@ func deriveRiskFlags(agent *models.Agent, stats *models.AgentGrowthStats) models
 	if agent.OwnerEmail == "" {
 		flags = append(flags, "unbound_owner_email")
 	}
+	if stats.ExperienceCardCount == 0 && stats.CompletedTaskCount > 0 {
+		flags = append(flags, "missing_experience_cards")
+	}
+	if stats.CrossEmployerValidatedCount == 0 && stats.CompletedTaskCount >= 2 {
+		flags = append(flags, "missing_cross_employer_validation")
+	}
+	if stats.ActiveRiskMemoryCount > 0 {
+		flags = append(flags, "active_risk_memories")
+	}
+	if stats.HighRiskMemoryCount > 0 {
+		flags = append(flags, "high_risk_history")
+	}
 	return flags
 }
 
 func hasBlockingGrowthFlag(flags models.StringList) bool {
 	for _, flag := range flags {
-		if flag == "status_not_active" || flag == "unbound_owner_email" {
+		if flag == "status_not_active" || flag == "unbound_owner_email" || flag == "high_risk_history" {
 			return true
 		}
 	}
@@ -289,39 +316,16 @@ func clampGrowthScore(score int) int {
 	return score
 }
 
-func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool string, riskFlags models.StringList) int {
-	score := 12
+func calculateGrowthScore(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool string) int {
+	score := 10
 
 	switch maturityPool {
 	case "observed":
-		score += 18
+		score += 16
 	case "standard":
-		score += 38
+		score += 34
 	case "preferred":
-		score += 58
-	}
-
-	if strings.TrimSpace(agent.OwnerEmail) != "" {
-		score += 10
-	}
-	if agent.OwnerEmailVerified != nil {
-		score += 6
-	}
-	if strings.TrimSpace(agent.Headline) != "" {
-		score += 6
-	}
-	if strings.TrimSpace(agent.Bio) != "" {
-		score += 8
-	}
-
-	capabilityCount := countNonEmptyCapabilities(agent.Capabilities)
-	switch {
-	case capabilityCount >= 5:
-		score += 14
-	case capabilityCount >= 3:
-		score += 10
-	case capabilityCount > 0:
-		score += 5
+		score += 52
 	}
 
 	switch {
@@ -334,8 +338,24 @@ func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGr
 	}
 
 	switch {
+	case stats.ExperienceCardCount >= 5:
+		score += 18
+	case stats.ExperienceCardCount >= 2:
+		score += 10
+	case stats.ExperienceCardCount >= 1:
+		score += 6
+	}
+
+	switch {
+	case stats.CrossEmployerValidatedCount >= 3:
+		score += 18
+	case stats.CrossEmployerValidatedCount >= 1:
+		score += 10
+	}
+
+	switch {
 	case stats.ActiveSkillCount >= 3:
-		score += 14
+		score += 12
 	case stats.ActiveSkillCount >= 1:
 		score += 8
 	}
@@ -355,6 +375,75 @@ func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGr
 	if stats.TemplateReuseCount > 0 {
 		score += 8
 	}
+	return clampGrowthScore(score)
+}
+
+func calculateRiskScore(agent *models.Agent, stats *models.AgentGrowthStats, riskFlags models.StringList) int {
+	score := 0
+
+	if stats.ActiveRiskMemoryCount > 0 {
+		score += minInt(45, stats.ActiveRiskMemoryCount*16)
+	}
+	if stats.HighRiskMemoryCount > 0 {
+		score += minInt(55, stats.HighRiskMemoryCount*22)
+	}
+
+	for _, flag := range riskFlags {
+		switch flag {
+		case "status_not_active":
+			score += 26
+		case "unbound_owner_email":
+			score += 16
+		case "missing_capabilities":
+			score += 10
+		case "resume_incomplete":
+			score += 8
+		case "missing_cross_employer_validation":
+			score += 8
+		case "missing_experience_cards":
+			score += 6
+		case "active_risk_memories":
+			score += 8
+		case "high_risk_history":
+			score += 18
+		}
+	}
+
+	return clampGrowthScore(score)
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool string, riskFlags models.StringList, growthScore, riskScore int) int {
+	score := growthScore
+
+	if strings.TrimSpace(agent.OwnerEmail) != "" {
+		score += 10
+	}
+	if agent.OwnerEmailVerified != nil {
+		score += 6
+	}
+	if strings.TrimSpace(agent.Headline) != "" {
+		score += 6
+	}
+	if strings.TrimSpace(agent.Bio) != "" {
+		score += 8
+	}
+
+	capabilityCount := countNonEmptyCapabilities(agent.Capabilities)
+	switch {
+	case capabilityCount >= 5:
+		score += 12
+	case capabilityCount >= 3:
+		score += 8
+	case capabilityCount > 0:
+		score += 4
+	}
 
 	switch {
 	case agent.Reputation >= 140:
@@ -365,22 +454,7 @@ func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGr
 		score += 3
 	}
 
-	for _, flag := range riskFlags {
-		switch flag {
-		case "status_not_active":
-			score -= 20
-		case "unbound_owner_email":
-			score -= 12
-		case "missing_capabilities":
-			score -= 10
-		case "resume_incomplete":
-			score -= 8
-		case "no_completed_tasks":
-			score -= 8
-		case "no_active_skills":
-			score -= 5
-		}
-	}
+	score -= riskScore / 2
 
 	return clampGrowthScore(score)
 }
@@ -394,11 +468,14 @@ func derivePromotionCandidate(agent *models.Agent, stats *models.AgentGrowthStat
 	case "observed":
 		return readinessScore >= 60 &&
 			stats.CompletedTaskCount >= 1 &&
-			(stats.ValidatedDraftCount > 0 || stats.PublishedDraftCount > 0 || countNonEmptyCapabilities(agent.Capabilities) >= 3)
+			(stats.ExperienceCardCount > 0 || stats.ValidatedDraftCount > 0 || stats.PublishedDraftCount > 0 || countNonEmptyCapabilities(agent.Capabilities) >= 3) &&
+			stats.ActiveRiskMemoryCount <= 1
 	case "standard":
 		return readinessScore >= 82 &&
 			stats.CompletedTaskCount >= 4 &&
 			stats.ActiveSkillCount >= 2 &&
+			stats.CrossEmployerValidatedCount >= 1 &&
+			stats.ActiveRiskMemoryCount == 0 &&
 			(stats.PublishedDraftCount > 0 || stats.TemplateReuseCount > 0 || agent.Reputation >= 120)
 	default:
 		return false
@@ -438,9 +515,15 @@ func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthS
 	if stats.CompletedTaskCount == 0 {
 		actions = append(actions, "先完成 1 个低风险真实任务，拿到第一条可验证交付记录。")
 	}
+	if stats.CompletedTaskCount > 0 && stats.ExperienceCardCount == 0 {
+		actions = append(actions, "确保成功任务沉淀为 Experience Card，不要让真实交付记录停留在日志里。")
+	}
 
 	if maturityPool == "observed" && stats.ValidatedDraftCount+stats.PublishedDraftCount == 0 {
 		actions = append(actions, "把首个成功任务沉淀成已审核 Skill 草稿，准备进入标准池。")
+	}
+	if maturityPool == "standard" && stats.CrossEmployerValidatedCount == 0 {
+		actions = append(actions, "再完成 1 次跨雇主的同类成功交付，拿到跨雇主验证证据。")
 	}
 
 	if stats.CompletedTaskCount > 0 && stats.PublishedDraftCount == 0 {
@@ -462,6 +545,9 @@ func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthS
 	if strings.EqualFold(agent.Provider, "openclaw") && stats.CompletedTaskCount > 0 && stats.ActiveSkillCount == 0 {
 		actions = append(actions, "完成首单后及时确认经验沉淀，让系统自动生成 Skill 并赠送给雇主，形成留存闭环。")
 	}
+	if stats.ActiveRiskMemoryCount > 0 {
+		actions = append(actions, "优先清理最近的返工/取消风险记录，避免影响晋级与曝光。")
+	}
 
 	if promotionCandidate {
 		actions = append(actions, fmt.Sprintf("你已经接近晋级到%s池，优先完成一次人工复核或补齐最后一项证据。", growthPoolLabel(nextPool)))
@@ -481,19 +567,30 @@ func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthS
 	return actions
 }
 
-func buildGrowthSummary(agent *models.Agent, primaryDomain, maturityPool, nextPool string, stats *models.AgentGrowthStats, readinessScore int, autoGrowthEligible, promotionCandidate bool) string {
+func buildGrowthSummary(agent *models.Agent, primaryDomain, maturityPool, nextPool string, stats *models.AgentGrowthStats, growthScore, riskScore, readinessScore int, autoGrowthEligible, promotionCandidate bool) string {
 	parts := []string{
 		fmt.Sprintf("%s池成长档案", growthPoolLabel(maturityPool)),
 		fmt.Sprintf("主领域 %s", primaryDomain),
+		fmt.Sprintf("成长分 %d/100", growthScore),
+		fmt.Sprintf("风险分 %d/100", riskScore),
 		fmt.Sprintf("准备度 %d/100", readinessScore),
 		fmt.Sprintf("已完成 %d 个任务", stats.CompletedTaskCount),
 		fmt.Sprintf("活跃 Skill %d 个", stats.ActiveSkillCount),
+	}
+	if stats.ExperienceCardCount > 0 {
+		parts = append(parts, fmt.Sprintf("经验卡 %d 张", stats.ExperienceCardCount))
+	}
+	if stats.CrossEmployerValidatedCount > 0 {
+		parts = append(parts, fmt.Sprintf("跨雇主验证 %d 张", stats.CrossEmployerValidatedCount))
 	}
 	if stats.PublishedDraftCount > 0 {
 		parts = append(parts, fmt.Sprintf("已发布经验 %d 个", stats.PublishedDraftCount))
 	}
 	if stats.TemplateReuseCount > 0 {
 		parts = append(parts, fmt.Sprintf("模板复用 %d 次", stats.TemplateReuseCount))
+	}
+	if stats.ActiveRiskMemoryCount > 0 {
+		parts = append(parts, fmt.Sprintf("活跃风险 %d 条", stats.ActiveRiskMemoryCount))
 	}
 	if promotionCandidate {
 		parts = append(parts, fmt.Sprintf("已达到晋级到%s池的候选条件", growthPoolLabel(nextPool)))
@@ -585,47 +682,55 @@ func (s *agentService) evaluateGrowthProfile(ctx context.Context, aid, triggerTy
 	recommendedNextPool := deriveRecommendedNextPool(maturityPool)
 	recommendedScope := deriveRecommendedTaskScope(maturityPool)
 	riskFlags := deriveRiskFlags(agent, stats)
-	promotionReadinessScore := calculatePromotionReadinessScore(agent, stats, maturityPool, riskFlags)
+	growthScore := calculateGrowthScore(agent, stats, maturityPool)
+	riskScore := calculateRiskScore(agent, stats, riskFlags)
+	promotionReadinessScore := calculatePromotionReadinessScore(agent, stats, maturityPool, riskFlags, growthScore, riskScore)
 	promotionCandidate := derivePromotionCandidate(agent, stats, maturityPool, promotionReadinessScore, riskFlags)
 	suggestedActions := buildSuggestedGrowthActions(agent, stats, maturityPool, recommendedNextPool, promotionCandidate)
 	autoGrowthEligible := strings.EqualFold(agent.Provider, "openclaw") && stats.CompletedTaskCount > 0 && stats.ActiveSkillCount == 0
 	now := time.Now()
 
 	profile := &models.AgentGrowthProfile{
-		AID:                     agent.AID,
-		Model:                   agent.Model,
-		Provider:                agent.Provider,
-		Capabilities:            agent.Capabilities,
-		Reputation:              agent.Reputation,
-		Status:                  agent.Status,
-		MembershipLevel:         agent.MembershipLevel,
-		TrustLevel:              agent.TrustLevel,
-		Headline:                agent.Headline,
-		Bio:                     agent.Bio,
-		AvailabilityStatus:      agent.AvailabilityStatus,
-		OwnerEmail:              agent.OwnerEmail,
-		PrimaryDomain:           primaryDomain,
-		DomainScores:            domainScores,
-		CurrentMaturityPool:     maturityPool,
-		RecommendedTaskScope:    recommendedScope,
-		AutoGrowthEligible:      autoGrowthEligible,
-		CompletedTaskCount:      stats.CompletedTaskCount,
-		ActiveSkillCount:        stats.ActiveSkillCount,
-		TotalTaskCount:          stats.TotalTaskCount,
-		IncubatingDraftCount:    stats.IncubatingDraftCount,
-		ValidatedDraftCount:     stats.ValidatedDraftCount,
-		PublishedDraftCount:     stats.PublishedDraftCount,
-		EmployerTemplateCount:   stats.EmployerTemplateCount,
-		TemplateReuseCount:      stats.TemplateReuseCount,
-		PromotionReadinessScore: promotionReadinessScore,
-		RecommendedNextPool:     recommendedNextPool,
-		PromotionCandidate:      promotionCandidate,
-		SuggestedActions:        suggestedActions,
-		RiskFlags:               riskFlags,
-		EvaluationSummary:       buildGrowthSummary(agent, primaryDomain, maturityPool, recommendedNextPool, stats, promotionReadinessScore, autoGrowthEligible, promotionCandidate),
-		LastEvaluatedAt:         now,
-		CreatedAt:               now,
-		UpdatedAt:               now,
+		AID:                         agent.AID,
+		Model:                       agent.Model,
+		Provider:                    agent.Provider,
+		Capabilities:                agent.Capabilities,
+		Reputation:                  agent.Reputation,
+		Status:                      agent.Status,
+		MembershipLevel:             agent.MembershipLevel,
+		TrustLevel:                  agent.TrustLevel,
+		Headline:                    agent.Headline,
+		Bio:                         agent.Bio,
+		AvailabilityStatus:          agent.AvailabilityStatus,
+		OwnerEmail:                  agent.OwnerEmail,
+		PrimaryDomain:               primaryDomain,
+		DomainScores:                domainScores,
+		CurrentMaturityPool:         maturityPool,
+		RecommendedTaskScope:        recommendedScope,
+		AutoGrowthEligible:          autoGrowthEligible,
+		CompletedTaskCount:          stats.CompletedTaskCount,
+		ActiveSkillCount:            stats.ActiveSkillCount,
+		TotalTaskCount:              stats.TotalTaskCount,
+		IncubatingDraftCount:        stats.IncubatingDraftCount,
+		ValidatedDraftCount:         stats.ValidatedDraftCount,
+		PublishedDraftCount:         stats.PublishedDraftCount,
+		EmployerTemplateCount:       stats.EmployerTemplateCount,
+		TemplateReuseCount:          stats.TemplateReuseCount,
+		ExperienceCardCount:         stats.ExperienceCardCount,
+		CrossEmployerValidatedCount: stats.CrossEmployerValidatedCount,
+		ActiveRiskMemoryCount:       stats.ActiveRiskMemoryCount,
+		HighRiskMemoryCount:         stats.HighRiskMemoryCount,
+		GrowthScore:                 growthScore,
+		RiskScore:                   riskScore,
+		PromotionReadinessScore:     promotionReadinessScore,
+		RecommendedNextPool:         recommendedNextPool,
+		PromotionCandidate:          promotionCandidate,
+		SuggestedActions:            suggestedActions,
+		RiskFlags:                   riskFlags,
+		EvaluationSummary:           buildGrowthSummary(agent, primaryDomain, maturityPool, recommendedNextPool, stats, growthScore, riskScore, promotionReadinessScore, autoGrowthEligible, promotionCandidate),
+		LastEvaluatedAt:             now,
+		CreatedAt:                   now,
+		UpdatedAt:                   now,
 	}
 
 	if err := s.growthRepo.UpsertProfile(ctx, profile); err != nil {

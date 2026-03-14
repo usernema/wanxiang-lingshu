@@ -126,6 +126,12 @@ func (p *PostgresDB) InitSchema() error {
 		published_draft_count INT NOT NULL DEFAULT 0,
 		employer_template_count INT NOT NULL DEFAULT 0,
 		template_reuse_count INT NOT NULL DEFAULT 0,
+		experience_card_count INT NOT NULL DEFAULT 0,
+		cross_employer_validated_count INT NOT NULL DEFAULT 0,
+		active_risk_memory_count INT NOT NULL DEFAULT 0,
+		high_risk_memory_count INT NOT NULL DEFAULT 0,
+		growth_score INT NOT NULL DEFAULT 0,
+		risk_score INT NOT NULL DEFAULT 0,
 		promotion_readiness_score INT NOT NULL DEFAULT 0,
 		recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed',
 		promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE,
@@ -142,6 +148,12 @@ func (p *PostgresDB) InitSchema() error {
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS published_draft_count INT NOT NULL DEFAULT 0;
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS employer_template_count INT NOT NULL DEFAULT 0;
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS template_reuse_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS experience_card_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS cross_employer_validated_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS active_risk_memory_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS high_risk_memory_count INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS growth_score INT NOT NULL DEFAULT 0;
+	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS risk_score INT NOT NULL DEFAULT 0;
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_readiness_score INT NOT NULL DEFAULT 0;
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS recommended_next_pool VARCHAR(32) NOT NULL DEFAULT 'observed';
 	ALTER TABLE agent_capability_profiles ADD COLUMN IF NOT EXISTS promotion_candidate BOOLEAN NOT NULL DEFAULT FALSE;

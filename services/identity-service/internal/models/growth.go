@@ -68,40 +68,46 @@ func (d *DomainScores) Scan(value interface{}) error {
 }
 
 type AgentGrowthProfile struct {
-	AID                     string       `json:"aid" db:"aid"`
-	Model                   string       `json:"model" db:"model"`
-	Provider                string       `json:"provider" db:"provider"`
-	Capabilities            Capabilities `json:"capabilities" db:"capabilities"`
-	Reputation              int          `json:"reputation" db:"reputation"`
-	Status                  string       `json:"status" db:"status"`
-	MembershipLevel         string       `json:"membership_level" db:"membership_level"`
-	TrustLevel              string       `json:"trust_level" db:"trust_level"`
-	Headline                string       `json:"headline,omitempty" db:"headline"`
-	Bio                     string       `json:"bio,omitempty" db:"bio"`
-	AvailabilityStatus      string       `json:"availability_status,omitempty" db:"availability_status"`
-	OwnerEmail              string       `json:"owner_email,omitempty" db:"owner_email"`
-	PrimaryDomain           string       `json:"primary_domain" db:"primary_domain"`
-	DomainScores            DomainScores `json:"domain_scores" db:"domain_scores"`
-	CurrentMaturityPool     string       `json:"current_maturity_pool" db:"current_maturity_pool"`
-	RecommendedTaskScope    string       `json:"recommended_task_scope" db:"recommended_task_scope"`
-	AutoGrowthEligible      bool         `json:"auto_growth_eligible" db:"auto_growth_eligible"`
-	CompletedTaskCount      int          `json:"completed_task_count" db:"completed_task_count"`
-	ActiveSkillCount        int          `json:"active_skill_count" db:"active_skill_count"`
-	TotalTaskCount          int          `json:"total_task_count" db:"total_task_count"`
-	IncubatingDraftCount    int          `json:"incubating_draft_count" db:"incubating_draft_count"`
-	ValidatedDraftCount     int          `json:"validated_draft_count" db:"validated_draft_count"`
-	PublishedDraftCount     int          `json:"published_draft_count" db:"published_draft_count"`
-	EmployerTemplateCount   int          `json:"employer_template_count" db:"employer_template_count"`
-	TemplateReuseCount      int          `json:"template_reuse_count" db:"template_reuse_count"`
-	PromotionReadinessScore int          `json:"promotion_readiness_score" db:"promotion_readiness_score"`
-	RecommendedNextPool     string       `json:"recommended_next_pool" db:"recommended_next_pool"`
-	PromotionCandidate      bool         `json:"promotion_candidate" db:"promotion_candidate"`
-	SuggestedActions        StringList   `json:"suggested_actions" db:"suggested_actions"`
-	RiskFlags               StringList   `json:"risk_flags" db:"risk_flags"`
-	EvaluationSummary       string       `json:"evaluation_summary" db:"evaluation_summary"`
-	LastEvaluatedAt         time.Time    `json:"last_evaluated_at" db:"last_evaluated_at"`
-	CreatedAt               time.Time    `json:"created_at" db:"created_at"`
-	UpdatedAt               time.Time    `json:"updated_at" db:"updated_at"`
+	AID                         string       `json:"aid" db:"aid"`
+	Model                       string       `json:"model" db:"model"`
+	Provider                    string       `json:"provider" db:"provider"`
+	Capabilities                Capabilities `json:"capabilities" db:"capabilities"`
+	Reputation                  int          `json:"reputation" db:"reputation"`
+	Status                      string       `json:"status" db:"status"`
+	MembershipLevel             string       `json:"membership_level" db:"membership_level"`
+	TrustLevel                  string       `json:"trust_level" db:"trust_level"`
+	Headline                    string       `json:"headline,omitempty" db:"headline"`
+	Bio                         string       `json:"bio,omitempty" db:"bio"`
+	AvailabilityStatus          string       `json:"availability_status,omitempty" db:"availability_status"`
+	OwnerEmail                  string       `json:"owner_email,omitempty" db:"owner_email"`
+	PrimaryDomain               string       `json:"primary_domain" db:"primary_domain"`
+	DomainScores                DomainScores `json:"domain_scores" db:"domain_scores"`
+	CurrentMaturityPool         string       `json:"current_maturity_pool" db:"current_maturity_pool"`
+	RecommendedTaskScope        string       `json:"recommended_task_scope" db:"recommended_task_scope"`
+	AutoGrowthEligible          bool         `json:"auto_growth_eligible" db:"auto_growth_eligible"`
+	CompletedTaskCount          int          `json:"completed_task_count" db:"completed_task_count"`
+	ActiveSkillCount            int          `json:"active_skill_count" db:"active_skill_count"`
+	TotalTaskCount              int          `json:"total_task_count" db:"total_task_count"`
+	IncubatingDraftCount        int          `json:"incubating_draft_count" db:"incubating_draft_count"`
+	ValidatedDraftCount         int          `json:"validated_draft_count" db:"validated_draft_count"`
+	PublishedDraftCount         int          `json:"published_draft_count" db:"published_draft_count"`
+	EmployerTemplateCount       int          `json:"employer_template_count" db:"employer_template_count"`
+	TemplateReuseCount          int          `json:"template_reuse_count" db:"template_reuse_count"`
+	ExperienceCardCount         int          `json:"experience_card_count" db:"experience_card_count"`
+	CrossEmployerValidatedCount int          `json:"cross_employer_validated_count" db:"cross_employer_validated_count"`
+	ActiveRiskMemoryCount       int          `json:"active_risk_memory_count" db:"active_risk_memory_count"`
+	HighRiskMemoryCount         int          `json:"high_risk_memory_count" db:"high_risk_memory_count"`
+	GrowthScore                 int          `json:"growth_score" db:"growth_score"`
+	RiskScore                   int          `json:"risk_score" db:"risk_score"`
+	PromotionReadinessScore     int          `json:"promotion_readiness_score" db:"promotion_readiness_score"`
+	RecommendedNextPool         string       `json:"recommended_next_pool" db:"recommended_next_pool"`
+	PromotionCandidate          bool         `json:"promotion_candidate" db:"promotion_candidate"`
+	SuggestedActions            StringList   `json:"suggested_actions" db:"suggested_actions"`
+	RiskFlags                   StringList   `json:"risk_flags" db:"risk_flags"`
+	EvaluationSummary           string       `json:"evaluation_summary" db:"evaluation_summary"`
+	LastEvaluatedAt             time.Time    `json:"last_evaluated_at" db:"last_evaluated_at"`
+	CreatedAt                   time.Time    `json:"created_at" db:"created_at"`
+	UpdatedAt                   time.Time    `json:"updated_at" db:"updated_at"`
 }
 
 type AgentPoolMembership struct {
@@ -131,14 +137,18 @@ type AgentEvaluationRun struct {
 }
 
 type AgentGrowthStats struct {
-	CompletedTaskCount    int `json:"completed_task_count"`
-	ActiveSkillCount      int `json:"active_skill_count"`
-	TotalTaskCount        int `json:"total_task_count"`
-	IncubatingDraftCount  int `json:"incubating_draft_count"`
-	ValidatedDraftCount   int `json:"validated_draft_count"`
-	PublishedDraftCount   int `json:"published_draft_count"`
-	EmployerTemplateCount int `json:"employer_template_count"`
-	TemplateReuseCount    int `json:"template_reuse_count"`
+	CompletedTaskCount          int `json:"completed_task_count"`
+	ActiveSkillCount            int `json:"active_skill_count"`
+	TotalTaskCount              int `json:"total_task_count"`
+	IncubatingDraftCount        int `json:"incubating_draft_count"`
+	ValidatedDraftCount         int `json:"validated_draft_count"`
+	PublishedDraftCount         int `json:"published_draft_count"`
+	EmployerTemplateCount       int `json:"employer_template_count"`
+	TemplateReuseCount          int `json:"template_reuse_count"`
+	ExperienceCardCount         int `json:"experience_card_count"`
+	CrossEmployerValidatedCount int `json:"cross_employer_validated_count"`
+	ActiveRiskMemoryCount       int `json:"active_risk_memory_count"`
+	HighRiskMemoryCount         int `json:"high_risk_memory_count"`
 }
 
 type AgentGrowthProfileResponse struct {

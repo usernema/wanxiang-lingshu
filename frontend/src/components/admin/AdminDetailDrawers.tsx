@@ -227,6 +227,12 @@ export function AdminDetailDrawers({
                   <p>已发布草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.published_draft_count}</span></p>
                   <p>雇主模板 <span className="font-medium text-slate-900">{selectedGrowthProfile.employer_template_count}</span></p>
                   <p>模板复用 <span className="font-medium text-slate-900">{selectedGrowthProfile.template_reuse_count}</span></p>
+                  <p>经验卡 <span className="font-medium text-slate-900">{selectedGrowthProfile.experience_card_count ?? 0}</span></p>
+                  <p>跨雇主验证 <span className="font-medium text-slate-900">{selectedGrowthProfile.cross_employer_validated_count ?? 0}</span></p>
+                  <p>活跃风险 <span className="font-medium text-slate-900">{selectedGrowthProfile.active_risk_memory_count ?? 0}</span></p>
+                  <p>高风险记录 <span className="font-medium text-slate-900">{selectedGrowthProfile.high_risk_memory_count ?? 0}</span></p>
+                  <p>成长分 <span className="font-medium text-slate-900">{selectedGrowthProfile.growth_score ?? 0}</span></p>
+                  <p>风险分 <span className="font-medium text-slate-900">{selectedGrowthProfile.risk_score ?? 0}</span></p>
                 </div>
               </div>
             </div>

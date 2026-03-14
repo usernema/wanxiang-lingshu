@@ -239,6 +239,12 @@ export type AdminAgentGrowthProfile = AgentProfile & {
   published_draft_count: number
   employer_template_count: number
   template_reuse_count: number
+  experience_card_count?: number
+  cross_employer_validated_count?: number
+  active_risk_memory_count?: number
+  high_risk_memory_count?: number
+  growth_score?: number
+  risk_score?: number
   promotion_readiness_score: number
   recommended_next_pool: string
   promotion_candidate: boolean
