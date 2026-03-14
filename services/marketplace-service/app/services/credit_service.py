@@ -1,6 +1,6 @@
 import httpx
 from app.core.config import settings
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 DEFAULT_ESCROW_TIMEOUT_HOURS = 168
@@ -18,6 +18,7 @@ class CreditService:
         amount: float,
         release_condition: str = "task_completion",
         timeout_hours: int = DEFAULT_ESCROW_TIMEOUT_HOURS,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -28,6 +29,7 @@ class CreditService:
                     "amount": amount,
                     "release_condition": release_condition,
                     "timeout_hours": timeout_hours,
+                    "metadata": metadata or {},
                 },
             )
             response.raise_for_status()
@@ -64,7 +66,7 @@ class CreditService:
             return response.json()
 
     @staticmethod
-    async def transfer(from_aid: str, to_aid: str, amount: float, memo: str = "") -> Dict[str, Any]:
+    async def transfer(from_aid: str, to_aid: str, amount: float, memo: str = "", metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{settings.CREDIT_SERVICE_URL}/api/v1/credits/transfer",
@@ -73,6 +75,7 @@ class CreditService:
                     "to": to_aid,
                     "amount": amount,
                     "memo": memo,
+                    "metadata": metadata or {},
                 },
             )
             response.raise_for_status()

@@ -384,6 +384,8 @@ func buildTransactionNotifications(transaction *models.Transaction) []*models.No
 
 	notifications := make([]*models.Notification, 0, 2)
 	amount := transaction.Amount.String()
+	baseMetadata := cloneMetadata(parseMetadataJSON(transaction.Metadata))
+	link := resolveNotificationLink(baseMetadata, "/wallet?focus=notifications")
 
 	if shouldDeliverUserNotification(transaction.FromAID) {
 		notifications = append(notifications, &models.Notification{
@@ -392,9 +394,9 @@ func buildTransactionNotifications(transaction *models.Transaction) []*models.No
 			Type:           "credit_out",
 			Title:          "积分转出成功",
 			Content:        fmt.Sprintf("你已向 %s 转出 %s 积分。", transaction.ToAID, amount),
-			Link:           "/wallet?focus=notifications",
+			Link:           link,
 			IsRead:         false,
-			Metadata:       mustJSON(map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "outgoing", "type": transaction.Type}),
+			Metadata:       mustJSON(mergeMetadata(baseMetadata, map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "outgoing", "type": transaction.Type})),
 			CreatedAt:      transaction.UpdatedAt,
 		})
 	}
@@ -406,9 +408,9 @@ func buildTransactionNotifications(transaction *models.Transaction) []*models.No
 			Type:           "credit_in",
 			Title:          "收到积分",
 			Content:        fmt.Sprintf("你收到了来自 %s 的 %s 积分。", transaction.FromAID, amount),
-			Link:           "/wallet?focus=notifications",
+			Link:           link,
 			IsRead:         false,
-			Metadata:       mustJSON(map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "incoming", "type": transaction.Type}),
+			Metadata:       mustJSON(mergeMetadata(baseMetadata, map[string]interface{}{"transaction_id": transaction.TransactionID, "direction": "incoming", "type": transaction.Type})),
 			CreatedAt:      transaction.UpdatedAt,
 		})
 	}
@@ -427,6 +429,8 @@ func buildEscrowNotifications(escrow *models.Escrow, action string) []*models.No
 	if createdAt.IsZero() {
 		createdAt = time.Now()
 	}
+	baseMetadata := cloneMetadata(parseMetadataJSON(escrow.Metadata))
+	link := resolveNotificationLink(baseMetadata, "/wallet?focus=notifications")
 
 	if shouldDeliverUserNotification(escrow.PayerAID) {
 		notifications = append(notifications, &models.Notification{
@@ -435,9 +439,9 @@ func buildEscrowNotifications(escrow *models.Escrow, action string) []*models.No
 			Type:           notificationTypeForEscrowAction(action),
 			Title:          escrowPayerTitle(action),
 			Content:        escrowPayerContent(action, escrow.PayeeAID, amount),
-			Link:           "/wallet?focus=notifications",
+			Link:           link,
 			IsRead:         false,
-			Metadata:       mustJSON(map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payer"}),
+			Metadata:       mustJSON(mergeMetadata(baseMetadata, map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payer"})),
 			CreatedAt:      createdAt,
 		})
 	}
@@ -449,9 +453,9 @@ func buildEscrowNotifications(escrow *models.Escrow, action string) []*models.No
 			Type:           notificationTypeForEscrowAction(action),
 			Title:          escrowPayeeTitle(action),
 			Content:        escrowPayeeContent(action, escrow.PayerAID, amount),
-			Link:           "/wallet?focus=notifications",
+			Link:           link,
 			IsRead:         false,
-			Metadata:       mustJSON(map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payee"}),
+			Metadata:       mustJSON(mergeMetadata(baseMetadata, map[string]interface{}{"escrow_id": escrow.EscrowID, "action": action, "role": "payee"})),
 			CreatedAt:      createdAt,
 		})
 	}
@@ -524,6 +528,48 @@ func mustJSON(value map[string]interface{}) string {
 		return "{}"
 	}
 	return string(body)
+}
+
+func parseMetadataJSON(raw string) map[string]interface{} {
+	if raw == "" {
+		return map[string]interface{}{}
+	}
+
+	var value map[string]interface{}
+	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+		return map[string]interface{}{}
+	}
+	return value
+}
+
+func cloneMetadata(metadata map[string]interface{}) map[string]interface{} {
+	cloned := make(map[string]interface{}, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func mergeMetadata(base map[string]interface{}, extra map[string]interface{}) map[string]interface{} {
+	merged := cloneMetadata(base)
+	for key, value := range extra {
+		merged[key] = value
+	}
+	return merged
+}
+
+func resolveNotificationLink(metadata map[string]interface{}, fallback string) string {
+	if metadata == nil {
+		return fallback
+	}
+
+	for _, key := range []string{"marketplace_link", "link"} {
+		if value, ok := metadata[key].(string); ok && value != "" {
+			return value
+		}
+	}
+
+	return fallback
 }
 
 func (s *CreditService) validateTransfer(ctx context.Context, fromAID, toAID string, amount decimal.Decimal) error {

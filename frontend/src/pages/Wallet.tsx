@@ -346,6 +346,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
                       <div className="mt-1 text-sm text-gray-600">From: {transaction.from_aid || '—'}</div>
                       <div className="mt-1 text-sm text-gray-600">To: {transaction.to_aid || '—'}</div>
                       {meta.memo && <div className="mt-1 text-sm text-gray-600">Memo: {meta.memo}</div>}
+                      {getTransactionContextSummary(meta, transaction) && (
+                        <div className="mt-1 text-sm text-gray-600">关联对象：{getTransactionContextSummary(meta, transaction)}</div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className={`text-2xl font-bold ${direction === 'incoming' ? 'text-green-600' : 'text-slate-700'}`}>
@@ -353,6 +356,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
                       </div>
                       <div className="mt-1 text-xs text-gray-500">Fee: {transaction.fee}</div>
                       <div className="mt-2 text-xs text-gray-500">{formatDateTime(transaction.created_at)}</div>
+                      <div className="mt-3 flex justify-end">
+                        <TransactionActionLink metadata={meta} />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -407,6 +413,26 @@ function parseMetadata(metadata?: string) {
   } catch {
     return {} as Record<string, string>
   }
+}
+
+function getResourceLabel(metadata: Record<string, string>) {
+  if (metadata.task_title) return `任务 ${metadata.task_title}`
+  if (metadata.task_id) return `任务 ${metadata.task_id}`
+  if (metadata.skill_name) return `Skill ${metadata.skill_name}`
+  if (metadata.skill_id) return `Skill ${metadata.skill_id}`
+  if (metadata.escrow_id) return `托管 ${metadata.escrow_id}`
+  return ''
+}
+
+function getTransactionContextSummary(metadata: Record<string, string>, transaction: CreditTransaction) {
+  const summary: string[] = []
+  const resource = getResourceLabel(metadata)
+  if (resource) summary.push(resource)
+  if (metadata.type) summary.push(`类型 ${metadata.type}`)
+  if (!resource && transaction.type.includes('escrow') && metadata.escrow_id) {
+    summary.push(`托管 ${metadata.escrow_id}`)
+  }
+  return summary.join(' · ')
 }
 
 function formatTransactionType(type: string) {
@@ -511,16 +537,19 @@ function getNotificationContextSummary(notification: Notification) {
       append('原状态', formatStatusLabel(metadata.previous_status))
       break
     case 'forum_post_moderated':
+      append('标题', metadata.post_title)
       append('帖子', metadata.post_id)
       append('结果', formatStatusLabel(metadata.status))
       break
     case 'forum_comment_moderated':
+      append('标题', metadata.post_title)
       append('评论', metadata.comment_id)
       append('帖子', metadata.post_id)
       append('结果', formatStatusLabel(metadata.status))
       break
     case 'credit_in':
     case 'credit_out':
+      append('对象', getResourceLabel(metadata as Record<string, string>))
       append('交易', metadata.transaction_id)
       append('方向', metadata.direction)
       append('类型', metadata.type)
@@ -528,6 +557,7 @@ function getNotificationContextSummary(notification: Notification) {
     case 'escrow_created':
     case 'escrow_released':
     case 'escrow_refunded':
+      append('对象', getResourceLabel(metadata as Record<string, string>))
       append('托管', metadata.escrow_id)
       append('动作', metadata.action)
       append('角色', metadata.role)
@@ -542,18 +572,49 @@ function getNotificationContextSummary(notification: Notification) {
 
 function NotificationActionLink({ notification }: { notification: Notification }) {
   if (!notification.link) return null
+  const metadata = (notification.metadata || {}) as Record<string, string>
+  const label = getContextActionLabel(notification.link, metadata)
 
   if (notification.link.startsWith('/')) {
     return (
       <Link to={notification.link} className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
-        查看相关页
+        {label}
       </Link>
     )
   }
 
   return (
     <a href={notification.link} className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
-      查看相关页
+      {label}
     </a>
   )
+}
+
+function TransactionActionLink({ metadata }: { metadata: Record<string, string> }) {
+  const link = metadata.marketplace_link || metadata.link
+  if (!link) return null
+  const label = getContextActionLabel(link, metadata)
+
+  if (link.startsWith('/')) {
+    return (
+      <Link to={link} className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
+        {label}
+      </Link>
+    )
+  }
+
+  return (
+    <a href={link} className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white hover:bg-black">
+      {label}
+    </a>
+  )
+}
+
+function getContextActionLabel(link: string, metadata: Record<string, string>) {
+  if (link.includes('/marketplace') && (metadata.task_id || metadata.task_title)) return '去任务工作台'
+  if (link.includes('/marketplace') && (metadata.skill_id || metadata.skill_name)) return '去查看 Skill'
+  if (link.includes('/forum')) return '去论坛查看'
+  if (link.includes('/profile')) return '去个人中心'
+  if (link.includes('/wallet')) return '查看通知中心'
+  return '查看相关页'
 }

@@ -183,6 +183,12 @@ async def assign_task(
             payer=task.employer_aid,
             payee=worker_aid,
             amount=float(task.reward),
+            metadata={
+                "resource_kind": "task",
+                "task_id": task.task_id,
+                "task_title": task.title,
+                "marketplace_link": f"/marketplace?tab=tasks&task={task.task_id}&focus=task-workspace&source=wallet-event",
+            },
         )
     except httpx.HTTPStatusError as e:
         detail = e.response.text or "Failed to create escrow"

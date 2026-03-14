@@ -11,7 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID string, amount decimal.Decimal, releaseCondition string, timeoutHours int) (*models.Escrow, error) {
+func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID string, amount decimal.Decimal, releaseCondition string, timeoutHours int, metadata map[string]interface{}) (*models.Escrow, error) {
 	if err := s.ensureAccountsBeforeCreateEscrow(ctx, payerAID, payeeAID); err != nil {
 		return nil, err
 	}
@@ -31,6 +31,10 @@ func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID str
 	}
 	defer tx.Rollback()
 
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+
 	escrow := &models.Escrow{
 		EscrowID:         fmt.Sprintf("escrow_%s", uuid.New().String()),
 		PayerAID:         payerAID,
@@ -43,6 +47,11 @@ func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID str
 		UpdatedAt:        time.Now(),
 	}
 
+	escrowMetadata := cloneMetadata(metadata)
+	escrowMetadata["escrow_id"] = escrow.EscrowID
+	escrowMetadata["release_condition"] = releaseCondition
+	escrow.Metadata = mustJSON(escrowMetadata)
+
 	if err := s.escrowRepo.Create(ctx, tx, escrow); err != nil {
 		return nil, err
 	}
@@ -51,10 +60,7 @@ func (s *CreditService) CreateEscrow(ctx context.Context, payerAID, payeeAID str
 		return nil, fmt.Errorf("failed to freeze balance: %w", err)
 	}
 
-	metadataJSON, _ := json.Marshal(map[string]interface{}{
-		"escrow_id":         escrow.EscrowID,
-		"release_condition": releaseCondition,
-	})
+	metadataJSON, _ := json.Marshal(escrowMetadata)
 	transaction := &models.Transaction{
 		TransactionID: fmt.Sprintf("tx_%s", uuid.New().String()),
 		Type:          models.TransactionTypeEscrow,
@@ -127,9 +133,9 @@ func (s *CreditService) ReleaseEscrow(ctx context.Context, escrowID, actorAID st
 		return err
 	}
 
-	metadataJSON, _ := json.Marshal(map[string]interface{}{
-		"escrow_id": escrowID,
-	})
+	releaseMetadata := cloneMetadata(parseMetadataJSON(escrow.Metadata))
+	releaseMetadata["escrow_id"] = escrowID
+	metadataJSON, _ := json.Marshal(releaseMetadata)
 	transaction := &models.Transaction{
 		TransactionID: fmt.Sprintf("tx_%s", uuid.New().String()),
 		Type:          models.TransactionTypeEscrowRelease,
@@ -199,9 +205,9 @@ func (s *CreditService) RefundEscrow(ctx context.Context, escrowID, actorAID str
 		return err
 	}
 
-	metadataJSON, _ := json.Marshal(map[string]interface{}{
-		"escrow_id": escrowID,
-	})
+	refundMetadata := cloneMetadata(parseMetadataJSON(escrow.Metadata))
+	refundMetadata["escrow_id"] = escrowID
+	metadataJSON, _ := json.Marshal(refundMetadata)
 	transaction := &models.Transaction{
 		TransactionID: fmt.Sprintf("tx_%s", uuid.New().String()),
 		Type:          models.TransactionTypeEscrowRefund,

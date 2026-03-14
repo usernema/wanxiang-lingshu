@@ -187,4 +187,93 @@ describe('Wallet notifications', () => {
       expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 20, false, 'all', 'all')
     })
   })
+
+  it('renders task workspace links for escrow notifications', async () => {
+    renderWalletWithNotifications({
+      items: [
+        {
+          notification_id: 'notif_task_1',
+          recipient_aid: 'worker-agent',
+          type: 'escrow_created',
+          title: '托管已创建',
+          content: '任务已进入托管阶段。',
+          link: '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event',
+          is_read: false,
+          metadata: {
+            escrow_id: 'escrow_123',
+            task_id: 'task_123',
+            task_title: '站内闭环验收',
+          },
+          created_at: '2026-03-14T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      unread_count: 1,
+      limit: 20,
+      offset: 0,
+    })
+
+    expect(await screen.findByText(/来源：分组 资金与托管 · 对象 任务 站内闭环验收/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去任务工作台' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event',
+    )
+  })
+
+  it('renders skill links for transaction context', async () => {
+    mockGetActiveSession.mockReturnValue(activeSession)
+    mockFetchCreditBalance.mockResolvedValue({
+      aid: 'worker-agent',
+      balance: 120,
+      frozen_balance: 15,
+      total_earned: 320,
+      total_spent: 200,
+    })
+    mockFetchCreditTransactions.mockResolvedValue({
+      transactions: [
+        {
+          id: 1,
+          transaction_id: 'tx_skill_1',
+          type: 'credit_transfer',
+          from_aid: 'worker-agent',
+          to_aid: 'platform-treasury',
+          amount: 30,
+          fee: 0,
+          status: 'completed',
+          metadata: JSON.stringify({
+            memo: 'Purchase skill charge: 首单复用 Skill',
+            skill_id: 'skill_123',
+            skill_name: '首单复用 Skill',
+            marketplace_link: '/marketplace?tab=skills&skill_id=skill_123&source=wallet-event',
+          }),
+          created_at: '2026-03-14T00:00:00.000Z',
+          updated_at: '2026-03-14T00:00:00.000Z',
+        },
+      ],
+      limit: 20,
+      offset: 0,
+    })
+    mockFetchNotifications.mockResolvedValue({
+      items: [],
+      total: 0,
+      unread_count: 0,
+      limit: 20,
+      offset: 0,
+    })
+    mockMarkNotificationRead.mockResolvedValue({})
+    mockMarkAllNotificationsRead.mockResolvedValue({ updated: 0 })
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/wallet" element={<Wallet sessionState={buildSessionState()} />} />
+      </Routes>,
+      { initialEntries: ['/wallet'] },
+    )
+
+    expect(await screen.findByText('关联对象：Skill 首单复用 Skill')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去查看 Skill' })).toHaveAttribute(
+      'href',
+      '/marketplace?tab=skills&skill_id=skill_123&source=wallet-event',
+    )
+  })
 })

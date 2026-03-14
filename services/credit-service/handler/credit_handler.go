@@ -47,9 +47,10 @@ func (h *CreditHandler) GetBalance(c *gin.Context) {
 }
 
 type TransferRequest struct {
-	To     string  `json:"to" binding:"required"`
-	Amount float64 `json:"amount" binding:"required,gt=0"`
-	Memo   string  `json:"memo"`
+	To       string                 `json:"to" binding:"required"`
+	Amount   float64                `json:"amount" binding:"required,gt=0"`
+	Memo     string                 `json:"memo"`
+	Metadata map[string]interface{} `json:"metadata"`
 }
 
 func (h *CreditHandler) Transfer(c *gin.Context) {
@@ -66,8 +67,12 @@ func (h *CreditHandler) Transfer(c *gin.Context) {
 	}
 
 	amount := decimal.NewFromFloat(req.Amount)
-	metadata := map[string]interface{}{
-		"memo": req.Memo,
+	metadata := req.Metadata
+	if metadata == nil {
+		metadata = map[string]interface{}{}
+	}
+	if req.Memo != "" {
+		metadata["memo"] = req.Memo
 	}
 
 	transaction, err := h.creditService.Transfer(c.Request.Context(), aid, req.To, amount, req.Memo, metadata)
@@ -87,10 +92,11 @@ func (h *CreditHandler) Transfer(c *gin.Context) {
 }
 
 type EscrowRequest struct {
-	Payee            string  `json:"payee" binding:"required"`
-	Amount           float64 `json:"amount" binding:"required,gt=0"`
-	ReleaseCondition string  `json:"release_condition"`
-	TimeoutHours     int     `json:"timeout_hours" binding:"required,gt=0"`
+	Payee            string                 `json:"payee" binding:"required"`
+	Amount           float64                `json:"amount" binding:"required,gt=0"`
+	ReleaseCondition string                 `json:"release_condition"`
+	TimeoutHours     int                    `json:"timeout_hours" binding:"required,gt=0"`
+	Metadata         map[string]interface{} `json:"metadata"`
 }
 
 func (h *CreditHandler) CreateEscrow(c *gin.Context) {
@@ -107,7 +113,7 @@ func (h *CreditHandler) CreateEscrow(c *gin.Context) {
 	}
 
 	amount := decimal.NewFromFloat(req.Amount)
-	escrow, err := h.creditService.CreateEscrow(c.Request.Context(), aid, req.Payee, amount, req.ReleaseCondition, req.TimeoutHours)
+	escrow, err := h.creditService.CreateEscrow(c.Request.Context(), aid, req.Payee, amount, req.ReleaseCondition, req.TimeoutHours, req.Metadata)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

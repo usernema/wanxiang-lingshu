@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "github.com/lib/pq"
 	"github.com/a2ahub/credit-service/config"
+	_ "github.com/lib/pq"
 )
 
 func Connect(cfg *config.DatabaseConfig) (*sql.DB, error) {
@@ -76,6 +76,7 @@ func InitSchema(db *sql.DB) error {
 		amount DECIMAL(18, 2) NOT NULL,
 		status VARCHAR(32) NOT NULL,
 		release_condition VARCHAR(128),
+		metadata JSONB DEFAULT '{}'::jsonb,
 		timeout TIMESTAMP NOT NULL,
 		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -86,6 +87,7 @@ func InitSchema(db *sql.DB) error {
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS amount DECIMAL(18, 2);
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS status VARCHAR(32);
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS release_condition VARCHAR(128);
+	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS timeout TIMESTAMP;
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 	ALTER TABLE escrows ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;

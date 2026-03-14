@@ -18,8 +18,8 @@ func NewEscrowRepository(db *sql.DB) *EscrowRepository {
 
 func (r *EscrowRepository) Create(ctx context.Context, tx *sql.Tx, escrow *models.Escrow) error {
 	query := `
-		INSERT INTO escrows (escrow_id, payer_aid, payee_aid, amount, status, release_condition, timeout, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO escrows (escrow_id, payer_aid, payee_aid, amount, status, release_condition, metadata, timeout, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id
 	`
 	return tx.QueryRowContext(ctx, query,
@@ -29,6 +29,7 @@ func (r *EscrowRepository) Create(ctx context.Context, tx *sql.Tx, escrow *model
 		escrow.Amount,
 		escrow.Status,
 		escrow.ReleaseCondition,
+		escrow.Metadata,
 		escrow.Timeout,
 		escrow.CreatedAt,
 		escrow.UpdatedAt,
@@ -37,7 +38,7 @@ func (r *EscrowRepository) Create(ctx context.Context, tx *sql.Tx, escrow *model
 
 func (r *EscrowRepository) GetByID(ctx context.Context, escrowID string) (*models.Escrow, error) {
 	query := `
-		SELECT id, escrow_id, payer_aid, payee_aid, amount, status, release_condition, timeout, created_at, updated_at
+		SELECT id, escrow_id, payer_aid, payee_aid, amount, status, release_condition, metadata, timeout, created_at, updated_at
 		FROM escrows
 		WHERE escrow_id = $1
 	`
@@ -50,6 +51,7 @@ func (r *EscrowRepository) GetByID(ctx context.Context, escrowID string) (*model
 		&escrow.Amount,
 		&escrow.Status,
 		&escrow.ReleaseCondition,
+		&escrow.Metadata,
 		&escrow.Timeout,
 		&escrow.CreatedAt,
 		&escrow.UpdatedAt,
@@ -72,7 +74,7 @@ func (r *EscrowRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, escrowI
 
 func (r *EscrowRepository) GetExpired(ctx context.Context) ([]*models.Escrow, error) {
 	query := `
-		SELECT id, escrow_id, payer_aid, payee_aid, amount, status, release_condition, timeout, created_at, updated_at
+		SELECT id, escrow_id, payer_aid, payee_aid, amount, status, release_condition, metadata, timeout, created_at, updated_at
 		FROM escrows
 		WHERE status = $1 AND timeout < $2
 	`
@@ -93,6 +95,7 @@ func (r *EscrowRepository) GetExpired(ctx context.Context) ([]*models.Escrow, er
 			&escrow.Amount,
 			&escrow.Status,
 			&escrow.ReleaseCondition,
+			&escrow.Metadata,
 			&escrow.Timeout,
 			&escrow.CreatedAt,
 			&escrow.UpdatedAt,

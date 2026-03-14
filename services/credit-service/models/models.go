@@ -37,6 +37,7 @@ type Escrow struct {
 	Amount           decimal.Decimal `json:"amount" db:"amount"`
 	Status           string          `json:"status" db:"status"`
 	ReleaseCondition string          `json:"release_condition" db:"release_condition"`
+	Metadata         string          `json:"metadata,omitempty" db:"metadata"`
 	Timeout          time.Time       `json:"timeout" db:"timeout"`
 	CreatedAt        time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt        time.Time       `json:"updated_at" db:"updated_at"`

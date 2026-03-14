@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -363,6 +364,39 @@ func TestEmitTransactionNotificationsPersistsSenderAndReceiver(t *testing.T) {
 	mockNotificationRepo.AssertExpectations(t)
 }
 
+func TestEmitTransactionNotificationsUsesContextLinkFromMetadata(t *testing.T) {
+	mockNotificationRepo := new(MockNotificationRepository)
+	service := &CreditService{
+		notificationRepo: mockNotificationRepo,
+	}
+
+	transaction := &models.Transaction{
+		TransactionID: "tx_ctx_123",
+		Type:          models.TransactionTypeCreditTransfer,
+		FromAID:       "agent://a2ahub/buyer-1",
+		ToAID:         "agent://a2ahub/seller-1",
+		Amount:        decimal.NewFromInt(12),
+		Status:        models.TransactionStatusCompleted,
+		Metadata:      `{"skill_id":"skill_123","skill_name":"首单复用 Skill","marketplace_link":"/marketplace?tab=skills&skill_id=skill_123&source=wallet-event"}`,
+		UpdatedAt:     time.Now(),
+	}
+
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_tx_ctx_123_sender" &&
+			notification.Link == "/marketplace?tab=skills&skill_id=skill_123&source=wallet-event" &&
+			strings.Contains(notification.Metadata, `"skill_id":"skill_123"`)
+	})).Return(nil).Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_tx_ctx_123_receiver" &&
+			notification.Link == "/marketplace?tab=skills&skill_id=skill_123&source=wallet-event" &&
+			strings.Contains(notification.Metadata, `"skill_name":"首单复用 Skill"`)
+	})).Return(nil).Once()
+
+	service.emitTransactionNotifications(context.Background(), transaction)
+
+	mockNotificationRepo.AssertExpectations(t)
+}
+
 func TestEmitEscrowNotificationsSkipsReservedPayeeOnRefund(t *testing.T) {
 	mockNotificationRepo := new(MockNotificationRepository)
 	mockNotificationPublisher := new(MockNotificationPublisher)
@@ -372,10 +406,10 @@ func TestEmitEscrowNotificationsSkipsReservedPayeeOnRefund(t *testing.T) {
 	}
 
 	escrow := &models.Escrow{
-		EscrowID: "escrow_123",
-		PayerAID: "agent://a2ahub/employer-1",
-		PayeeAID: "agent://a2ahub/platform-treasury",
-		Amount:   decimal.NewFromInt(12),
+		EscrowID:  "escrow_123",
+		PayerAID:  "agent://a2ahub/employer-1",
+		PayeeAID:  "agent://a2ahub/platform-treasury",
+		Amount:    decimal.NewFromInt(12),
 		UpdatedAt: time.Now(),
 	}
 
@@ -389,5 +423,36 @@ func TestEmitEscrowNotificationsSkipsReservedPayeeOnRefund(t *testing.T) {
 	service.emitEscrowNotifications(context.Background(), escrow, "refunded")
 
 	mockNotificationPublisher.AssertExpectations(t)
+	mockNotificationRepo.AssertExpectations(t)
+}
+
+func TestEmitEscrowNotificationsUsesContextLinkFromEscrowMetadata(t *testing.T) {
+	mockNotificationRepo := new(MockNotificationRepository)
+	service := &CreditService{
+		notificationRepo: mockNotificationRepo,
+	}
+
+	escrow := &models.Escrow{
+		EscrowID:  "escrow_ctx_123",
+		PayerAID:  "agent://a2ahub/employer-1",
+		PayeeAID:  "agent://a2ahub/worker-1",
+		Amount:    decimal.NewFromInt(20),
+		Metadata:  `{"task_id":"task_123","task_title":"站内闭环验收","marketplace_link":"/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event"}`,
+		UpdatedAt: time.Now(),
+	}
+
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_escrow_ctx_123_created_payer" &&
+			notification.Link == "/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event" &&
+			strings.Contains(notification.Metadata, `"task_title":"站内闭环验收"`)
+	})).Return(nil).Once()
+	mockNotificationRepo.On("Upsert", mock.Anything, mock.MatchedBy(func(notification *models.Notification) bool {
+		return notification.NotificationID == "notif_escrow_ctx_123_created_payee" &&
+			notification.Link == "/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event" &&
+			strings.Contains(notification.Metadata, `"task_id":"task_123"`)
+	})).Return(nil).Once()
+
+	service.emitEscrowNotifications(context.Background(), escrow, "created")
+
 	mockNotificationRepo.AssertExpectations(t)
 }

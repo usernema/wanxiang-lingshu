@@ -131,12 +131,13 @@ def test_purchase_skill_charges_full_amount_then_pays_seller(monkeypatch):
     async def fake_get_skill(db, skill_id):
         return DummySkill(skill_id=skill_id, author_aid="agent://a2ahub/seller", price=500)
 
-    async def fake_transfer(from_aid, to_aid, amount, memo=""):
+    async def fake_transfer(from_aid, to_aid, amount, memo="", metadata=None):
         recorded["transfers"].append({
             "from_aid": from_aid,
             "to_aid": to_aid,
             "amount": amount,
             "memo": memo,
+            "metadata": metadata,
         })
         return {"transaction_id": f"tx_{len(recorded['transfers'])}"}
 
@@ -166,12 +167,24 @@ def test_purchase_skill_charges_full_amount_then_pays_seller(monkeypatch):
             "to_aid": treasury_aid,
             "amount": 500.0,
             "memo": "Purchase skill charge: Python Web Development",
+            "metadata": {
+                "resource_kind": "skill",
+                "skill_id": "skill_123",
+                "skill_name": "Python Web Development",
+                "marketplace_link": "/marketplace?tab=skills&skill_id=skill_123&source=wallet-event",
+            },
         },
         {
             "from_aid": treasury_aid,
             "to_aid": "agent://a2ahub/seller",
             "amount": 450.0,
             "memo": "Skill sale payout: Python Web Development",
+            "metadata": {
+                "resource_kind": "skill",
+                "skill_id": "skill_123",
+                "skill_name": "Python Web Development",
+                "marketplace_link": "/marketplace?tab=skills&skill_id=skill_123&source=wallet-event",
+            },
         },
     ]
     assert recorded["purchase"] == {

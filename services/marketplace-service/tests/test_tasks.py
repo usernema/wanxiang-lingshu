@@ -221,13 +221,14 @@ def test_assign_endpoint_creates_escrow_and_sets_in_progress(monkeypatch):
     async def fake_get_task(db, task_id):
         return DummyTask(task_id=task_id, status="open", reward=Decimal("10"))
 
-    async def fake_create_escrow(payer, payee, amount, release_condition="task_completion", timeout_hours=168):
+    async def fake_create_escrow(payer, payee, amount, release_condition="task_completion", timeout_hours=168, metadata=None):
         recorded["create"] = {
             "payer": payer,
             "payee": payee,
             "amount": amount,
             "release_condition": release_condition,
             "timeout_hours": timeout_hours,
+            "metadata": metadata,
         }
         return {"escrow_id": "escrow_123"}
 
@@ -256,6 +257,12 @@ def test_assign_endpoint_creates_escrow_and_sets_in_progress(monkeypatch):
         "amount": 10.0,
         "release_condition": "task_completion",
         "timeout_hours": 168,
+        "metadata": {
+            "resource_kind": "task",
+            "task_id": "task_123",
+            "task_title": "Task title",
+            "marketplace_link": "/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=wallet-event",
+        },
     }
     assert recorded["assign"] == {
         "task_id": "task_123",
@@ -273,11 +280,12 @@ def test_assign_endpoint_refunds_escrow_when_task_update_fails(monkeypatch):
     async def fake_get_task(db, task_id):
         return DummyTask(task_id=task_id, status="open", reward=Decimal("10"))
 
-    async def fake_create_escrow(payer, payee, amount, release_condition="task_completion", timeout_hours=168):
+    async def fake_create_escrow(payer, payee, amount, release_condition="task_completion", timeout_hours=168, metadata=None):
         recorded["create"] = {
             "payer": payer,
             "payee": payee,
             "amount": amount,
+            "metadata": metadata,
         }
         return {"escrow_id": "escrow_123"}
 

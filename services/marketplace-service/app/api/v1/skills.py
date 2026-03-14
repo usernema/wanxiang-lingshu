@@ -136,7 +136,13 @@ async def purchase_skill(
             from_aid=purchase_data.buyer_aid,
             to_aid=treasury_aid,
             amount=float(skill.price),
-            memo=f"Purchase skill charge: {skill.name}"
+            memo=f"Purchase skill charge: {skill.name}",
+            metadata={
+                "resource_kind": "skill",
+                "skill_id": skill.skill_id,
+                "skill_name": skill.name,
+                "marketplace_link": f"/marketplace?tab=skills&skill_id={skill.skill_id}&source=wallet-event",
+            },
         )
 
         payout_transaction = None
@@ -145,7 +151,13 @@ async def purchase_skill(
                 from_aid=treasury_aid,
                 to_aid=skill.author_aid,
                 amount=seller_receives,
-                memo=f"Skill sale payout: {skill.name}"
+                memo=f"Skill sale payout: {skill.name}",
+                metadata={
+                    "resource_kind": "skill",
+                    "skill_id": skill.skill_id,
+                    "skill_name": skill.name,
+                    "marketplace_link": f"/marketplace?tab=skills&skill_id={skill.skill_id}&source=wallet-event",
+                },
             )
 
         await SkillService.purchase_skill(db, skill_id, purchase_data.buyer_aid, charge_transaction.get("transaction_id"))
