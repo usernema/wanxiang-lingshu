@@ -6,6 +6,7 @@ import Wallet from '@/pages/Wallet'
 import { renderWithProviders } from '@/test/renderWithProviders'
 import { buildSessionState } from '@/test/fixtures/marketplace'
 import type { Session } from '@/lib/api'
+import type { NotificationListResponse } from '@/types'
 
 const mockFetchCreditBalance = vi.fn()
 const mockFetchCreditTransactions = vi.fn()
@@ -47,7 +48,7 @@ function renderWallet(initialEntries = ['/wallet']) {
     limit: 20,
     offset: 0,
   })
-  mockFetchNotifications.mockResolvedValue({
+  const defaultNotifications = {
     items: [
       {
         notification_id: 'notif_1',
@@ -65,7 +66,34 @@ function renderWallet(initialEntries = ['/wallet']) {
     unread_count: 1,
     limit: 20,
     offset: 0,
+  }
+  mockFetchNotifications.mockResolvedValue(defaultNotifications)
+  mockMarkNotificationRead.mockResolvedValue({})
+  mockMarkAllNotificationsRead.mockResolvedValue({ updated: 1 })
+
+  return renderWithProviders(
+    <Routes>
+      <Route path="/wallet" element={<Wallet sessionState={buildSessionState()} />} />
+    </Routes>,
+    { initialEntries },
+  )
+}
+
+function renderWalletWithNotifications(notifications: NotificationListResponse, initialEntries = ['/wallet']) {
+  mockGetActiveSession.mockReturnValue(activeSession)
+  mockFetchCreditBalance.mockResolvedValue({
+    aid: 'worker-agent',
+    balance: 120,
+    frozen_balance: 15,
+    total_earned: 320,
+    total_spent: 200,
   })
+  mockFetchCreditTransactions.mockResolvedValue({
+    transactions: [],
+    limit: 20,
+    offset: 0,
+  })
+  mockFetchNotifications.mockResolvedValue(notifications)
   mockMarkNotificationRead.mockResolvedValue({})
   mockMarkAllNotificationsRead.mockResolvedValue({ updated: 1 })
 
@@ -91,6 +119,8 @@ describe('Wallet notifications', () => {
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
     expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。')).toBeInTheDocument()
     expect(screen.getByLabelText('通知类型')).toBeInTheDocument()
+    expect(screen.getByText('Filtered total')).toBeInTheDocument()
+    expect(screen.getByText('Current type')).toBeInTheDocument()
   })
 
   it('marks all notifications as read from the wallet page', async () => {
@@ -120,6 +150,33 @@ describe('Wallet notifications', () => {
 
     await waitFor(() => {
       expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 0, true, 'forum_post_moderated')
+    })
+  })
+
+  it('supports notification pagination controls', async () => {
+    renderWalletWithNotifications({
+      items: Array.from({ length: 20 }, (_, index) => ({
+        notification_id: `notif_${index}`,
+        recipient_aid: 'worker-agent',
+        type: 'agent_status_changed',
+        title: `通知 ${index}`,
+        content: '内容',
+        link: '/profile',
+        is_read: index % 2 === 0,
+        metadata: null,
+        created_at: '2026-03-14T00:00:00.000Z',
+      })),
+      total: 25,
+      unread_count: 5,
+      limit: 20,
+      offset: 0,
+    })
+
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '通知下一页' }))
+
+    await waitFor(() => {
+      expect(mockFetchNotifications).toHaveBeenLastCalledWith(20, 20, false, 'all')
     })
   })
 })

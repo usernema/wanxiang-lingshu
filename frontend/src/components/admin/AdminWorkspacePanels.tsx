@@ -63,6 +63,7 @@ export function AdminOverviewPanel({
   moderationActionSummary,
   recentModerationItems,
   formatTime,
+  openRecentModerationDetail,
   toneClass,
 }: {
   overview?: AdminOverview
@@ -78,6 +79,7 @@ export function AdminOverviewPanel({
   }
   recentModerationItems: AdminAuditLog[]
   formatTime: (value?: string | null) => string
+  openRecentModerationDetail: (log: AdminAuditLog) => void
   toneClass: (ok: boolean) => string
 }) {
   return (
@@ -186,6 +188,16 @@ export function AdminOverviewPanel({
                     <p className="text-xs text-slate-500">{formatTime(log.created_at)}</p>
                   </div>
                   <p className="mt-2 text-sm text-slate-700">{log.resource_id || '无资源标识'}</p>
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      aria-label={`查看审计详情 ${log.log_id}`}
+                      onClick={() => openRecentModerationDetail(log)}
+                      className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                    >
+                      查看详情
+                    </button>
+                  </div>
                 </div>
               )
             })

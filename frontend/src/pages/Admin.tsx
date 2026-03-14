@@ -645,6 +645,7 @@ export default function Admin() {
           moderationActionSummary={moderationActionSummary}
           recentModerationItems={recentModerationItems}
           formatTime={formatTime}
+          openRecentModerationDetail={(log) => navigateToAdminView('audit', { audit: log.log_id })}
           toneClass={toneClass}
         />
       )}

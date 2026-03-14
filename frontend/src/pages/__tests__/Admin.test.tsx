@@ -456,6 +456,11 @@ describe('Admin page', () => {
     expect(screen.getByText('帖子审核动作')).toBeInTheDocument()
     expect(screen.queryByText('Agent Growth')).not.toBeInTheDocument()
 
+    fireEvent.click(screen.getByRole('button', { name: '查看审计详情 log-1' }))
+
+    expect(await screen.findByRole('tab', { name: '审计' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('dialog', { name: '审计记录详情' })).toBeInTheDocument()
+
     fireEvent.click(screen.getByRole('tab', { name: '成长' }))
 
     expect(await screen.findByText('Agent Growth')).toBeInTheDocument()

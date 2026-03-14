@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchCreditBalance, fetchCreditTransactions, fetchNotifications, getActiveSession, markAllNotificationsRead, markNotificationRead } from '@/lib/api'
@@ -22,12 +22,17 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const session = getActiveSession()
   const location = useLocation()
   const [offset, setOffset] = useState(0)
+  const [notificationOffset, setNotificationOffset] = useState(0)
   const [notificationError, setNotificationError] = useState<string | null>(null)
   const [notificationTypeFilter, setNotificationTypeFilter] = useState<(typeof NOTIFICATION_TYPE_OPTIONS)[number]['value']>('all')
   const [notificationUnreadOnly, setNotificationUnreadOnly] = useState(false)
   const queryClient = useQueryClient()
   const focus = useMemo(() => new URLSearchParams(location.search).get('focus'), [location.search])
   const showNotificationsFocus = focus === 'notifications'
+
+  useEffect(() => {
+    setNotificationOffset(0)
+  }, [notificationTypeFilter, notificationUnreadOnly])
 
   const balanceQuery = useQuery({
     queryKey: ['wallet-balance', session?.aid],
@@ -42,9 +47,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   })
 
   const notificationsQuery = useQuery({
-    queryKey: ['notifications', session?.aid, PAGE_SIZE, 0, notificationUnreadOnly, notificationTypeFilter],
+    queryKey: ['notifications', session?.aid, PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.token),
-    queryFn: async () => (await fetchNotifications(PAGE_SIZE, 0, notificationUnreadOnly, notificationTypeFilter)) as NotificationListResponse,
+    queryFn: async () => (await fetchNotifications(PAGE_SIZE, notificationOffset, notificationUnreadOnly, notificationTypeFilter)) as NotificationListResponse,
   })
 
   const markNotificationReadMutation = useMutation({
@@ -72,8 +77,14 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const transactions = transactionsQuery.data?.transactions || []
   const notifications = notificationsQuery.data?.items || []
   const unreadNotificationCount = notificationsQuery.data?.unread_count ?? 0
+  const filteredNotificationTotal = notificationsQuery.data?.total ?? 0
+  const currentPageUnreadCount = notifications.filter((notification) => !notification.is_read).length
+  const currentPageReadCount = notifications.filter((notification) => notification.is_read).length
+  const selectedNotificationTypeLabel = NOTIFICATION_TYPE_OPTIONS.find((option) => option.value === notificationTypeFilter)?.label ?? '全部通知'
   const hasPreviousPage = offset > 0
   const hasNextPage = transactions.length === PAGE_SIZE
+  const hasPreviousNotificationPage = notificationOffset > 0
+  const hasNextNotificationPage = notificationOffset + notifications.length < filteredNotificationTotal
   const flowSummary = useMemo(() => summarizeTransactions(transactions, session?.aid), [transactions, session?.aid])
 
   return (
@@ -169,6 +180,13 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           </div>
         </div>
 
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Card label="Filtered total" value={filteredNotificationTotal} tone="slate" />
+          <Card label="Page unread" value={currentPageUnreadCount} tone="amber" />
+          <Card label="Page read" value={currentPageReadCount} tone="green" />
+          <Card label="Current type" value={selectedNotificationTypeLabel} tone="primary" />
+        </div>
+
         {notificationsQuery.isLoading ? (
           <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载通知...</div>
         ) : notificationsQuery.isError ? (
@@ -216,6 +234,29 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
                 </div>
               </div>
             ))}
+            <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div className="text-sm text-slate-600">
+                显示 {filteredNotificationTotal === 0 ? 0 : notificationOffset + 1} - {notificationOffset + notifications.length} / {filteredNotificationTotal}
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  className="rounded-lg border px-3 py-2 text-slate-700 disabled:opacity-50"
+                  disabled={!hasPreviousNotificationPage || notificationsQuery.isFetching}
+                  onClick={() => setNotificationOffset((current) => Math.max(0, current - PAGE_SIZE))}
+                >
+                  通知上一页
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border px-3 py-2 text-slate-700 disabled:opacity-50"
+                  disabled={!hasNextNotificationPage || notificationsQuery.isFetching}
+                  onClick={() => setNotificationOffset((current) => current + PAGE_SIZE)}
+                >
+                  通知下一页
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </section>
