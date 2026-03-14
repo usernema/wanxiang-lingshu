@@ -62,7 +62,68 @@ type TaskOpsQueueItem = {
   meta?: string
   queue: 'legacy_assigned' | 'submitted' | 'anomaly' | 'cancelled_settlement'
   issue?: string
+  slaLevel?: 'warning' | 'critical'
+  slaLabel?: string
+  slaHours?: number
+  latestDisposition?: 'checked' | 'follow_up'
+  latestNote?: string
+  latestRecordedAt?: string
   task?: AdminTask
+}
+
+type TaskOpsLatestRecord = {
+  disposition?: 'checked' | 'follow_up'
+  note?: string
+  createdAt?: string
+}
+
+function parseDateValue(value?: string | null) {
+  if (!value) return null
+  const timestamp = Date.parse(value)
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+function diffHoursFromNow(value?: string | null) {
+  const timestamp = parseDateValue(value)
+  if (!timestamp) return null
+  return Math.max(0, (Date.now() - timestamp) / (1000 * 60 * 60))
+}
+
+function formatSlaHours(hours?: number | null) {
+  if (hours === null || hours === undefined) return ''
+  if (hours < 1) return '<1h'
+  if (hours < 24) return `${Math.round(hours)}h`
+  return `${Math.round(hours / 24)}d`
+}
+
+function deriveTaskOpsSla(task: AdminTask) {
+  const baseTime = task.cancelled_at || task.updated_at || task.created_at
+
+  if (task.status === 'submitted') {
+    const hours = diffHoursFromNow(task.updated_at || task.created_at)
+    if (hours === null) return null
+    if (hours >= 24) return { level: 'critical' as const, label: '待验收超时', hours }
+    if (hours >= 12) return { level: 'warning' as const, label: '待验收临期', hours }
+    return null
+  }
+
+  if (task.status === 'assigned') {
+    const hours = diffHoursFromNow(task.updated_at || task.created_at)
+    if (hours === null) return null
+    if (hours >= 24) return { level: 'critical' as const, label: '长时间未开工', hours }
+    if (hours >= 8) return { level: 'warning' as const, label: '待开工积压', hours }
+    return null
+  }
+
+  if (task.status === 'cancelled' && task.escrow_id) {
+    const hours = diffHoursFromNow(baseTime)
+    if (hours === null) return null
+    if (hours >= 24) return { level: 'critical' as const, label: '退款核账超时', hours }
+    if (hours >= 6) return { level: 'warning' as const, label: '退款待核账', hours }
+    return null
+  }
+
+  return null
 }
 
 function deriveTaskMaintenanceIssue(task: AdminTask) {
@@ -133,8 +194,30 @@ function TaskOpsQueueCard({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{item.title}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.slaLabel && (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        item.slaLevel === 'critical'
+                          ? 'bg-rose-100 text-rose-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {item.slaLabel} {formatSlaHours(item.slaHours)}
+                      </span>
+                    )}
+                    {item.latestDisposition && (
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                        item.latestDisposition === 'checked'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-sky-100 text-sky-800'
+                      }`}>
+                        {item.latestDisposition === 'checked' ? '已核对' : '待跟进'}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs opacity-80">{item.note}</p>
                   {item.meta && <p className="mt-1 text-xs opacity-70">{item.meta}</p>}
+                  {item.latestNote && <p className="mt-1 text-xs opacity-70">最近备注：{item.latestNote}</p>}
+                  {item.latestRecordedAt && <p className="mt-1 text-[11px] opacity-60">记录于 {item.latestRecordedAt}</p>}
                 </div>
                 {item.task && openTaskDetail && (
                   <button
@@ -1012,6 +1095,33 @@ export function AdminTaskOperationsPanel({
   const submittedCount = taskStatusSummary.submitted || 0
   const visibleTaskCount = taskItems.length || recentTasksCount
   const taskMap = new Map(taskItems.map((task) => [task.task_id, task]))
+  const taskOpsLatestRecordMap = new Map<string, TaskOpsLatestRecord>()
+
+  taskOpsAuditItems.forEach((log) => {
+    if (!log.resource_id) return
+    if (taskOpsLatestRecordMap.has(log.resource_id)) return
+    const disposition = readAuditDetailString(log.details, 'disposition')
+    taskOpsLatestRecordMap.set(log.resource_id, {
+      disposition: disposition === 'checked' || disposition === 'follow_up' ? disposition : undefined,
+      note: readAuditDetailString(log.details, 'note'),
+      createdAt: log.created_at,
+    })
+  })
+
+  const enrichTaskOpsItem = (item: TaskOpsQueueItem): TaskOpsQueueItem => {
+    const latestRecord = item.task ? taskOpsLatestRecordMap.get(item.task.task_id) : undefined
+    const sla = item.task ? deriveTaskOpsSla(item.task) : null
+    return {
+      ...item,
+      slaLevel: item.queue === 'anomaly' ? 'critical' : sla?.level,
+      slaLabel: item.queue === 'anomaly' ? '数据异常' : sla?.label,
+      slaHours: sla?.hours,
+      latestDisposition: latestRecord?.disposition,
+      latestNote: latestRecord?.note,
+      latestRecordedAt: latestRecord?.createdAt ? formatTime(latestRecord.createdAt) : undefined,
+    }
+  }
+
   const legacyAssignedQueueItems: TaskOpsQueueItem[] = taskItems
     .filter((task) => task.status === 'assigned')
     .map((task) => ({
@@ -1021,9 +1131,10 @@ export function AdminTaskOperationsPanel({
         ? `已分配给 ${task.worker_aid || '未知 worker'}，但仍停留在 legacy assigned。`
         : '已分配但缺少 escrow_id，暂不建议自动归一化。',
       meta: `雇主 ${task.employer_aid} · ${task.escrow_id ? `Escrow ${task.escrow_id}` : 'Escrow 待补'}`,
-      queue: 'legacy_assigned',
+      queue: 'legacy_assigned' as const,
       task,
     }))
+    .map(enrichTaskOpsItem)
   const submittedQueueItems: TaskOpsQueueItem[] = taskItems
     .filter((task) => task.status === 'submitted')
     .map((task) => ({
@@ -1031,9 +1142,10 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: `Worker ${task.worker_aid || '未记录'} 已提交交付，等待 employer 决策。`,
       meta: `雇主 ${task.employer_aid} · Reward ${task.reward}`,
-      queue: 'submitted',
+      queue: 'submitted' as const,
       task,
     }))
+    .map(enrichTaskOpsItem)
   const cancelledSettlementQueueItems: TaskOpsQueueItem[] = taskItems
     .filter((task) => task.status === 'cancelled' && Boolean(task.escrow_id))
     .map((task) => ({
@@ -1041,9 +1153,10 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: '已取消且带 escrow 轨迹，建议核对退款、冻结余额和通知解释。',
       meta: `${task.escrow_id} · 取消时间 ${task.cancelled_at ? formatTime(task.cancelled_at) : '待补'}`,
-      queue: 'cancelled_settlement',
+      queue: 'cancelled_settlement' as const,
       task,
     }))
+    .map(enrichTaskOpsItem)
   const anomalyQueueItemMap = new Map<string, TaskOpsQueueItem>()
 
   consistencyExamples.forEach((example) => {
@@ -1053,7 +1166,7 @@ export function AdminTaskOperationsPanel({
       title: task?.title || example.task_id,
       note: example.issue,
       meta: task ? `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}` : taskStatusLabel(example.status),
-      queue: 'anomaly',
+      queue: 'anomaly' as const,
       issue: example.issue,
       task,
     })
@@ -1069,14 +1182,20 @@ export function AdminTaskOperationsPanel({
       title: task.title,
       note: issue,
       meta: `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}`,
-      queue: 'anomaly',
+      queue: 'anomaly' as const,
       issue,
       task,
     })
   })
 
-  const anomalyQueueItems = Array.from(anomalyQueueItemMap.values())
+  const anomalyQueueItems = Array.from(anomalyQueueItemMap.values()).map(enrichTaskOpsItem)
   const recentTaskOpsRecords = taskOpsAuditItems.slice(0, 5)
+  const queueItems = [...legacyAssignedQueueItems, ...submittedQueueItems, ...anomalyQueueItems, ...cancelledSettlementQueueItems]
+  const unresolvedQueueItems = queueItems.filter((item) => item.latestDisposition !== 'checked')
+  const criticalQueueCount = unresolvedQueueItems.filter((item) => item.slaLevel === 'critical').length
+  const warningQueueCount = unresolvedQueueItems.filter((item) => item.slaLevel === 'warning').length
+  const followUpQueueCount = queueItems.filter((item) => item.latestDisposition === 'follow_up').length
+  const checkedQueueCount = queueItems.filter((item) => item.latestDisposition === 'checked').length
 
   return (
     <section className="grid gap-6">
@@ -1085,6 +1204,21 @@ export function AdminTaskOperationsPanel({
         <StatCard title="待验收任务" value={submittedCount} tone={submittedCount > 0 ? 'amber' : 'slate'} />
         <StatCard title="历史 assigned" value={legacyAssignedCount} tone={legacyAssignedCount > 0 ? 'rose' : 'emerald'} />
         <StatCard title="一致性异常" value={consistencyIssueCount} tone={consistencyIssueCount > 0 ? 'rose' : 'emerald'} />
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">SLA 看板</h2>
+            <p className="text-sm text-slate-500">按超时、临期和处理状态聚合当前可见任务，优先处理未核对的红黄项。</p>
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="SLA 超时" value={criticalQueueCount} tone={criticalQueueCount > 0 ? 'rose' : 'emerald'} />
+          <StatCard title="SLA 临期" value={warningQueueCount} tone={warningQueueCount > 0 ? 'amber' : 'slate'} />
+          <StatCard title="待跟进" value={followUpQueueCount} tone={followUpQueueCount > 0 ? 'amber' : 'slate'} />
+          <StatCard title="已核对" value={checkedQueueCount} tone={checkedQueueCount > 0 ? 'emerald' : 'slate'} />
+        </div>
       </div>
 
       <div className="rounded-2xl bg-white p-6 shadow-sm">
