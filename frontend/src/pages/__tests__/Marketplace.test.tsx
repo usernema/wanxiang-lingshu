@@ -617,6 +617,116 @@ describe('Marketplace UI regression coverage', () => {
     expect(screen.getByTestId('route-location')).toHaveTextContent('/marketplace')
   })
 
+  it('filters worker open queue from deep link and excludes self-owned open tasks', async () => {
+    renderMarketplace({
+      activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
+      initialEntries: ['/marketplace?tab=tasks&queue=open'],
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-self-open',
+          title: '自己的开放任务',
+          employer_aid: 'worker-agent',
+          status: 'open',
+        }),
+        buildMarketplaceTask({
+          id: 2,
+          task_id: 'task-open-public',
+          title: '公开任务队列',
+          employer_aid: 'employer-agent',
+          status: 'open',
+        }),
+        buildMarketplaceTask({
+          id: 3,
+          task_id: 'task-submitted-other',
+          title: '已提交任务',
+          employer_aid: 'employer-agent',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+          status: 'submitted',
+        }),
+      ],
+    })
+
+    expect(await screen.findByText('已定位到执行者视角的「可申请任务」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /公开任务队列/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /自己的开放任务/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /已提交任务/i })).not.toBeInTheDocument()
+  })
+
+  it('filters employer review queue from deep link and auto-focuses matching review task', async () => {
+    renderMarketplace({
+      activeRole: 'employer',
+      initialEntries: ['/marketplace?tab=tasks&queue=review'],
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-open-other',
+          title: '开放任务',
+          status: 'open',
+        }),
+        buildMarketplaceTask({
+          id: 2,
+          task_id: 'task-review-target',
+          title: '待验收目标任务',
+          status: 'submitted',
+          employer_aid: 'employer-agent',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+        }),
+        buildMarketplaceTask({
+          id: 3,
+          task_id: 'task-review-other',
+          title: '别人的待验收任务',
+          status: 'submitted',
+          employer_aid: 'another-employer',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-2',
+        }),
+      ],
+    })
+
+    expect(await screen.findByText('已定位到雇主视角的「等待验收」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /待验收目标任务/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /别人的待验收任务/i })).not.toBeInTheDocument()
+    expect(await screen.findByText('当前任务处于 submitted：worker 已提交交付，employer 可以验收放款或退回修改。')).toBeInTheDocument()
+  })
+
+  it('filters worker execution queue from deep link and keeps assigned tasks readable', async () => {
+    renderMarketplace({
+      activeRole: 'worker',
+      sessions: {
+        default: defaultWorkerSession,
+      },
+      initialEntries: ['/marketplace?tab=tasks&queue=execution'],
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-assigned-focus',
+          title: '已分配执行任务',
+          status: 'assigned',
+          employer_aid: 'employer-agent',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-1',
+        }),
+        buildMarketplaceTask({
+          id: 2,
+          task_id: 'task-execution-other',
+          title: '别人的执行任务',
+          status: 'in_progress',
+          employer_aid: 'employer-agent',
+          worker_aid: 'other-worker',
+          escrow_id: 'escrow-2',
+        }),
+      ],
+    })
+
+    expect(await screen.findByText('已定位到执行者视角的「执行中」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /已分配执行任务/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /别人的执行任务/i })).not.toBeInTheDocument()
+    expect(await screen.findByText('当前任务处于 assigned：任务已完成分配，通常表示托管已建立，下一步等待 worker 开始执行。')).toBeInTheDocument()
+  })
+
   it('deep-links into the requested task workspace', async () => {
     renderMarketplace({
       initialEntries: ['/marketplace?tab=tasks&task=task-focus-2&focus=task-workspace'],

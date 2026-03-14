@@ -377,7 +377,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             : '还没有开放招募中的任务，可以继续发布新的真实需求。',
           href: latestOpenEmployerTask
             ? buildTaskWorkspaceHref(latestOpenEmployerTask, 'home-employer-funnel-open')
-            : '/marketplace?tab=tasks&focus=create-task&source=home-employer-funnel',
+            : buildMarketplaceTaskQueueHref('open', 'home-employer-funnel', 'create-task'),
           cta: latestOpenEmployerTask ? '去看待指派任务' : '去发布任务',
         },
         {
@@ -389,7 +389,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             : '当前没有执行中的雇主任务。',
           href: latestEmployerExecutionTask
             ? buildTaskWorkspaceHref(latestEmployerExecutionTask, 'home-employer-funnel-active')
-            : '/marketplace?tab=tasks&source=home-employer-funnel',
+            : buildMarketplaceTaskQueueHref('execution', 'home-employer-funnel'),
           cta: latestEmployerExecutionTask ? '去看执行任务' : '去市场查看',
         },
         {
@@ -401,8 +401,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             : '当前没有待你验收的任务。',
           href: latestEmployerReviewTask
             ? buildTaskWorkspaceHref(latestEmployerReviewTask, 'home-employer-funnel-review')
-            : '/wallet?focus=notifications&source=home-employer-funnel',
-          cta: latestEmployerReviewTask ? '去验收任务' : '去看通知',
+            : buildMarketplaceTaskQueueHref('review', 'home-employer-funnel'),
+          cta: latestEmployerReviewTask ? '去验收任务' : '去看验收队列',
         },
         {
           key: 'employer-completed',
@@ -430,7 +430,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         summary: workerAvailableTasks.length > 0
           ? '市场里还有开放任务可申请，首页可以直接提醒你去抢首单或下一单。'
           : '当前没有可申请的公开任务，稍后可回市场继续看机会。',
-        href: '/marketplace?tab=tasks&source=home-worker-funnel',
+        href: buildMarketplaceTaskQueueHref('open', 'home-worker-funnel'),
         cta: '去浏览任务',
       },
       {
@@ -442,7 +442,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           : '当前没有执行中的任务。',
         href: latestWorkerExecutionTask
           ? buildTaskWorkspaceHref(latestWorkerExecutionTask, 'home-worker-funnel-active')
-          : '/marketplace?tab=tasks&source=home-worker-funnel',
+          : buildMarketplaceTaskQueueHref('execution', 'home-worker-funnel'),
         cta: latestWorkerExecutionTask ? '去推进交付' : '去看任务市场',
       },
       {
@@ -454,8 +454,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           : '当前没有等待雇主验收的任务。',
         href: latestWorkerReviewTask
           ? buildTaskWorkspaceHref(latestWorkerReviewTask, 'home-worker-funnel-review')
-          : '/wallet?focus=notifications&source=home-worker-funnel',
-        cta: latestWorkerReviewTask ? '去盯验收结果' : '去看通知',
+          : buildMarketplaceTaskQueueHref('review', 'home-worker-funnel'),
+        cta: latestWorkerReviewTask ? '去盯验收结果' : '去看验收队列',
       },
       {
         key: 'worker-completed',
@@ -832,6 +832,20 @@ function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'home') 
     focus: 'task-workspace',
     source,
   })
+
+  return `/marketplace?${params.toString()}`
+}
+
+function buildMarketplaceTaskQueueHref(queue: 'open' | 'execution' | 'review' | 'completed', source = 'home', focus?: 'create-task') {
+  const params = new URLSearchParams({
+    tab: 'tasks',
+    queue,
+    source,
+  })
+
+  if (focus) {
+    params.set('focus', focus)
+  }
 
   return `/marketplace?${params.toString()}`
 }

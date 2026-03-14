@@ -15,6 +15,7 @@ import type { AppSessionState } from '@/App'
 
 type Role = 'employer' | 'worker'
 type TaskAction = 'apply' | 'assign' | 'complete' | 'accept' | 'requestRevision' | 'cancel'
+type TaskQueue = 'open' | 'execution' | 'review' | 'completed'
 
 type HttpErrorPayload = {
   detail?: string
@@ -136,7 +137,7 @@ function getApplicantCountLabel(count: number) {
 function getTaskHiringSummary(task: MarketplaceTask, applications: TaskApplication[]) {
   if (task.status === 'open' && applications.length === 0) return '已发布，等待申请人投递 proposal。'
   if (task.status === 'open' && applications.length > 0) return `已收到 ${applications.length} 个申请，待 employer 决策。`
-  if (task.status === 'in_progress') return `已分配给 ${task.worker_aid || '指定 worker'}，escrow ${task.escrow_id ? '已创建' : '待核对'}。`
+  if (task.status === 'assigned' || task.status === 'in_progress') return `已分配给 ${task.worker_aid || '指定 worker'}，escrow ${task.escrow_id ? '已创建' : '待核对'}。`
   if (task.status === 'submitted') return `执行者 ${task.worker_aid || '已分配 worker'} 已提交交付，等待 employer 验收。`
   if (task.status === 'completed') return '任务已完成，建议转去 Profile / Wallet 核对结算。'
   if (task.status === 'cancelled') return '任务已取消，如存在托管应已退款。'
@@ -155,7 +156,9 @@ function getWorkerTaskActionSummary(task: MarketplaceTask, applications: TaskApp
   const hasApplied = applications.some((application) => application.applicant_aid === workerSession.aid)
   if (task.status === 'open' && !hasApplied) return '你可以提交 proposal 争取被雇佣。'
   if (task.status === 'open' && hasApplied) return '你已提交 proposal，等待 employer 做分配决策。'
-  if (task.status === 'in_progress' && task.worker_aid === workerSession.aid) return '你已被雇佣，可以开始交付并完成任务。'
+  if ((task.status === 'assigned' || task.status === 'in_progress') && task.worker_aid === workerSession.aid) {
+    return task.status === 'assigned' ? '你已被雇佣，任务已分配，接下来可以开始交付。' : '你已被雇佣，可以开始交付并完成任务。'
+  }
   if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待 employer 验收或退回修改。'
   if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成此任务，建议去 Wallet 查看收入流水。'
   return '当前这个任务没有分配给你。'
@@ -165,7 +168,9 @@ function getEmployerTaskActionSummary(task: MarketplaceTask, applications: TaskA
   if (!employerSession || task.employer_aid !== employerSession.aid) return '当前不是你的任务，无法进行雇佣决策。'
   if (task.status === 'open' && applications.length === 0) return '任务已发布，下一步是等待或引导 worker 申请。'
   if (task.status === 'open' && applications.length > 0) return '任务已收到申请，下一步是选择 proposal 并 assign。'
-  if (task.status === 'in_progress') return '任务已进入执行中，下一步重点是等待 worker 完成。'
+  if (task.status === 'assigned' || task.status === 'in_progress') {
+    return task.status === 'assigned' ? '任务已完成分配，下一步重点是确认 worker 已开始执行。' : '任务已进入执行中，下一步重点是等待 worker 完成。'
+  }
   if (task.status === 'submitted') return 'worker 已提交交付，下一步是验收通过或退回修改。'
   if (task.status === 'completed') return '任务已闭环完成，建议核对 escrow 和 balance 变化。'
   return '当前任务已取消。'
@@ -197,7 +202,7 @@ function getPrimaryApplicantMessage(applications: TaskApplication[]) {
 function getTaskDecisionState(task: MarketplaceTask, applications: TaskApplication[]) {
   if (task.status === 'open' && applications.length > 0) return '待分配'
   if (task.status === 'open') return '待申请'
-  if (task.status === 'in_progress') return '待交付'
+  if (task.status === 'assigned' || task.status === 'in_progress') return '待交付'
   if (task.status === 'submitted') return '待验收'
   if (task.status === 'completed') return '已完成'
   return '已取消'
@@ -308,6 +313,74 @@ function RoleSummaryBanner({ message }: { message: string }) {
   return <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">{message}</div>
 }
 
+function parseTaskQueue(value?: string | null): TaskQueue | null {
+  if (value === 'open' || value === 'execution' || value === 'review' || value === 'completed') {
+    return value
+  }
+  return null
+}
+
+function getTaskQueueLabel(queue: TaskQueue, role: Role) {
+  const labels = role === 'worker'
+    ? {
+        open: '可申请任务',
+        execution: '执行中',
+        review: '待雇主验收',
+        completed: '已完成交付',
+      }
+    : {
+        open: '开放招募',
+        execution: '执行中',
+        review: '等待验收',
+        completed: '已完成验收',
+      }
+
+  return labels[queue]
+}
+
+function getTaskQueueBannerCopy(queue: TaskQueue, role: Role, count: number) {
+  const roleLabel = role === 'worker' ? '执行者视角' : '雇主视角'
+  const stageLabel = getTaskQueueLabel(queue, role)
+  if (count > 0) {
+    return `已定位到${roleLabel}的「${stageLabel}」队列，共 ${count} 个任务。`
+  }
+  return `已定位到${roleLabel}的「${stageLabel}」队列，当前没有匹配任务。`
+}
+
+function matchesTaskQueue(
+  task: MarketplaceTask,
+  queue: TaskQueue,
+  role: Role,
+  employerSession: ReturnType<typeof getSession>,
+  workerSession: ReturnType<typeof getSession>,
+) {
+  if (queue === 'open') {
+    if (role === 'worker') {
+      return task.status === 'open' && (!workerSession || task.employer_aid !== workerSession.aid)
+    }
+    return task.status === 'open' && Boolean(employerSession && task.employer_aid === employerSession.aid)
+  }
+
+  if (queue === 'execution') {
+    if (role === 'worker') {
+      return ['assigned', 'in_progress'].includes(task.status) && Boolean(workerSession && task.worker_aid === workerSession.aid)
+    }
+    return ['assigned', 'in_progress'].includes(task.status) && Boolean(employerSession && task.employer_aid === employerSession.aid)
+  }
+
+  if (queue === 'review') {
+    if (role === 'worker') {
+      return task.status === 'submitted' && Boolean(workerSession && task.worker_aid === workerSession.aid)
+    }
+    return task.status === 'submitted' && Boolean(employerSession && task.employer_aid === employerSession.aid)
+  }
+
+  if (role === 'worker') {
+    return task.status === 'completed' && Boolean(workerSession && task.worker_aid === workerSession.aid)
+  }
+  return task.status === 'completed' && Boolean(employerSession && task.employer_aid === employerSession.aid)
+}
+
 function SectionHint({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -374,7 +447,9 @@ function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplica
   if (!workerSession) return '当前没有 worker 身份可用。'
   if (task.status === 'open' && hasAppliedToTask(applications, workerSession)) return '你已提交 proposal，等待 employer 选择申请人。'
   if (task.status === 'open') return '你可以作为 worker 申请该任务。'
-  if (task.status === 'in_progress' && task.worker_aid === workerSession.aid) return '你已被雇佣，接下来可以完成任务。'
+  if ((task.status === 'assigned' || task.status === 'in_progress') && task.worker_aid === workerSession.aid) {
+    return task.status === 'assigned' ? '你已被雇佣，任务已分配，接下来可以开始交付。' : '你已被雇佣，接下来可以完成任务。'
+  }
   if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待雇主验收。'
   if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成该任务，可以去 Wallet 查看收入流水。'
   return '当前该任务没有分配给你。'
@@ -406,6 +481,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const requestedTab = marketplaceSearchParams.get('tab')
   const focusedTaskId = marketplaceSearchParams.get('task')
   const focusedMarketplaceFocus = marketplaceSearchParams.get('focus')
+  const focusedTaskQueue = parseTaskQueue(marketplaceSearchParams.get('queue'))
   const focusedSkillId = marketplaceSearchParams.get('skill_id')
   const focusedSkillSource = marketplaceSearchParams.get('source')
   const shouldSyncTaskParam = marketplaceSearchParams.has('task')
@@ -420,6 +496,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return
     }
 
+    if (focusedTaskQueue) {
+      setMarketTab('tasks')
+      return
+    }
+
     if (focusedMarketplaceFocus === 'publish-skill') {
       setMarketTab('skills')
       return
@@ -428,7 +509,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     if (requestedTab === 'tasks' || requestedTab === 'skills') {
       setMarketTab(requestedTab)
     }
-  }, [focusedMarketplaceFocus, requestedTab])
+  }, [focusedMarketplaceFocus, focusedTaskQueue, requestedTab])
 
   const currentSession = getSession('default')
   const employerSession = currentSession
@@ -464,6 +545,17 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     },
   })
 
+  const visibleTasks = useMemo(() => {
+    const tasks = tasksQuery.data || []
+    if (!focusedTaskQueue) return tasks
+    return tasks.filter((task) => matchesTaskQueue(task, focusedTaskQueue, role, employerSession, workerSession))
+  }, [tasksQuery.data, focusedTaskQueue, role, employerSession, workerSession])
+
+  const taskQueueBannerCopy = useMemo(
+    () => (focusedTaskQueue ? getTaskQueueBannerCopy(focusedTaskQueue, role, visibleTasks.length) : null),
+    [focusedTaskQueue, role, visibleTasks.length],
+  )
+
   const selectedTask = useMemo(
     () => tasksQuery.data?.find((task) => task.task_id === selectedTaskId) ?? null,
     [tasksQuery.data, selectedTaskId],
@@ -493,15 +585,20 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       }
     }
 
-    if (!selectedTaskId) {
-      setSelectedTaskId(tasksQuery.data[0].task_id)
+    if (!visibleTasks.length) {
+      setSelectedTaskId(null)
       return
     }
 
-    if (!tasksQuery.data.some((task) => task.task_id === selectedTaskId)) {
-      setSelectedTaskId(tasksQuery.data[0].task_id)
+    if (!selectedTaskId) {
+      setSelectedTaskId(visibleTasks[0].task_id)
+      return
     }
-  }, [focusedTaskId, selectedTaskId, tasksQuery.data])
+
+    if (!visibleTasks.some((task) => task.task_id === selectedTaskId)) {
+      setSelectedTaskId(visibleTasks[0].task_id)
+    }
+  }, [focusedTaskId, selectedTaskId, tasksQuery.data, visibleTasks])
 
   useEffect(() => {
     if (!(shouldSyncTaskParam && requestedTask)) return
@@ -852,7 +949,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         ? createTaskRef.current
         : focusedMarketplaceFocus === 'publish-skill'
           ? publishSkillRef.current
-          : focusedMarketplaceFocus === 'task-workspace' || focusedTaskId
+          : focusedMarketplaceFocus === 'task-workspace' || focusedTaskId || focusedTaskQueue
             ? taskWorkspaceRef.current
             : null
 
@@ -860,7 +957,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     if (typeof target.scrollIntoView === 'function') {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [focusedMarketplaceFocus, focusedTaskId, marketTab, selectedTaskId])
+  }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, marketTab, selectedTaskId])
 
   if (sessionState.bootstrapState === 'loading') {
     return <PageStateCard message="正在恢复市场访问所需会话..." />
@@ -901,6 +998,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             {requestedTask
               ? `已定位到任务工作台：${requestedTask.title}`
               : '正在定位指定任务；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
+          </div>
+        )}
+        {focusedTaskQueue && marketTab === 'tasks' && (
+          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            {taskQueueBannerCopy}
           </div>
         )}
       </div>
@@ -956,6 +1058,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 >
                   <option value="">全部状态</option>
                   <option value="open">open</option>
+                  <option value="assigned">assigned</option>
                   <option value="in_progress">in_progress</option>
                   <option value="submitted">submitted</option>
                   <option value="completed">completed</option>
@@ -966,9 +1069,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <div className="space-y-3">
                 {tasksQuery.isLoading && <PageStateCard message="加载任务中..." compact />}
                 {tasksQuery.isError && <PageStateCard message="任务加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
-                {!tasksQuery.isLoading && !tasksQuery.isError && tasksQuery.data?.length === 0 && (
+                {!tasksQuery.isLoading && !tasksQuery.isError && visibleTasks.length === 0 && (
                   <PageStateCard
-                    message="当前没有符合筛选条件的任务。"
+                    message={focusedTaskQueue ? '当前阶段队列里没有符合条件的任务。' : '当前没有符合筛选条件的任务。'}
                     compact
                     actions={[
                       { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' },
@@ -977,7 +1080,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                     ]}
                   />
                 )}
-                {tasksQuery.data?.map((task) => (
+                {visibleTasks.map((task) => (
                   <button
                     type="button"
                     key={task.task_id}
@@ -1292,6 +1395,7 @@ function getTaskActionDisabledReason(
     case 'complete':
       if (!workerSession) return '当前没有可用的 worker session。'
       if (task.status === 'submitted') return '该任务已提交验收，等待 employer 决策。'
+      if (task.status === 'assigned') return '任务刚完成分配，待进入 in_progress 后再提交验收。'
       if (task.status !== 'in_progress') return '只有 in_progress 状态的任务可以提交验收。'
       if (task.worker_aid !== workerSession.aid) return '只有被分配的 worker 可以完成该任务。'
       if (!task.escrow_id) return '当前任务缺少 escrow，无法提交验收。'
@@ -1310,6 +1414,7 @@ function getTaskActionDisabledReason(
     case 'cancel':
       if (!employerSession) return '当前没有可用的 employer session。'
       if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以取消任务。'
+      if (task.status === 'assigned') return '任务已完成分配，通常会很快切到 in_progress；如需取消请先核对最新状态。'
       if (task.status !== 'open' && task.status !== 'in_progress') return '只有 open 或 in_progress 状态的任务可以取消。'
       return null
   }
@@ -1416,6 +1521,17 @@ function getRecommendedMarketplaceAction(
       ctaLabel: null,
       ctaKind: null,
       hint: '下方“申请列表”中的分配按钮就是当前推荐动作。',
+      tone: 'amber',
+    }
+  }
+
+  if (task.status === 'assigned') {
+    return {
+      title: '推荐先推进交付启动',
+      description: '当前任务已经完成分配并建立托管，下一步重点是让 Worker 尽快开始执行。',
+      ctaLabel: null,
+      ctaKind: null,
+      hint: '可以先看上方阶段卡、申请摘要和当前托管状态，确认执行信息是否完整。',
       tone: 'amber',
     }
   }
@@ -1554,6 +1670,19 @@ function getTaskStageGuide(
       blockers: [context.role === 'worker' ? context.applyDisabledReason : null, context.cancelDisabledReason].filter(Boolean) as string[],
       progressLabel: hasApplications ? '待分配' : '招募中',
       progressTone: hasApplications ? 'amber' : 'blue',
+    }
+  }
+
+  if (task.status === 'assigned') {
+    return {
+      title: '已分配，等待开始执行',
+      summary: task.escrow_id
+        ? '任务已完成分配，Credit escrow 已创建，接下来由 Worker 开始推进交付。'
+        : '任务已完成分配，但当前 escrow 信息缺失，需要先检查托管状态。',
+      nextAction: 'Worker 开始交付',
+      blockers: [context.completeDisabledReason, context.cancelDisabledReason].filter(Boolean) as string[],
+      progressLabel: '已分配',
+      progressTone: 'amber',
     }
   }
 
@@ -1701,6 +1830,7 @@ function DiagnosticsCard({ diagnosticsQuery }: { diagnosticsQuery: ReturnType<ty
 function TaskStateGuide({ task }: { task: MarketplaceTask }) {
   const guide = {
     open: '当前任务处于 open：worker 可以申请，任务 employer 可以从申请列表中分配执行者。',
+    assigned: '当前任务处于 assigned：任务已完成分配，通常表示托管已建立，下一步等待 worker 开始执行。',
     in_progress: '当前任务处于 in_progress：只有被分配的 worker 可以提交验收，employer 可以 cancel。',
     submitted: '当前任务处于 submitted：worker 已提交交付，employer 可以验收放款或退回修改。',
     completed: '当前任务处于 completed：任务已完成，托管应已释放，不再允许 assign / complete / cancel。',
@@ -1892,6 +2022,7 @@ function RoleButton({ active, onClick, label, aid }: { active: boolean; onClick:
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700',
+    assigned: 'bg-indigo-100 text-indigo-700',
     in_progress: 'bg-amber-100 text-amber-700',
     submitted: 'bg-orange-100 text-orange-700',
     completed: 'bg-green-100 text-green-700',

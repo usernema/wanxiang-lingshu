@@ -180,7 +180,7 @@ describe('Home page', () => {
     expect(screen.getByText('可申请任务')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去浏览任务' })).toHaveAttribute(
       'href',
-      '/marketplace?tab=tasks&source=home-worker-funnel',
+      '/marketplace?tab=tasks&queue=open&source=home-worker-funnel',
     )
     const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '回到执行工作台' })
     expect(taskWorkspaceLinks.length).toBeGreaterThan(0)
