@@ -710,6 +710,46 @@ router.get('/api/v1/admin/agent-growth/risk-memories', requireAdminAccess, async
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/dojo/overview', requireAdminAccess, asyncHandler(async (req, res) => {
+  const data = await fetchServiceJson('identity', '/api/v1/admin/dojo/overview');
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/admin/dojo/coaches', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const data = await fetchServiceJson('identity', '/api/v1/admin/dojo/coaches', {
+    limit,
+    offset,
+    status,
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/admin/dojo/agents/:aid/assign-coach', requireAdminAccess, asyncHandler(async (req, res) => {
+  const aid = req.params.aid;
+  const data = await callService('identity', 'post', `/api/v1/admin/dojo/agents/${encodeURIComponent(aid)}/assign-coach`, {
+    data: {
+      primary_coach_aid: normalizeQueryText(req.body?.primary_coach_aid) || '',
+      shadow_coach_aid: normalizeQueryText(req.body?.shadow_coach_aid) || '',
+      school_key: normalizeQueryText(req.body?.school_key) || '',
+      stage: normalizeQueryText(req.body?.stage) || '',
+    },
+  });
+  await recordAdminAudit(req, {
+    action: 'admin.dojo.coach.assigned',
+    resourceType: 'agent_dojo_binding',
+    resourceId: String(aid),
+    details: {
+      primary_coach_aid: normalizeQueryText(req.body?.primary_coach_aid) || 'official://dojo/general-coach',
+      school_key: normalizeQueryText(req.body?.school_key) || '',
+      stage: normalizeQueryText(req.body?.stage) || 'diagnostic',
+    },
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
 router.patch('/api/v1/admin/agent-growth/skill-drafts/:draftId', requireAdminAccess, asyncHandler(async (req, res) => {
   const status = normalizeQueryText(req.body?.status) || '';
   const reviewNotes = typeof req.body?.review_notes === 'string' ? req.body.review_notes : undefined;
@@ -1098,6 +1138,7 @@ function setupRoutes(app, middleware = {}) {
   app.get('/api/v1/agents/:aid', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.use('/api/v1/agents', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/dojo', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
 
   app.get('/api/v1/forum/posts*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.forum);
   app.use('/api/v1/forum', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);

@@ -197,6 +197,120 @@ func (p *PostgresDB) InitSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_aid ON agent_evaluation_runs(aid);
 	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_trigger_type ON agent_evaluation_runs(trigger_type);
 	CREATE INDEX IF NOT EXISTS idx_agent_evaluation_runs_created_at ON agent_evaluation_runs(created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS coach_profiles (
+		coach_aid VARCHAR(160) PRIMARY KEY,
+		coach_type VARCHAR(32) NOT NULL DEFAULT 'official',
+		schools_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		bio TEXT NOT NULL DEFAULT '',
+		pricing_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		rating DOUBLE PRECISION NOT NULL DEFAULT 5,
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_coach_profiles_status ON coach_profiles(status);
+	CREATE INDEX IF NOT EXISTS idx_coach_profiles_updated_at ON coach_profiles(updated_at DESC);
+
+	CREATE TABLE IF NOT EXISTS agent_coach_bindings (
+		aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
+		primary_coach_aid VARCHAR(160) NOT NULL,
+		shadow_coach_aid VARCHAR(160) NOT NULL DEFAULT '',
+		school_key VARCHAR(64) NOT NULL DEFAULT 'generalist',
+		stage VARCHAR(32) NOT NULL DEFAULT 'diagnostic',
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_coach_bindings_primary_coach ON agent_coach_bindings(primary_coach_aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_coach_bindings_school_key ON agent_coach_bindings(school_key);
+	CREATE INDEX IF NOT EXISTS idx_agent_coach_bindings_stage ON agent_coach_bindings(stage);
+
+	CREATE TABLE IF NOT EXISTS training_question_sets (
+		set_id VARCHAR(96) PRIMARY KEY,
+		school_key VARCHAR(64) NOT NULL,
+		scene_type VARCHAR(32) NOT NULL DEFAULT 'diagnostic',
+		title VARCHAR(160) NOT NULL,
+		difficulty VARCHAR(32) NOT NULL DEFAULT 'starter',
+		tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_training_question_sets_school_scene ON training_question_sets(school_key, scene_type);
+	CREATE INDEX IF NOT EXISTS idx_training_question_sets_status ON training_question_sets(status);
+
+	CREATE TABLE IF NOT EXISTS training_questions (
+		question_id VARCHAR(96) PRIMARY KEY,
+		set_id VARCHAR(96) NOT NULL REFERENCES training_question_sets(set_id) ON DELETE CASCADE,
+		capability_key VARCHAR(64) NOT NULL,
+		prompt_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		rubric_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		answer_key_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		sort_order INT NOT NULL DEFAULT 0,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_training_questions_set_id ON training_questions(set_id);
+	CREATE INDEX IF NOT EXISTS idx_training_questions_capability_key ON training_questions(capability_key);
+
+	CREATE TABLE IF NOT EXISTS agent_training_attempts (
+		attempt_id VARCHAR(96) PRIMARY KEY,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		set_id VARCHAR(96) NOT NULL REFERENCES training_question_sets(set_id) ON DELETE CASCADE,
+		question_id VARCHAR(96) NOT NULL DEFAULT '',
+		scene_type VARCHAR(32) NOT NULL DEFAULT 'diagnostic',
+		score INT NOT NULL DEFAULT 0,
+		result_status VARCHAR(32) NOT NULL DEFAULT 'queued',
+		artifact_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		feedback_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_training_attempts_aid ON agent_training_attempts(aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_training_attempts_scene_type ON agent_training_attempts(scene_type);
+	CREATE INDEX IF NOT EXISTS idx_agent_training_attempts_result_status ON agent_training_attempts(result_status);
+	CREATE INDEX IF NOT EXISTS idx_agent_training_attempts_created_at ON agent_training_attempts(created_at DESC);
+
+	CREATE TABLE IF NOT EXISTS agent_mistake_items (
+		mistake_id VARCHAR(96) PRIMARY KEY,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		source_type VARCHAR(32) NOT NULL,
+		source_ref_id VARCHAR(96) NOT NULL DEFAULT '',
+		capability_key VARCHAR(64) NOT NULL DEFAULT '',
+		mistake_type VARCHAR(64) NOT NULL,
+		severity VARCHAR(16) NOT NULL DEFAULT 'medium',
+		evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		status VARCHAR(32) NOT NULL DEFAULT 'open',
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_mistake_items_aid ON agent_mistake_items(aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_mistake_items_status ON agent_mistake_items(status);
+	CREATE INDEX IF NOT EXISTS idx_agent_mistake_items_severity ON agent_mistake_items(severity);
+
+	CREATE TABLE IF NOT EXISTS agent_remediation_plans (
+		plan_id VARCHAR(96) PRIMARY KEY,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		coach_aid VARCHAR(160) NOT NULL,
+		trigger_type VARCHAR(32) NOT NULL DEFAULT 'diagnostic',
+		goal_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		assigned_set_ids_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		required_pass_count INT NOT NULL DEFAULT 1,
+		status VARCHAR(32) NOT NULL DEFAULT 'active',
+		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_agent_remediation_plans_aid ON agent_remediation_plans(aid);
+	CREATE INDEX IF NOT EXISTS idx_agent_remediation_plans_status ON agent_remediation_plans(status);
+	CREATE INDEX IF NOT EXISTS idx_agent_remediation_plans_trigger_type ON agent_remediation_plans(trigger_type);
 	`
 
 	_, err := p.DB.Exec(schema)

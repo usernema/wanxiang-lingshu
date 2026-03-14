@@ -43,22 +43,31 @@ type AgentService interface {
 	ListGrowthProfiles(ctx context.Context, limit, offset int, maturityPool, primaryDomain string) ([]*models.AgentGrowthProfile, int, error)
 	GetGrowthOverview(ctx context.Context) (*models.AgentGrowthOverview, error)
 	TriggerGrowthEvaluation(ctx context.Context, aid, triggerType string) (*models.AgentGrowthProfileResponse, error)
+	GetDojoOverview(ctx context.Context, aid string) (*models.AgentDojoOverview, error)
+	StartDojoDiagnostics(ctx context.Context, aid string) (*models.DojoDiagnosticStartResponse, error)
+	ListDojoMistakes(ctx context.Context, aid string, limit int) ([]models.AgentMistakeItem, error)
+	ListDojoRemediationPlans(ctx context.Context, aid string, limit int) ([]models.AgentRemediationPlan, error)
+	GetAdminDojoOverview(ctx context.Context) (*models.AdminDojoOverview, error)
+	ListDojoCoaches(ctx context.Context, limit, offset int, status string) ([]*models.CoachProfile, int, error)
+	AssignAgentCoach(ctx context.Context, aid string, req *AssignCoachRequest) (*models.AgentCoachBinding, error)
 }
 
 // agentService Agent 服务实现
 type agentService struct {
 	repo             repository.AgentRepository
 	growthRepo       repository.GrowthRepository
+	dojoRepo         repository.DojoRepository
 	notificationRepo repository.NotificationRepository
 	redis            *database.RedisClient
 	config           *config.Config
 }
 
 // NewAgentService 创建 Agent 服务
-func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, notificationRepo repository.NotificationRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
+func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, dojoRepo repository.DojoRepository, notificationRepo repository.NotificationRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
 	return &agentService{
 		repo:             repo,
 		growthRepo:       growthRepo,
+		dojoRepo:         dojoRepo,
 		notificationRepo: notificationRepo,
 		redis:            redis,
 		config:           cfg,

@@ -50,10 +50,11 @@ func main() {
 	// 初始化仓库
 	agentRepo := repository.NewAgentRepository(db)
 	growthRepo := repository.NewGrowthRepository(db)
+	dojoRepo := repository.NewDojoRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
 	// 初始化服务
-	agentService := service.NewAgentService(agentRepo, growthRepo, notificationRepo, redis, cfg)
+	agentService := service.NewAgentService(agentRepo, growthRepo, dojoRepo, notificationRepo, redis, cfg)
 
 	// 初始化处理器
 	agentHandler := handler.NewAgentHandler(agentService)
@@ -137,6 +138,9 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			admin.GET("/agent-growth/agents", agentHandler.ListGrowthProfiles)
 			admin.POST("/agent-growth/evaluate", agentHandler.EvaluateGrowthProfile)
 			admin.POST("/agent-growth/agents/:aid/evaluate", agentHandler.EvaluateGrowthProfile)
+			admin.GET("/dojo/overview", agentHandler.GetAdminDojoOverview)
+			admin.GET("/dojo/coaches", agentHandler.ListDojoCoaches)
+			admin.POST("/dojo/agents/:aid/assign-coach", agentHandler.AssignDojoCoach)
 		}
 
 		agents := v1.Group("/agents")
@@ -168,6 +172,15 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 				authenticated.PUT("/me/profile", agentHandler.UpdateProfile)
 				authenticated.POST("/:aid/reputation", agentHandler.UpdateReputation)
 			}
+		}
+
+		dojo := v1.Group("/dojo")
+		dojo.Use(middleware.AuthMiddleware(cfg, redisClient))
+		{
+			dojo.GET("/me/overview", agentHandler.GetDojoOverview)
+			dojo.POST("/diagnostics/start", agentHandler.StartDojoDiagnostics)
+			dojo.GET("/me/mistakes", agentHandler.ListDojoMistakes)
+			dojo.GET("/me/remediation-plans", agentHandler.ListDojoRemediationPlans)
 		}
 	}
 
