@@ -147,7 +147,7 @@ describe('Admin page', () => {
         agentsTotal: 12,
         forumPostsTotal: 8,
         recentTasksCount: 3,
-        consistencyIssues: 0,
+        consistencyIssues: 1,
         ready: true,
       },
       dependencies: {
@@ -160,13 +160,19 @@ describe('Admin page', () => {
       tasks: [],
       consistency: {
         summary: {
-          total_issues: 0,
+          total_issues: 1,
           open_with_lifecycle_fields: 0,
-          in_progress_missing_assignment: 0,
+          in_progress_missing_assignment: 1,
           completed_missing_completed_at: 0,
-          cancelled_missing_cancelled_at: 0,
+          cancelled_missing_cancelled_at: 1,
         },
-        examples: [],
+        examples: [
+          {
+            task_id: 'task-cancel-1',
+            status: 'cancelled',
+            issue: 'cancelled 缺少 cancelled_at',
+          },
+        ],
       },
     })
     mockFetchAdminAgents.mockResolvedValue({
@@ -326,8 +332,35 @@ describe('Admin page', () => {
           requirements: '确认后台能查看申请',
           employer_aid: 'agent://a2ahub/admin-1',
           worker_aid: 'agent://a2ahub/worker-1',
+          escrow_id: 'escrow-1',
           status: 'submitted',
           reward: 10,
+          created_at: '2026-03-12T00:00:00.000Z',
+        },
+        {
+          id: 2,
+          task_id: 'task-legacy-1',
+          title: '旧分配任务',
+          description: '用于验证 legacy assigned 队列',
+          requirements: '检查归一化入口',
+          employer_aid: 'agent://a2ahub/admin-1',
+          worker_aid: 'agent://a2ahub/worker-2',
+          escrow_id: 'escrow-legacy-1',
+          status: 'assigned',
+          reward: 12,
+          created_at: '2026-03-12T00:00:00.000Z',
+        },
+        {
+          id: 3,
+          task_id: 'task-cancel-1',
+          title: '退款核对任务',
+          description: '用于验证取消后核账与异常样本',
+          requirements: '检查退款和冻结余额',
+          employer_aid: 'agent://a2ahub/admin-1',
+          worker_aid: 'agent://a2ahub/worker-3',
+          escrow_id: 'escrow-cancel-1',
+          status: 'cancelled',
+          reward: 8,
           created_at: '2026-03-12T00:00:00.000Z',
         },
       ],
@@ -621,6 +654,13 @@ describe('Admin page', () => {
     expect(await screen.findByText('任务运维中心')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '任务运维' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
+    expect(screen.getByText('任务运维队列')).toBeInTheDocument()
+    expect(screen.getByText('历史 assigned 待处理')).toBeInTheDocument()
+    expect(screen.getByText('待验收积压')).toBeInTheDocument()
+    expect(screen.getByText('缺字段待人工复核')).toBeInTheDocument()
+    expect(screen.getByText('取消后待核账')).toBeInTheDocument()
+    expect(screen.getAllByText('旧分配任务').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('退款核对任务').length).toBeGreaterThan(0)
     expect(screen.getByText('一致性诊断')).toBeInTheDocument()
     expect(screen.getAllByText('待验收').length).toBeGreaterThan(0)
     expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()

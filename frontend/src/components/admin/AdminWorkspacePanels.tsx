@@ -55,6 +55,102 @@ function DependencyRow({ dependency, toneClass }: { dependency: AdminDependency;
   )
 }
 
+type TaskOpsQueueItem = {
+  key: string
+  title: string
+  note: string
+  meta?: string
+  task?: AdminTask
+}
+
+function deriveTaskMaintenanceIssue(task: AdminTask) {
+  if (task.status === 'assigned' && !task.worker_aid) return 'assigned 缺少 worker_aid'
+  if (task.status === 'assigned' && !task.escrow_id) return 'assigned 缺少 escrow_id'
+  if ((task.status === 'in_progress' || task.status === 'submitted') && !task.worker_aid) return `${task.status} 缺少 worker_aid`
+  if ((task.status === 'in_progress' || task.status === 'submitted') && !task.escrow_id) return `${task.status} 缺少 escrow_id`
+  if (task.status === 'completed' && !task.completed_at) return 'completed 缺少 completed_at'
+  if (task.status === 'cancelled' && !task.cancelled_at) return 'cancelled 缺少 cancelled_at'
+  return null
+}
+
+function TaskOpsQueueCard({
+  title,
+  description,
+  count,
+  tone,
+  items,
+  emptyText,
+  actionLabel,
+  onAction,
+  openTaskDetail,
+}: {
+  title: string
+  description: string
+  count: number
+  tone: 'slate' | 'emerald' | 'amber' | 'rose'
+  items: TaskOpsQueueItem[]
+  emptyText: string
+  actionLabel?: string
+  onAction?: () => void | Promise<void>
+  openTaskDetail?: (task: AdminTask) => void
+}) {
+  const toneMap = {
+    slate: 'bg-slate-50 text-slate-900 border-slate-200',
+    emerald: 'bg-emerald-50 text-emerald-900 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-900 border-amber-200',
+    rose: 'bg-rose-50 text-rose-900 border-rose-200',
+  }
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneMap[tone]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">{title}</p>
+          <p className="mt-1 text-sm opacity-80">{description}</p>
+        </div>
+        <span className="rounded-full bg-white/80 px-3 py-1 text-sm font-semibold">{count}</span>
+      </div>
+      <div className="mt-4 space-y-2">
+        {items.length === 0 ? (
+          <p className="rounded-xl bg-white/80 px-3 py-2 text-sm opacity-80">{emptyText}</p>
+        ) : (
+          items.slice(0, 3).map((item) => (
+            <div key={item.key} className="rounded-xl bg-white/80 px-3 py-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{item.title}</p>
+                  <p className="mt-1 text-xs opacity-80">{item.note}</p>
+                  {item.meta && <p className="mt-1 text-xs opacity-70">{item.meta}</p>}
+                </div>
+                {item.task && openTaskDetail && (
+                  <button
+                    type="button"
+                    aria-label={`查看队列任务 ${item.task.task_id} 详情`}
+                    onClick={() => openTaskDetail(item.task as AdminTask)}
+                    className="shrink-0 rounded-lg border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+      {items.length > 3 && <p className="mt-3 text-xs opacity-70">还有 {items.length - 3} 条未展开。</p>}
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={() => onAction()}
+          className="mt-4 rounded-lg border border-primary-300 bg-white px-3 py-2 text-xs text-primary-700 hover:bg-primary-50"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function AdminOverviewPanel({
   overview,
   isLoading,
@@ -855,6 +951,64 @@ export function AdminTaskOperationsPanel({
   const legacyAssignedCount = taskStatusSummary.assigned || 0
   const submittedCount = taskStatusSummary.submitted || 0
   const visibleTaskCount = taskItems.length || recentTasksCount
+  const taskMap = new Map(taskItems.map((task) => [task.task_id, task]))
+  const legacyAssignedQueueItems: TaskOpsQueueItem[] = taskItems
+    .filter((task) => task.status === 'assigned')
+    .map((task) => ({
+      key: `legacy-${task.task_id}`,
+      title: task.title,
+      note: task.escrow_id
+        ? `已分配给 ${task.worker_aid || '未知 worker'}，但仍停留在 legacy assigned。`
+        : '已分配但缺少 escrow_id，暂不建议自动归一化。',
+      meta: `雇主 ${task.employer_aid} · ${task.escrow_id ? `Escrow ${task.escrow_id}` : 'Escrow 待补'}`,
+      task,
+    }))
+  const submittedQueueItems: TaskOpsQueueItem[] = taskItems
+    .filter((task) => task.status === 'submitted')
+    .map((task) => ({
+      key: `submitted-${task.task_id}`,
+      title: task.title,
+      note: `Worker ${task.worker_aid || '未记录'} 已提交交付，等待 employer 决策。`,
+      meta: `雇主 ${task.employer_aid} · Reward ${task.reward}`,
+      task,
+    }))
+  const cancelledSettlementQueueItems: TaskOpsQueueItem[] = taskItems
+    .filter((task) => task.status === 'cancelled' && Boolean(task.escrow_id))
+    .map((task) => ({
+      key: `cancelled-${task.task_id}`,
+      title: task.title,
+      note: '已取消且带 escrow 轨迹，建议核对退款、冻结余额和通知解释。',
+      meta: `${task.escrow_id} · 取消时间 ${task.cancelled_at ? formatTime(task.cancelled_at) : '待补'}`,
+      task,
+    }))
+  const anomalyQueueItemMap = new Map<string, TaskOpsQueueItem>()
+
+  consistencyExamples.forEach((example) => {
+    const task = taskMap.get(example.task_id)
+    anomalyQueueItemMap.set(`${example.task_id}:${example.issue}`, {
+      key: `consistency-${example.task_id}-${example.issue}`,
+      title: task?.title || example.task_id,
+      note: example.issue,
+      meta: task ? `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}` : taskStatusLabel(example.status),
+      task,
+    })
+  })
+
+  taskItems.forEach((task) => {
+    const issue = deriveTaskMaintenanceIssue(task)
+    if (!issue) return
+    const key = `${task.task_id}:${issue}`
+    if (anomalyQueueItemMap.has(key)) return
+    anomalyQueueItemMap.set(key, {
+      key: `derived-${task.task_id}-${issue}`,
+      title: task.title,
+      note: issue,
+      meta: `${taskStatusLabel(task.status)} · 雇主 ${task.employer_aid}`,
+      task,
+    })
+  })
+
+  const anomalyQueueItems = Array.from(anomalyQueueItemMap.values())
 
   return (
     <section className="grid gap-6">
@@ -863,6 +1017,58 @@ export function AdminTaskOperationsPanel({
         <StatCard title="待验收任务" value={submittedCount} tone={submittedCount > 0 ? 'amber' : 'slate'} />
         <StatCard title="历史 assigned" value={legacyAssignedCount} tone={legacyAssignedCount > 0 ? 'rose' : 'emerald'} />
         <StatCard title="一致性异常" value={consistencyIssueCount} tone={consistencyIssueCount > 0 ? 'rose' : 'emerald'} />
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">任务运维队列</h2>
+            <p className="text-sm text-slate-500">把最容易积压和最需要人工干预的任务先聚出来，值班时直接按队列处理。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            队列 {legacyAssignedQueueItems.length + submittedQueueItems.length + anomalyQueueItems.length + cancelledSettlementQueueItems.length}
+          </span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <TaskOpsQueueCard
+            title="历史 assigned 待处理"
+            description="优先识别能自动归一化的旧任务，避免 worker 长时间卡在 legacy 状态。"
+            count={legacyAssignedQueueItems.length}
+            tone={legacyAssignedQueueItems.length > 0 ? 'rose' : 'emerald'}
+            items={legacyAssignedQueueItems}
+            emptyText="当前没有历史 assigned 任务。"
+            actionLabel={legacyAssignedQueueItems.length > 0 ? '执行归一化' : undefined}
+            onAction={legacyAssignedQueueItems.length > 0 ? handleNormalizeLegacyAssignedTasks : undefined}
+            openTaskDetail={openTaskDetail}
+          />
+          <TaskOpsQueueCard
+            title="待验收积压"
+            description="这些任务已完成交付，下一步应该由 employer 验收或退回修改。"
+            count={submittedQueueItems.length}
+            tone={submittedQueueItems.length > 0 ? 'amber' : 'emerald'}
+            items={submittedQueueItems}
+            emptyText="当前没有 submitted 积压任务。"
+            openTaskDetail={openTaskDetail}
+          />
+          <TaskOpsQueueCard
+            title="缺字段待人工复核"
+            description="状态、生命周期字段或 escrow / worker 记录不一致，优先排查。"
+            count={anomalyQueueItems.length}
+            tone={anomalyQueueItems.length > 0 ? 'rose' : 'emerald'}
+            items={anomalyQueueItems}
+            emptyText="当前没有需要人工复核的异常样本。"
+            openTaskDetail={openTaskDetail}
+          />
+          <TaskOpsQueueCard
+            title="取消后待核账"
+            description="已取消但涉及 escrow，建议核对退款通知、冻结余额和账务解释。"
+            count={cancelledSettlementQueueItems.length}
+            tone={cancelledSettlementQueueItems.length > 0 ? 'amber' : 'slate'}
+            items={cancelledSettlementQueueItems}
+            emptyText="当前没有需要核账的取消任务。"
+            openTaskDetail={openTaskDetail}
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
