@@ -666,21 +666,6 @@ export function AdminContentPanel({
   contentTone,
   statusLabel,
   formatTime,
-  taskItems,
-  recentTasksCount,
-  taskDraftFilters,
-  setTaskDraftFilters,
-  applyTaskFilters,
-  resetTaskFilters,
-  taskStatusSummary,
-  consistencySummary,
-  consistencyExamples,
-  handleNormalizeLegacyAssignedTasks,
-  normalizeLegacyAssignedPending,
-  taskStatusTone,
-  taskStatusLabel,
-  summarizeText,
-  openTaskDetail,
 }: {
   postItems: AdminForumPost[]
   postTotal: number
@@ -699,29 +684,14 @@ export function AdminContentPanel({
   contentTone: (status?: string) => string
   statusLabel: (status?: string) => string
   formatTime: (value?: string | null) => string
-  taskItems: AdminTask[]
-  recentTasksCount: number
-  taskDraftFilters: TaskDraftFilters
-  setTaskDraftFilters: Dispatch<SetStateAction<TaskDraftFilters>>
-  applyTaskFilters: (event: FormEvent<HTMLFormElement>) => void
-  resetTaskFilters: () => void
-  taskStatusSummary: Record<string, number>
-  consistencySummary?: ConsistencySummary
-  consistencyExamples: Array<{ task_id: string; status: string; issue: string }>
-  handleNormalizeLegacyAssignedTasks: () => void | Promise<void>
-  normalizeLegacyAssignedPending: boolean
-  taskStatusTone: (status?: string) => string
-  taskStatusLabel: (status?: string) => string
-  summarizeText: (content?: string | null, maxLength?: number) => string
-  openTaskDetail: (task: AdminTask) => void
 }) {
   return (
-    <section className="grid gap-6 xl:grid-cols-2">
-      <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
+    <section className="grid gap-6">
+      <div className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">内容审核</h2>
-            <p className="text-sm text-slate-500">按状态、作者和分类筛选帖子并处理评论</p>
+            <p className="text-sm text-slate-500">按状态、作者和分类筛选帖子并处理评论。</p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
             {postItems.length} / {postTotal || forumPostsTotal}
@@ -842,120 +812,196 @@ export function AdminContentPanel({
           {postItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有帖子。</p>}
         </div>
       </div>
+    </section>
+  )
+}
 
-      <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-900">任务运营</h2>
-            <p className="text-sm text-slate-500">按任务状态和雇主筛选，并查看一致性诊断</p>
-          </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
-            {taskItems.length || recentTasksCount}
-          </span>
-        </div>
-        <form className="mb-4 space-y-3 rounded-xl border border-slate-200 p-4" onSubmit={applyTaskFilters}>
-          <div className="grid gap-3 xl:grid-cols-2">
-            <label className="block text-sm text-slate-600">
-              <span className="mb-1 block font-medium text-slate-700">任务状态</span>
-              <select
-                value={taskDraftFilters.status}
-                onChange={(event) => setTaskDraftFilters((current) => ({ ...current, status: event.target.value as 'all' | AdminTaskStatus }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
-              >
-                <option value="all">全部</option>
-                <option value="open">开放中</option>
-                <option value="assigned">已分配待开工</option>
-                <option value="in_progress">进行中</option>
-                <option value="submitted">待验收</option>
-                <option value="completed">已完成</option>
-                <option value="cancelled">已取消</option>
-              </select>
-            </label>
-            <label className="block text-sm text-slate-600">
-              <span className="mb-1 block font-medium text-slate-700">雇主 AID</span>
-              <input
-                value={taskDraftFilters.employerAid}
-                onChange={(event) => setTaskDraftFilters((current) => ({ ...current, employerAid: event.target.value }))}
-                className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
-                placeholder="agent://..."
-              />
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
-              应用筛选
-            </button>
-            <button type="button" onClick={resetTaskFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
-              重置
-            </button>
-          </div>
-        </form>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
-          <SummaryChip label="已分配" value={taskStatusSummary.assigned || 0} tone="bg-indigo-100 text-indigo-800" />
-          <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
-          <SummaryChip label="待验收" value={taskStatusSummary.submitted || 0} tone="bg-violet-100 text-violet-800" />
-          <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
-          <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
-        </div>
-        <div className="mb-4 rounded-xl bg-slate-50 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="font-medium text-slate-900">一致性诊断</p>
-              <p className="text-sm text-slate-500">重点排查任务状态和生命周期字段不一致，并修复历史 assigned 兼容数据。</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-3 py-1 text-xs ${(consistencySummary?.total_issues || 0) > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                异常 {consistencySummary?.total_issues || 0}
+export function AdminTaskOperationsPanel({
+  taskItems,
+  recentTasksCount,
+  taskDraftFilters,
+  setTaskDraftFilters,
+  applyTaskFilters,
+  resetTaskFilters,
+  taskStatusSummary,
+  consistencySummary,
+  consistencyExamples,
+  handleNormalizeLegacyAssignedTasks,
+  normalizeLegacyAssignedPending,
+  taskStatusTone,
+  taskStatusLabel,
+  summarizeText,
+  openTaskDetail,
+  formatTime,
+}: {
+  taskItems: AdminTask[]
+  recentTasksCount: number
+  taskDraftFilters: TaskDraftFilters
+  setTaskDraftFilters: Dispatch<SetStateAction<TaskDraftFilters>>
+  applyTaskFilters: (event: FormEvent<HTMLFormElement>) => void
+  resetTaskFilters: () => void
+  taskStatusSummary: Record<string, number>
+  consistencySummary?: ConsistencySummary
+  consistencyExamples: Array<{ task_id: string; status: string; issue: string }>
+  handleNormalizeLegacyAssignedTasks: () => void | Promise<void>
+  normalizeLegacyAssignedPending: boolean
+  taskStatusTone: (status?: string) => string
+  taskStatusLabel: (status?: string) => string
+  summarizeText: (content?: string | null, maxLength?: number) => string
+  openTaskDetail: (task: AdminTask) => void
+  formatTime: (value?: string | null) => string
+}) {
+  const consistencyIssueCount = consistencySummary?.total_issues || 0
+  const legacyAssignedCount = taskStatusSummary.assigned || 0
+  const submittedCount = taskStatusSummary.submitted || 0
+  const visibleTaskCount = taskItems.length || recentTasksCount
+
+  return (
+    <section className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="当前任务视图" value={visibleTaskCount} tone="amber" />
+        <StatCard title="待验收任务" value={submittedCount} tone={submittedCount > 0 ? 'amber' : 'slate'} />
+        <StatCard title="历史 assigned" value={legacyAssignedCount} tone={legacyAssignedCount > 0 ? 'rose' : 'emerald'} />
+        <StatCard title="一致性异常" value={consistencyIssueCount} tone={consistencyIssueCount > 0 ? 'rose' : 'emerald'} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">任务运维中心</h2>
+                <p className="text-sm text-slate-500">聚焦任务筛选、异常筛查、历史兼容修复和人工复核。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                最近任务 {recentTasksCount}
               </span>
-              <button
-                type="button"
-                onClick={() => handleNormalizeLegacyAssignedTasks()}
-                disabled={normalizeLegacyAssignedPending}
-                className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {normalizeLegacyAssignedPending ? '归一化中…' : '归一化历史 assigned'}
-              </button>
+            </div>
+            <form className="space-y-3 rounded-xl border border-slate-200 p-4" onSubmit={applyTaskFilters}>
+              <div className="grid gap-3">
+                <label className="block text-sm text-slate-600">
+                  <span className="mb-1 block font-medium text-slate-700">任务状态</span>
+                  <select
+                    value={taskDraftFilters.status}
+                    onChange={(event) => setTaskDraftFilters((current) => ({ ...current, status: event.target.value as 'all' | AdminTaskStatus }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                  >
+                    <option value="all">全部</option>
+                    <option value="open">开放中</option>
+                    <option value="assigned">已分配待开工</option>
+                    <option value="in_progress">进行中</option>
+                    <option value="submitted">待验收</option>
+                    <option value="completed">已完成</option>
+                    <option value="cancelled">已取消</option>
+                  </select>
+                </label>
+                <label className="block text-sm text-slate-600">
+                  <span className="mb-1 block font-medium text-slate-700">雇主 AID</span>
+                  <input
+                    value={taskDraftFilters.employerAid}
+                    onChange={(event) => setTaskDraftFilters((current) => ({ ...current, employerAid: event.target.value }))}
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
+                    placeholder="agent://..."
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+                  应用筛选
+                </button>
+                <button type="button" onClick={resetTaskFilters} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                  重置
+                </button>
+              </div>
+            </form>
+            <div className="mt-4 rounded-xl bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-900">修复说明</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                “归一化历史 assigned”只会处理同时具备 <span className="font-mono text-slate-900">worker_aid</span> 与
+                <span className="font-mono text-slate-900"> escrow_id</span> 的旧任务；缺字段任务会保留原状，供运营人工复核。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SummaryChip label="开放中" value={taskStatusSummary.open || 0} tone="bg-sky-100 text-sky-800" />
+                <SummaryChip label="已分配" value={legacyAssignedCount} tone="bg-indigo-100 text-indigo-800" />
+                <SummaryChip label="进行中" value={taskStatusSummary.in_progress || 0} tone="bg-amber-100 text-amber-800" />
+                <SummaryChip label="待验收" value={submittedCount} tone="bg-violet-100 text-violet-800" />
+                <SummaryChip label="已完成" value={taskStatusSummary.completed || 0} tone="bg-emerald-100 text-emerald-800" />
+                <SummaryChip label="已取消" value={taskStatusSummary.cancelled || 0} tone="bg-rose-100 text-rose-800" />
+              </div>
             </div>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <SummaryChip label="open 异常" value={consistencySummary?.open_with_lifecycle_fields || 0} tone="bg-sky-100 text-sky-800" />
-            <SummaryChip label="执行/待验收缺字段" value={consistencySummary?.in_progress_missing_assignment || 0} tone="bg-amber-100 text-amber-800" />
-            <SummaryChip label="完成缺时间" value={consistencySummary?.completed_missing_completed_at || 0} tone="bg-emerald-100 text-emerald-800" />
-            <SummaryChip label="取消缺时间" value={consistencySummary?.cancelled_missing_cancelled_at || 0} tone="bg-rose-100 text-rose-800" />
-          </div>
-          <div className="mt-3 space-y-2">
-            {consistencyExamples.length > 0 ? consistencyExamples.map((example) => (
-              <div key={`${example.task_id}-${example.issue}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-                <span className="font-medium text-slate-900">{example.task_id}</span> · {taskStatusLabel(example.status)} · {example.issue}
+
+          <div className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="font-medium text-slate-900">一致性诊断</p>
+                <p className="text-sm text-slate-500">重点排查任务状态和生命周期字段不一致，并修复历史兼容状态。</p>
               </div>
-            )) : <p className="text-sm text-slate-500">当前没有检测到一致性异常。</p>}
-          </div>
-        </div>
-        <div className="space-y-3">
-          {taskItems.map((task) => (
-            <div key={task.task_id} className="rounded-xl border border-slate-200 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <p className="font-medium text-slate-900">{task.title}</p>
-                <span className={`rounded-full px-3 py-1 text-xs ${taskStatusTone(task.status)}`}>{taskStatusLabel(task.status)}</span>
-              </div>
-              <p className="mt-2 text-sm text-slate-600">{summarizeText(task.description, 140)}</p>
-              <p className="mt-2 text-sm text-slate-600">雇主：{task.employer_aid}</p>
-              <p className="mt-1 text-xs text-slate-500">需求：{summarizeText(task.requirements, 120)}</p>
-              <p className="mt-1 text-xs text-slate-500">工作者：{task.worker_aid || '未分配'} · Reward {task.reward} · {formatTime(task.created_at)}</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-3 py-1 text-xs ${consistencyIssueCount > 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                  异常 {consistencyIssueCount}
+                </span>
                 <button
                   type="button"
-                  aria-label={`查看任务 ${task.title} 详情`}
-                  onClick={() => openTaskDetail(task)}
-                  className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  onClick={() => handleNormalizeLegacyAssignedTasks()}
+                  disabled={normalizeLegacyAssignedPending}
+                  className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  查看详情
+                  {normalizeLegacyAssignedPending ? '归一化中…' : '归一化历史 assigned'}
                 </button>
               </div>
             </div>
-          ))}
-          {taskItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有任务。</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <SummaryChip label="open 异常" value={consistencySummary?.open_with_lifecycle_fields || 0} tone="bg-sky-100 text-sky-800" />
+              <SummaryChip label="执行/待验收缺字段" value={consistencySummary?.in_progress_missing_assignment || 0} tone="bg-amber-100 text-amber-800" />
+              <SummaryChip label="完成缺时间" value={consistencySummary?.completed_missing_completed_at || 0} tone="bg-emerald-100 text-emerald-800" />
+              <SummaryChip label="取消缺时间" value={consistencySummary?.cancelled_missing_cancelled_at || 0} tone="bg-rose-100 text-rose-800" />
+            </div>
+            <div className="mt-4 space-y-2">
+              {consistencyExamples.length > 0 ? consistencyExamples.map((example) => (
+                <div key={`${example.task_id}-${example.issue}`} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                  <span className="font-medium text-slate-900">{example.task_id}</span> · {taskStatusLabel(example.status)} · {example.issue}
+                </div>
+              )) : <p className="text-sm text-slate-500">当前没有检测到一致性异常。</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">任务列表</h2>
+              <p className="text-sm text-slate-500">查看任务状态、雇主 / worker 归属与任务描述，必要时打开详情继续追查。</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+              {visibleTaskCount}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {taskItems.map((task) => (
+              <div key={task.task_id} className="rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-medium text-slate-900">{task.title}</p>
+                  <span className={`rounded-full px-3 py-1 text-xs ${taskStatusTone(task.status)}`}>{taskStatusLabel(task.status)}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">{summarizeText(task.description, 140)}</p>
+                <p className="mt-2 text-sm text-slate-600">雇主：{task.employer_aid}</p>
+                <p className="mt-1 text-xs text-slate-500">需求：{summarizeText(task.requirements, 120)}</p>
+                <p className="mt-1 text-xs text-slate-500">工作者：{task.worker_aid || '未分配'} · Reward {task.reward} · {formatTime(task.created_at)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    aria-label={`查看任务 ${task.title} 详情`}
+                    onClick={() => openTaskDetail(task)}
+                    className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                  >
+                    查看详情
+                  </button>
+                </div>
+              </div>
+            ))}
+            {taskItems.length === 0 && <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">当前筛选条件下没有任务。</p>}
+          </div>
         </div>
       </div>
     </section>

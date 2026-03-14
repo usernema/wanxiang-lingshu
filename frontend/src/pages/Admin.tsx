@@ -8,6 +8,7 @@ import {
   AdminContentPanel,
   AdminGrowthPanel,
   AdminOverviewPanel,
+  AdminTaskOperationsPanel,
 } from '@/components/admin/AdminWorkspacePanels'
 import { isProtectedAgent, useAdminConsoleState } from '@/hooks/useAdminConsoleState'
 import { formatAdminError } from '@/lib/admin'
@@ -139,7 +140,7 @@ function draftLabel(status?: string) {
   return status || '未知'
 }
 
-type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'audit'
+type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
 type AdminDetailParamKey = 'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit'
 type AdminDetailParams = Partial<Record<AdminDetailParamKey, string>>
 
@@ -148,6 +149,7 @@ const ADMIN_TAB_SEGMENTS: Record<AdminTabKey, string> = {
   agents: 'agents',
   growth: 'growth',
   content: 'content',
+  tasks: 'tasks',
   audit: 'audit',
 }
 
@@ -164,6 +166,7 @@ function getAdminTabFromPath(pathname: string): AdminTabKey {
   if (segment === 'agents') return 'agents'
   if (segment === 'growth') return 'growth'
   if (segment === 'content') return 'content'
+  if (segment === 'tasks') return 'tasks'
   if (segment === 'audit') return 'audit'
   return 'overview'
 }
@@ -350,6 +353,7 @@ export default function Admin() {
       resetAgentControls,
       resetGrowthControls,
       resetContentControls,
+      resetTaskControls,
       resetAuditControls,
     },
   } = useAdminConsoleState()
@@ -440,6 +444,10 @@ export default function Admin() {
       resetContentControls()
     }
 
+    if (tab === 'tasks') {
+      resetTaskControls()
+    }
+
     if (tab === 'audit') {
       resetAuditControls()
     }
@@ -480,9 +488,15 @@ export default function Admin() {
     },
     {
       key: 'content',
-      label: '内容与任务',
-      description: '统一处理论坛内容审核、评论复核和任务流诊断。',
-      badge: (postItems.length || 0) + (taskItems.length || 0),
+      label: '内容',
+      description: '处理论坛帖子、评论复核和内容侧运营动作。',
+      badge: postItems.length || 0,
+    },
+    {
+      key: 'tasks',
+      label: '任务运维',
+      description: '处理任务筛选、异常诊断和历史兼容修复。',
+      badge: taskItems.length || 0,
     },
     {
       key: 'audit',
@@ -542,7 +556,7 @@ export default function Admin() {
   }, [activeTab, deepLinkPostId, postItems, selectedPost?.id])
 
   useEffect(() => {
-    if (activeTab !== 'content' || !deepLinkTaskId) return
+    if (activeTab !== 'tasks' || !deepLinkTaskId) return
     const target = taskItems.find((task) => task.task_id === deepLinkTaskId)
     if (target && selectedTask?.task_id !== target.task_id) {
       openTaskDetail(target)
@@ -562,7 +576,7 @@ export default function Admin() {
       <div className="space-y-6">
         <section className="rounded-2xl bg-white p-8 shadow-sm">
           <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
-          <p className="mt-3 text-slate-600">这是内部运营后台，当前提供系统健康、Agent 列表、论坛帖子与评论审核，以及任务工作台概览。请输入后台访问令牌后进入。</p>
+          <p className="mt-3 text-slate-600">这是内部运营后台，当前提供系统健康、Agent 管理、内容审核、任务运维和审计追踪。请输入后台访问令牌后进入。</p>
         </section>
 
         <section className="rounded-2xl bg-white p-8 shadow-sm">
@@ -592,7 +606,7 @@ export default function Admin() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
-            <p className="mt-2 text-slate-600">用于内部巡检和内容运营的控制台。当前版本覆盖服务健康、Agent 注册态势、论坛帖子与评论审核，以及任务流状态。</p>
+            <p className="mt-2 text-slate-600">用于内部巡检和运营交付的控制台。当前版本覆盖服务健康、Agent 注册态势、内容审核、任务运维与后台审计。</p>
           </div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={handleRefresh} className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50">
@@ -751,6 +765,11 @@ export default function Admin() {
           contentTone={contentTone}
           statusLabel={statusLabel}
           formatTime={formatTime}
+        />
+      )}
+
+      {activeTab === 'tasks' && (
+        <AdminTaskOperationsPanel
           taskItems={taskItems}
           recentTasksCount={overview?.summary.recentTasksCount ?? 0}
           taskDraftFilters={taskDraftFilters}
@@ -766,6 +785,7 @@ export default function Admin() {
           taskStatusLabel={taskStatusLabel}
           summarizeText={summarizeText}
           openTaskDetail={openTaskDetail}
+          formatTime={formatTime}
         />
       )}
 

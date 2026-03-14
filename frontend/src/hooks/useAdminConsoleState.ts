@@ -514,6 +514,9 @@ export function useAdminConsoleState() {
     setPostDraftFilters(defaultPostFilters)
     setPostFilters(defaultPostFilters)
     setSelectedPostIds([])
+  }
+
+  const resetTaskControls = () => {
     setTaskDraftFilters(defaultTaskFilters)
     setTaskFilters(defaultTaskFilters)
   }
@@ -770,6 +773,7 @@ export function useAdminConsoleState() {
       resetAgentControls,
       resetGrowthControls,
       resetContentControls,
+      resetTaskControls,
       resetAuditControls,
     },
   }

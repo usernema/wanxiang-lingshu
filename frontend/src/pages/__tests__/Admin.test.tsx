@@ -532,7 +532,7 @@ describe('Admin page', () => {
     })
 
     expect(await screen.findByRole('dialog', { name: '任务详情' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '内容与任务' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '任务运维' })).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.click(screen.getByRole('button', { name: '关闭 任务详情' }))
 
@@ -569,16 +569,10 @@ describe('Admin page', () => {
       expect(mockFetchAdminAgents).toHaveBeenLastCalledWith({ limit: 100, offset: 0, status: 'suspended' })
     })
 
-    fireEvent.click(screen.getByRole('tab', { name: '内容与任务' }))
+    fireEvent.click(screen.getByRole('tab', { name: '内容' }))
 
     expect(await screen.findByText('后台巡检')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: '内容与任务' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
-    expect(screen.getByText('一致性诊断')).toBeInTheDocument()
-    expect(screen.getAllByText('待验收').length).toBeGreaterThan(0)
-    expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: '待验收' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '归一化历史 assigned' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '内容' })).toHaveAttribute('aria-selected', 'true')
 
     fireEvent.change(screen.getByPlaceholderText('如：ops'), {
       target: { value: 'ops' },
@@ -586,7 +580,7 @@ describe('Admin page', () => {
     fireEvent.change(screen.getByLabelText('作者 AID'), {
       target: { value: 'agent://a2ahub/admin-1' },
     })
-    fireEvent.click(screen.getAllByText('应用筛选')[0])
+    fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
 
     await waitFor(() => {
       expect(mockFetchAdminForumPosts).toHaveBeenLastCalledWith({
@@ -622,13 +616,24 @@ describe('Admin page', () => {
       expect(mockBatchUpdateAdminPostStatus).toHaveBeenCalledWith(['post-1'], 'hidden')
     })
 
+    fireEvent.click(screen.getByRole('tab', { name: '任务运维' }))
+
+    expect(await screen.findByText('任务运维中心')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '任务运维' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByText('检查生产健康').length).toBeGreaterThan(0)
+    expect(screen.getByText('一致性诊断')).toBeInTheDocument()
+    expect(screen.getAllByText('待验收').length).toBeGreaterThan(0)
+    expect(screen.getByRole('option', { name: '已分配待开工' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: '待验收' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '归一化历史 assigned' })).toBeInTheDocument()
+
     fireEvent.change(screen.getByLabelText('任务状态'), {
       target: { value: 'submitted' },
     })
     fireEvent.change(screen.getByLabelText('雇主 AID'), {
       target: { value: 'agent://a2ahub/admin-1' },
     })
-    fireEvent.click(screen.getAllByText('应用筛选')[1])
+    fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
 
     await waitFor(() => {
       expect(mockFetchAdminTasks).toHaveBeenLastCalledWith({

@@ -1,7 +1,7 @@
 import type { AdminAuditLog } from '@/lib/admin'
 import { auditResourceLabel, readAuditDetailString } from '@/components/admin/adminPresentation'
 
-export type AdminAuditNavigationTab = 'agents' | 'growth' | 'content' | 'audit'
+export type AdminAuditNavigationTab = 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
 export type AdminAuditNavigationParams = Partial<Record<'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
 
 export type AdminAuditResourceTarget = {
@@ -76,7 +76,7 @@ export function getAdminAuditResourceTarget(log: AdminAuditLog): AdminAuditResou
     case 'marketplace_task':
       if (!resourceId) return null
       return {
-        tab: 'content',
+        tab: 'tasks',
         params: { task: resourceId },
         buttonLabel: '查看关联任务',
         summaryLabel: `任务 ${resourceId}`,

@@ -21,7 +21,7 @@ import {
   readAuditDetailString,
 } from '@/components/admin/adminPresentation'
 
-type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'audit'
+type AdminTabKey = 'overview' | 'agents' | 'growth' | 'content' | 'tasks' | 'audit'
 type AdminDetailParams = Partial<Record<'agent' | 'growth' | 'draft' | 'template' | 'grant' | 'post' | 'task' | 'audit', string>>
 
 function DetailDrawer({
@@ -355,7 +355,7 @@ export function AdminDetailDrawers({
                 <button
                   type="button"
                   aria-label={`查看 Skill Draft ${selectedGrowthDraft.draft_id} 的来源任务`}
-                  onClick={() => navigateToAdminView('content', { task: selectedGrowthDraft.source_task_id })}
+                  onClick={() => navigateToAdminView('tasks', { task: selectedGrowthDraft.source_task_id })}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
                 >
                   查看来源任务
@@ -510,7 +510,7 @@ export function AdminDetailDrawers({
                 <button
                   type="button"
                   aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的来源任务`}
-                  onClick={() => navigateToAdminView('content', { task: selectedEmployerTemplate.source_task_id })}
+                  onClick={() => navigateToAdminView('tasks', { task: selectedEmployerTemplate.source_task_id })}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
                 >
                   查看来源任务
@@ -589,7 +589,7 @@ export function AdminDetailDrawers({
                 <button
                   type="button"
                   aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的来源任务`}
-                  onClick={() => navigateToAdminView('content', { task: selectedEmployerSkillGrant.source_task_id })}
+                  onClick={() => navigateToAdminView('tasks', { task: selectedEmployerSkillGrant.source_task_id })}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
                 >
                   查看来源任务
