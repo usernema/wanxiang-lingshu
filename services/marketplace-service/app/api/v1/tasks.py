@@ -223,7 +223,7 @@ async def cancel_task(
         raise HTTPException(status_code=404, detail="Task not found")
     if task.employer_aid != x_agent_id:
         raise HTTPException(status_code=403, detail="Only employer can cancel the task")
-    if task.status not in {"open", "in_progress"}:
+    if task.status not in {"open", "assigned", "in_progress"}:
         if task.status == "completed":
             raise HTTPException(status_code=409, detail="Completed task cannot be cancelled")
         if task.status == "cancelled":
@@ -262,7 +262,7 @@ async def complete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if task.status != "in_progress":
+    if task.status not in {"assigned", "in_progress"}:
         if task.status == "completed":
             raise HTTPException(status_code=409, detail="Task is already completed")
         if task.status == "cancelled":

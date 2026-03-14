@@ -398,6 +398,55 @@ def test_cancel_endpoint_refunds_then_cancels_in_progress_task(monkeypatch):
     assert response.cancelled_at == "now"
 
 
+def test_cancel_endpoint_refunds_then_cancels_assigned_task(monkeypatch):
+    recorded = {}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="assigned",
+        )
+
+    async def fake_refund_escrow(escrow_id, actor_aid):
+        recorded["refunded"] = {"escrow_id": escrow_id, "actor_aid": actor_aid}
+        return {"message": "ok"}
+
+    async def fake_cancel_task(db, task_id, actor_aid):
+        recorded["cancelled"] = {"task_id": task_id, "actor_aid": actor_aid}
+        return DummyTask(
+            task_id=task_id,
+            employer_aid=actor_aid,
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="cancelled",
+            cancelled_at="now",
+        )
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "refund_escrow", fake_refund_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "cancel_task", fake_cancel_task)
+
+    response = run(task_routes.cancel_task(
+        task_id="task_123",
+        db=None,
+        x_agent_id="agent://a2ahub/employer",
+    ))
+
+    assert recorded["refunded"] == {
+        "escrow_id": "escrow_123",
+        "actor_aid": "agent://a2ahub/employer",
+    }
+    assert recorded["cancelled"] == {
+        "task_id": "task_123",
+        "actor_aid": "agent://a2ahub/employer",
+    }
+    assert response.status == "cancelled"
+    assert response.cancelled_at == "now"
+
+
 def test_cancel_endpoint_does_not_advance_when_refund_fails(monkeypatch):
     recorded = {"cancelled": False}
 
@@ -539,6 +588,41 @@ def test_complete_endpoint_submits_for_employer_acceptance(monkeypatch):
             worker_aid="agent://a2ahub/worker",
             escrow_id="escrow_123",
             status="in_progress",
+        )
+
+    async def fake_submit_task_completion(db, task_id, worker_aid):
+        recorded["submitted"] = {"task_id": task_id, "worker_aid": worker_aid}
+        return DummyTask(task_id=task_id, worker_aid=worker_aid, escrow_id="escrow_123", status="submitted")
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.TaskService, "submit_task_completion", fake_submit_task_completion)
+
+    response = run(task_routes.complete_task(
+        task_id="task_123",
+        complete_data=TaskCompleteRequest(worker_aid="agent://a2ahub/worker", result="done"),
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert recorded["submitted"] == {
+        "task_id": "task_123",
+        "worker_aid": "agent://a2ahub/worker",
+    }
+    assert response["status"] == "submitted"
+    assert response["growth_assets"] is None
+    assert response["message"] == "Task submitted for employer acceptance"
+
+
+def test_complete_endpoint_submits_assigned_task_for_employer_acceptance(monkeypatch):
+    recorded = {}
+
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="assigned",
         )
 
     async def fake_submit_task_completion(db, task_id, worker_aid):
@@ -1112,6 +1196,7 @@ async def create_test_db_session():
 
 def test_task_service_build_issue_returns_expected_messages():
     assert TaskService._build_issue(DummyTask(status="open", worker_aid="agent://a2ahub/worker", escrow_id=None)) == "open task should not have worker_aid or escrow_id"
+    assert TaskService._build_issue(DummyTask(status="assigned", worker_aid=None, escrow_id=None)) == "assigned task must have worker_aid and escrow_id"
     assert TaskService._build_issue(DummyTask(status="in_progress", worker_aid=None, escrow_id=None)) == "in_progress task must have worker_aid and escrow_id"
     assert TaskService._build_issue(DummyTask(status="completed", worker_aid="agent://a2ahub/worker", escrow_id="escrow_123", completed_at=None)) == "completed task must have completed_at"
     assert TaskService._build_issue(DummyTask(status="cancelled", worker_aid="agent://a2ahub/worker", escrow_id="escrow_123", cancelled_at=None)) == "cancelled task must have cancelled_at"

@@ -256,6 +256,44 @@ describe('Marketplace UI regression coverage', () => {
     ).toBeInTheDocument()
   })
 
+  it('allows worker to submit assigned compatibility tasks', async () => {
+    renderMarketplace({
+      sessions: {
+        default: defaultWorkerSession,
+      },
+      tasks: [
+        buildMarketplaceTask({
+          task_id: 'task-assigned-complete',
+          title: '历史 assigned 任务',
+          status: 'assigned',
+          worker_aid: 'worker-agent',
+          escrow_id: 'escrow-compat',
+        }),
+      ],
+      apiPostImpl: async (endpoint: string) => {
+        if (endpoint === '/v1/marketplace/tasks/task-assigned-complete/complete') {
+          return {
+            data: {
+              task_id: 'task-assigned-complete',
+              status: 'submitted',
+              message: 'Task submitted for employer acceptance',
+              growth_assets: null,
+            },
+          }
+        }
+        return { data: {} }
+      },
+    })
+
+    const user = userEvent.setup()
+    const completeButton = await screen.findByRole('button', { name: '以 Worker 身份提交验收' })
+
+    await waitFor(() => expect(completeButton).toBeEnabled())
+    await user.click(completeButton)
+
+    expect((await screen.findAllByText('任务已提交验收，等待雇主确认。')).length).toBeGreaterThan(0)
+  })
+
   it('shows in_progress state-guide copy', async () => {
     renderMarketplace({
       tasks: [

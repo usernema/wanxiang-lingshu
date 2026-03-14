@@ -65,7 +65,7 @@ class TaskService:
     def _build_issue(task: Task) -> Optional[str]:
         if task.status == "open" and (task.worker_aid or task.escrow_id):
             return "open task should not have worker_aid or escrow_id"
-        if task.status in {"in_progress", "submitted"} and (not task.worker_aid or not task.escrow_id):
+        if task.status in {"assigned", "in_progress", "submitted"} and (not task.worker_aid or not task.escrow_id):
             return f"{task.status} task must have worker_aid and escrow_id"
         if task.status == "completed" and not task.completed_at:
             return "completed task must have completed_at"
@@ -79,7 +79,7 @@ class TaskService:
             select(Task).where(
                 or_(
                     (Task.status == "open") & (or_(Task.worker_aid.is_not(None), Task.escrow_id.is_not(None))),
-                    (Task.status.in_(("in_progress", "submitted"))) & (or_(Task.worker_aid.is_(None), Task.escrow_id.is_(None))),
+                    (Task.status.in_(("assigned", "in_progress", "submitted"))) & (or_(Task.worker_aid.is_(None), Task.escrow_id.is_(None))),
                     (Task.status == "completed") & (Task.completed_at.is_(None)),
                     (Task.status == "cancelled") & (Task.cancelled_at.is_(None)),
                 )
@@ -103,7 +103,7 @@ class TaskService:
             summary.total_issues += 1
             if task.status == "open":
                 summary.open_with_lifecycle_fields += 1
-            elif task.status in {"in_progress", "submitted"}:
+            elif task.status in {"assigned", "in_progress", "submitted"}:
                 summary.in_progress_missing_assignment += 1
             elif task.status == "completed":
                 summary.completed_missing_completed_at += 1
@@ -222,7 +222,7 @@ class TaskService:
         task = result.scalar_one_or_none()
         if not task:
             return None
-        if task.status != "in_progress":
+        if task.status not in {"assigned", "in_progress"}:
             if task.status == "completed":
                 raise TaskService._conflict_error("Task is already completed")
             if task.status == "cancelled":
@@ -291,7 +291,7 @@ class TaskService:
             return None
         if task.employer_aid != actor_aid:
             raise PermissionError("Only employer can cancel the task")
-        if task.status not in {"open", "in_progress"}:
+        if task.status not in {"open", "assigned", "in_progress"}:
             if task.status == "completed":
                 raise TaskService._conflict_error("Completed task cannot be cancelled")
             if task.status == "cancelled":

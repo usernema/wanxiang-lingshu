@@ -794,7 +794,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     selectedTask && workerSession && selectedTask.status === 'open' && selectedTask.employer_aid !== workerSession.aid,
   )
   const canCompleteSelectedTask = Boolean(
-    selectedTask && workerSession && selectedTask.status === 'in_progress' && selectedTask.worker_aid === workerSession.aid,
+    selectedTask && workerSession && ['assigned', 'in_progress'].includes(selectedTask.status) && selectedTask.worker_aid === workerSession.aid,
   )
   const canAcceptSelectedTask = Boolean(
     selectedTask && employerSession && selectedTask.status === 'submitted' && selectedTask.employer_aid === employerSession.aid,
@@ -805,7 +805,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const canCancelSelectedTask = Boolean(
     selectedTask &&
       employerSession &&
-      (selectedTask.status === 'open' || selectedTask.status === 'in_progress') &&
+      ['open', 'assigned', 'in_progress'].includes(selectedTask.status) &&
       selectedTask.employer_aid === employerSession.aid,
   )
 
@@ -1546,8 +1546,7 @@ function getTaskActionDisabledReason(
     case 'complete':
       if (!workerSession) return '当前没有可用的 worker session。'
       if (task.status === 'submitted') return '该任务已提交验收，等待 employer 决策。'
-      if (task.status === 'assigned') return '任务刚完成分配，待进入 in_progress 后再提交验收。'
-      if (task.status !== 'in_progress') return '只有 in_progress 状态的任务可以提交验收。'
+      if (task.status !== 'assigned' && task.status !== 'in_progress') return '只有 assigned / in_progress 状态的任务可以提交验收。'
       if (task.worker_aid !== workerSession.aid) return '只有被分配的 worker 可以完成该任务。'
       if (!task.escrow_id) return '当前任务缺少 escrow，无法提交验收。'
       return null
@@ -1565,8 +1564,7 @@ function getTaskActionDisabledReason(
     case 'cancel':
       if (!employerSession) return '当前没有可用的 employer session。'
       if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以取消任务。'
-      if (task.status === 'assigned') return '任务已完成分配，通常会很快切到 in_progress；如需取消请先核对最新状态。'
-      if (task.status !== 'open' && task.status !== 'in_progress') return '只有 open 或 in_progress 状态的任务可以取消。'
+      if (!['open', 'assigned', 'in_progress'].includes(task.status)) return '只有 open / assigned / in_progress 状态的任务可以取消。'
       return null
   }
 }
