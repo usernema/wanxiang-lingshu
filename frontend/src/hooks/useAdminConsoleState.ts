@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { type FormEvent, useState } from 'react'
-import type { AgentProfile } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type FormEvent, useState } from "react";
+import type { AgentProfile } from "@/lib/api";
 import {
   assignAdminDojoCoach,
   batchUpdateAdminAgentStatus,
@@ -11,6 +11,7 @@ import {
   type AdminAgentGrowthExperienceCard,
   type AdminAgentGrowthProfile,
   type AdminAgentGrowthRiskMemory,
+  type AdminSectApplication,
   type AdminDojoOverview,
   fetchAdminAgentGrowthOverview,
   fetchAdminAgentGrowthExperienceCards,
@@ -20,6 +21,7 @@ import {
   fetchAdminDojoBindings,
   fetchAdminDojoCoaches,
   fetchAdminDojoOverview,
+  fetchAdminSectApplications,
   fetchAdminAgents,
   fetchAdminAuditLogs,
   type AdminAgentStatus,
@@ -39,6 +41,7 @@ import {
   getAdminToken,
   normalizeAdminLegacyAssignedTasks,
   recordAdminTaskOpsRecord,
+  reviewAdminSectApplication,
   setAdminToken,
   type AdminTask,
   type AdminTaskOpsDisposition,
@@ -50,285 +53,367 @@ import {
   updateAdminAgentStatus,
   updateAdminCommentStatus,
   updateAdminPostStatus,
-} from '@/lib/admin'
+} from "@/lib/admin";
 
-type AgentStatusFilter = 'all' | AdminAgentStatus | 'pending'
+type AgentStatusFilter = "all" | AdminAgentStatus | "pending";
 type PostDraftFilters = {
-  status: string
-  category: string
-  authorAid: string
-}
+  status: string;
+  category: string;
+  authorAid: string;
+};
 type TaskDraftFilters = {
-  status: 'all' | AdminTaskStatus
-  employerAid: string
-}
+  status: "all" | AdminTaskStatus;
+  employerAid: string;
+};
 type AuditDraftFilters = {
-  resourceType: string
-  action: string
-}
+  resourceType: string;
+  action: string;
+};
 type DojoDraftFilters = {
-  keyword: string
-  stage: string
-  schoolKey: string
-}
-type GrowthPoolFilter = 'all' | 'cold_start' | 'observed' | 'standard' | 'preferred'
-type GrowthDomainFilter = 'all' | 'automation' | 'content' | 'data' | 'development' | 'support'
+  keyword: string;
+  stage: string;
+  schoolKey: string;
+};
+type GrowthPoolFilter =
+  | "all"
+  | "cold_start"
+  | "observed"
+  | "standard"
+  | "preferred";
+type GrowthDomainFilter =
+  | "all"
+  | "automation"
+  | "content"
+  | "data"
+  | "development"
+  | "support";
 
 const defaultPostFilters: PostDraftFilters = {
-  status: 'all',
-  category: '',
-  authorAid: '',
-}
+  status: "all",
+  category: "",
+  authorAid: "",
+};
 
 const defaultTaskFilters: TaskDraftFilters = {
-  status: 'all',
-  employerAid: '',
-}
+  status: "all",
+  employerAid: "",
+};
 
 const defaultAuditFilters: AuditDraftFilters = {
-  resourceType: 'all',
-  action: '',
-}
+  resourceType: "all",
+  action: "",
+};
 
 const defaultDojoFilters: DojoDraftFilters = {
-  keyword: '',
-  stage: 'all',
-  schoolKey: 'all',
-}
+  keyword: "",
+  stage: "all",
+  schoolKey: "all",
+};
 
-const SYSTEM_AGENT_AID = 'agent://a2ahub/system'
+const SYSTEM_AGENT_AID = "agent://a2ahub/system";
 
 export function isProtectedAgent(aid: string) {
-  return aid === SYSTEM_AGENT_AID
+  return aid === SYSTEM_AGENT_AID;
 }
 
-function confirmModeration(targetLabel: string, nextStatus: 'published' | 'hidden' | 'deleted') {
-  const actionLabel = nextStatus === 'published' ? '恢复发布' : nextStatus === 'hidden' ? '隐藏' : '删除'
-  return window.confirm(`确认${actionLabel}${targetLabel}吗？`)
+function confirmModeration(
+  targetLabel: string,
+  nextStatus: "published" | "hidden" | "deleted",
+) {
+  const actionLabel =
+    nextStatus === "published"
+      ? "恢复发布"
+      : nextStatus === "hidden"
+        ? "隐藏"
+        : "删除";
+  return window.confirm(`确认${actionLabel}${targetLabel}吗？`);
 }
 
 function confirmAgentStatusChange(aid: string, nextStatus: AdminAgentStatus) {
-  const actionLabel = nextStatus === 'active' ? '恢复为正常状态' : nextStatus === 'suspended' ? '暂停' : '封禁'
-  return window.confirm(`确认将 ${aid} ${actionLabel}吗？`)
+  const actionLabel =
+    nextStatus === "active"
+      ? "恢复为正常状态"
+      : nextStatus === "suspended"
+        ? "暂停"
+        : "封禁";
+  return window.confirm(`确认将 ${aid} ${actionLabel}吗？`);
 }
 
 function normalizeFilter(value: string) {
-  const normalized = value.trim()
-  return normalized ? normalized : undefined
+  const normalized = value.trim();
+  return normalized ? normalized : undefined;
 }
 
 function summarizeStatuses(items: string[]) {
   return items.reduce<Record<string, number>>((summary, status) => {
-    const key = status || 'unknown'
-    summary[key] = (summary[key] || 0) + 1
-    return summary
-  }, {})
+    const key = status || "unknown";
+    summary[key] = (summary[key] || 0) + 1;
+    return summary;
+  }, {});
 }
 
 export function useAdminConsoleState() {
-  const queryClient = useQueryClient()
-  const initialToken = getAdminToken()
-  const [draftToken, setDraftToken] = useState(initialToken)
-  const [activeToken, setActiveToken] = useState(initialToken)
-  const [expandedPostId, setExpandedPostId] = useState<string | number | null>(null)
-  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
-  const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null)
-  const [selectedGrowthProfile, setSelectedGrowthProfile] = useState<AdminAgentGrowthProfile | null>(null)
-  const [selectedGrowthDraft, setSelectedGrowthDraft] = useState<AdminAgentGrowthSkillDraft | null>(null)
-  const [selectedEmployerTemplate, setSelectedEmployerTemplate] = useState<AdminEmployerTemplate | null>(null)
-  const [selectedEmployerSkillGrant, setSelectedEmployerSkillGrant] = useState<AdminEmployerSkillGrant | null>(null)
-  const [selectedPost, setSelectedPost] = useState<AdminForumPost | null>(null)
-  const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null)
-  const [selectedAuditLog, setSelectedAuditLog] = useState<AdminAuditLog | null>(null)
-  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatusFilter>('all')
-  const [agentKeyword, setAgentKeyword] = useState('')
-  const [hideProtectedAgents, setHideProtectedAgents] = useState(false)
-  const [selectedAgentAids, setSelectedAgentAids] = useState<string[]>([])
-  const [postDraftFilters, setPostDraftFilters] = useState(defaultPostFilters)
-  const [postFilters, setPostFilters] = useState(defaultPostFilters)
-  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([])
-  const [taskDraftFilters, setTaskDraftFilters] = useState(defaultTaskFilters)
-  const [taskFilters, setTaskFilters] = useState(defaultTaskFilters)
-  const [auditDraftFilters, setAuditDraftFilters] = useState(defaultAuditFilters)
-  const [auditFilters, setAuditFilters] = useState(defaultAuditFilters)
-  const [dojoDraftFilters, setDojoDraftFilters] = useState(defaultDojoFilters)
-  const [dojoFilters, setDojoFilters] = useState(defaultDojoFilters)
-  const [growthPoolFilter, setGrowthPoolFilter] = useState<GrowthPoolFilter>('all')
-  const [growthDomainFilter, setGrowthDomainFilter] = useState<GrowthDomainFilter>('all')
-  const [growthKeyword, setGrowthKeyword] = useState('')
-  const [growthDraftStatusFilter, setGrowthDraftStatusFilter] = useState<'all' | AdminAgentGrowthSkillDraftStatus>('all')
-  const [growthDraftKeyword, setGrowthDraftKeyword] = useState('')
-  const [taskMaintenanceMessage, setTaskMaintenanceMessage] = useState<string | null>(null)
+  const queryClient = useQueryClient();
+  const initialToken = getAdminToken();
+  const [draftToken, setDraftToken] = useState(initialToken);
+  const [activeToken, setActiveToken] = useState(initialToken);
+  const [expandedPostId, setExpandedPostId] = useState<string | number | null>(
+    null,
+  );
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<AgentProfile | null>(null);
+  const [selectedGrowthProfile, setSelectedGrowthProfile] =
+    useState<AdminAgentGrowthProfile | null>(null);
+  const [selectedGrowthDraft, setSelectedGrowthDraft] =
+    useState<AdminAgentGrowthSkillDraft | null>(null);
+  const [selectedEmployerTemplate, setSelectedEmployerTemplate] =
+    useState<AdminEmployerTemplate | null>(null);
+  const [selectedEmployerSkillGrant, setSelectedEmployerSkillGrant] =
+    useState<AdminEmployerSkillGrant | null>(null);
+  const [selectedPost, setSelectedPost] = useState<AdminForumPost | null>(null);
+  const [selectedTask, setSelectedTask] = useState<AdminTask | null>(null);
+  const [selectedAuditLog, setSelectedAuditLog] =
+    useState<AdminAuditLog | null>(null);
+  const [agentStatusFilter, setAgentStatusFilter] =
+    useState<AgentStatusFilter>("all");
+  const [agentKeyword, setAgentKeyword] = useState("");
+  const [hideProtectedAgents, setHideProtectedAgents] = useState(false);
+  const [selectedAgentAids, setSelectedAgentAids] = useState<string[]>([]);
+  const [postDraftFilters, setPostDraftFilters] = useState(defaultPostFilters);
+  const [postFilters, setPostFilters] = useState(defaultPostFilters);
+  const [selectedPostIds, setSelectedPostIds] = useState<string[]>([]);
+  const [taskDraftFilters, setTaskDraftFilters] = useState(defaultTaskFilters);
+  const [taskFilters, setTaskFilters] = useState(defaultTaskFilters);
+  const [auditDraftFilters, setAuditDraftFilters] =
+    useState(defaultAuditFilters);
+  const [auditFilters, setAuditFilters] = useState(defaultAuditFilters);
+  const [dojoDraftFilters, setDojoDraftFilters] = useState(defaultDojoFilters);
+  const [dojoFilters, setDojoFilters] = useState(defaultDojoFilters);
+  const [growthPoolFilter, setGrowthPoolFilter] =
+    useState<GrowthPoolFilter>("all");
+  const [growthDomainFilter, setGrowthDomainFilter] =
+    useState<GrowthDomainFilter>("all");
+  const [growthKeyword, setGrowthKeyword] = useState("");
+  const [growthDraftStatusFilter, setGrowthDraftStatusFilter] = useState<
+    "all" | AdminAgentGrowthSkillDraftStatus
+  >("all");
+  const [growthDraftKeyword, setGrowthDraftKeyword] = useState("");
+  const [taskMaintenanceMessage, setTaskMaintenanceMessage] = useState<
+    string | null
+  >(null);
 
-  const enabled = activeToken.trim().length > 0
+  const enabled = activeToken.trim().length > 0;
 
   const overviewQuery = useQuery({
-    queryKey: ['admin', 'overview', activeToken],
+    queryKey: ["admin", "overview", activeToken],
     queryFn: fetchAdminOverview,
     enabled,
-  })
+  });
 
   const agentsQuery = useQuery({
-    queryKey: ['admin', 'agents', activeToken, agentStatusFilter],
-    queryFn: () => fetchAdminAgents({
-      limit: 100,
-      offset: 0,
-      status: agentStatusFilter === 'all' ? undefined : agentStatusFilter,
-    }),
+    queryKey: ["admin", "agents", activeToken, agentStatusFilter],
+    queryFn: () =>
+      fetchAdminAgents({
+        limit: 100,
+        offset: 0,
+        status: agentStatusFilter === "all" ? undefined : agentStatusFilter,
+      }),
     enabled,
-  })
+  });
 
   const growthOverviewQuery = useQuery({
-    queryKey: ['admin', 'agent-growth-overview', activeToken],
+    queryKey: ["admin", "agent-growth-overview", activeToken],
     queryFn: fetchAdminAgentGrowthOverview,
     enabled,
-  })
+  });
 
   const growthProfilesQuery = useQuery({
-    queryKey: ['admin', 'agent-growth-profiles', activeToken, growthPoolFilter, growthDomainFilter],
-    queryFn: () => fetchAdminAgentGrowthProfiles({
-      limit: 50,
-      offset: 0,
-      maturityPool: growthPoolFilter === 'all' ? undefined : growthPoolFilter,
-      primaryDomain: growthDomainFilter === 'all' ? undefined : growthDomainFilter,
-    }),
+    queryKey: [
+      "admin",
+      "agent-growth-profiles",
+      activeToken,
+      growthPoolFilter,
+      growthDomainFilter,
+    ],
+    queryFn: () =>
+      fetchAdminAgentGrowthProfiles({
+        limit: 50,
+        offset: 0,
+        maturityPool: growthPoolFilter === "all" ? undefined : growthPoolFilter,
+        primaryDomain:
+          growthDomainFilter === "all" ? undefined : growthDomainFilter,
+      }),
     enabled,
-  })
+  });
 
   const growthDraftsQuery = useQuery({
-    queryKey: ['admin', 'agent-growth-drafts', activeToken, growthDraftStatusFilter],
-    queryFn: () => fetchAdminAgentGrowthSkillDrafts({
-      limit: 50,
-      offset: 0,
-      status: growthDraftStatusFilter === 'all' ? undefined : growthDraftStatusFilter,
-    }),
+    queryKey: [
+      "admin",
+      "agent-growth-drafts",
+      activeToken,
+      growthDraftStatusFilter,
+    ],
+    queryFn: () =>
+      fetchAdminAgentGrowthSkillDrafts({
+        limit: 50,
+        offset: 0,
+        status:
+          growthDraftStatusFilter === "all"
+            ? undefined
+            : growthDraftStatusFilter,
+      }),
     enabled,
-  })
+  });
 
   const growthExperienceCardsQuery = useQuery({
-    queryKey: ['admin', 'agent-growth-experience-cards', activeToken],
-    queryFn: () => fetchAdminAgentGrowthExperienceCards({
-      limit: 50,
-      offset: 0,
-    }),
+    queryKey: ["admin", "agent-growth-experience-cards", activeToken],
+    queryFn: () =>
+      fetchAdminAgentGrowthExperienceCards({
+        limit: 50,
+        offset: 0,
+      }),
     enabled,
-  })
+  });
 
   const growthRiskMemoriesQuery = useQuery({
-    queryKey: ['admin', 'agent-growth-risk-memories', activeToken],
-    queryFn: () => fetchAdminAgentGrowthRiskMemories({
-      limit: 50,
-      offset: 0,
-    }),
+    queryKey: ["admin", "agent-growth-risk-memories", activeToken],
+    queryFn: () =>
+      fetchAdminAgentGrowthRiskMemories({
+        limit: 50,
+        offset: 0,
+      }),
     enabled,
-  })
+  });
 
   const dojoOverviewQuery = useQuery({
-    queryKey: ['admin', 'dojo-overview', activeToken],
+    queryKey: ["admin", "dojo-overview", activeToken],
     queryFn: fetchAdminDojoOverview,
     enabled,
-  })
+  });
 
   const dojoCoachesQuery = useQuery({
-    queryKey: ['admin', 'dojo-coaches', activeToken],
-    queryFn: () => fetchAdminDojoCoaches({
-      limit: 50,
-      offset: 0,
-      status: 'active',
-    }),
+    queryKey: ["admin", "dojo-coaches", activeToken],
+    queryFn: () =>
+      fetchAdminDojoCoaches({
+        limit: 50,
+        offset: 0,
+        status: "active",
+      }),
     enabled,
-  })
+  });
 
   const dojoBindingsQuery = useQuery({
-    queryKey: ['admin', 'dojo-bindings', activeToken, dojoFilters],
-    queryFn: () => fetchAdminDojoBindings({
-      limit: 100,
-      offset: 0,
-      schoolKey: dojoFilters.schoolKey === 'all' ? undefined : dojoFilters.schoolKey,
-      stage: dojoFilters.stage === 'all' ? undefined : dojoFilters.stage,
-      status: 'active',
-    }),
+    queryKey: ["admin", "dojo-bindings", activeToken, dojoFilters],
+    queryFn: () =>
+      fetchAdminDojoBindings({
+        limit: 100,
+        offset: 0,
+        schoolKey:
+          dojoFilters.schoolKey === "all" ? undefined : dojoFilters.schoolKey,
+        stage: dojoFilters.stage === "all" ? undefined : dojoFilters.stage,
+        status: "active",
+      }),
     enabled,
-  })
+  });
+
+  const sectApplicationsQuery = useQuery({
+    queryKey: ["admin", "sect-applications", activeToken],
+    queryFn: () =>
+      fetchAdminSectApplications({
+        limit: 100,
+        offset: 0,
+        status: "submitted",
+      }),
+    enabled,
+  });
 
   const employerTemplatesQuery = useQuery({
-    queryKey: ['admin', 'employer-templates', activeToken],
+    queryKey: ["admin", "employer-templates", activeToken],
     queryFn: () => fetchAdminEmployerTemplates({ limit: 20, offset: 0 }),
     enabled,
-  })
+  });
 
   const employerSkillGrantsQuery = useQuery({
-    queryKey: ['admin', 'employer-skill-grants', activeToken],
+    queryKey: ["admin", "employer-skill-grants", activeToken],
     queryFn: () => fetchAdminEmployerSkillGrants({ limit: 20, offset: 0 }),
     enabled,
-  })
+  });
 
   const postsQuery = useQuery({
-    queryKey: ['admin', 'forum-posts', activeToken, postFilters],
-    queryFn: () => fetchAdminForumPosts({
-      limit: 100,
-      offset: 0,
-      status: postFilters.status === 'all' ? undefined : postFilters.status,
-      category: normalizeFilter(postFilters.category),
-      authorAid: normalizeFilter(postFilters.authorAid),
-    }),
+    queryKey: ["admin", "forum-posts", activeToken, postFilters],
+    queryFn: () =>
+      fetchAdminForumPosts({
+        limit: 100,
+        offset: 0,
+        status: postFilters.status === "all" ? undefined : postFilters.status,
+        category: normalizeFilter(postFilters.category),
+        authorAid: normalizeFilter(postFilters.authorAid),
+      }),
     enabled,
-  })
+  });
 
   const tasksQuery = useQuery({
-    queryKey: ['admin', 'tasks', activeToken, taskFilters],
-    queryFn: () => fetchAdminTasks({
-      limit: 100,
-      offset: 0,
-      status: taskFilters.status === 'all' ? undefined : taskFilters.status,
-      employerAid: normalizeFilter(taskFilters.employerAid),
-    }),
+    queryKey: ["admin", "tasks", activeToken, taskFilters],
+    queryFn: () =>
+      fetchAdminTasks({
+        limit: 100,
+        offset: 0,
+        status: taskFilters.status === "all" ? undefined : taskFilters.status,
+        employerAid: normalizeFilter(taskFilters.employerAid),
+      }),
     enabled,
-  })
+  });
 
   const commentsQuery = useQuery({
-    queryKey: ['admin', 'post-comments', activeToken, expandedPostId],
-    queryFn: () => fetchAdminPostComments(expandedPostId as string | number, 50, 0),
+    queryKey: ["admin", "post-comments", activeToken, expandedPostId],
+    queryFn: () =>
+      fetchAdminPostComments(expandedPostId as string | number, 50, 0),
     enabled: enabled && expandedPostId !== null,
-  })
+  });
 
   const taskApplicationsQuery = useQuery({
-    queryKey: ['admin', 'task-applications', activeToken, expandedTaskId],
+    queryKey: ["admin", "task-applications", activeToken, expandedTaskId],
     queryFn: () => fetchAdminTaskApplications(expandedTaskId as string),
     enabled: enabled && expandedTaskId !== null,
-  })
+  });
 
   const auditLogsQuery = useQuery({
-    queryKey: ['admin', 'audit-logs', activeToken, auditFilters],
-    queryFn: () => fetchAdminAuditLogs({
-      limit: 20,
-      offset: 0,
-      action: normalizeFilter(auditFilters.action),
-      resourceType: auditFilters.resourceType === 'all' ? undefined : auditFilters.resourceType,
-    }),
+    queryKey: ["admin", "audit-logs", activeToken, auditFilters],
+    queryFn: () =>
+      fetchAdminAuditLogs({
+        limit: 20,
+        offset: 0,
+        action: normalizeFilter(auditFilters.action),
+        resourceType:
+          auditFilters.resourceType === "all"
+            ? undefined
+            : auditFilters.resourceType,
+      }),
     enabled,
-  })
+  });
 
   const moderationAuditQuery = useQuery({
-    queryKey: ['admin', 'audit-logs', 'moderation', activeToken],
-    queryFn: () => fetchAdminAuditLogs({
-      limit: 20,
-      offset: 0,
-      action: 'status.updated',
-    }),
+    queryKey: ["admin", "audit-logs", "moderation", activeToken],
+    queryFn: () =>
+      fetchAdminAuditLogs({
+        limit: 20,
+        offset: 0,
+        action: "status.updated",
+      }),
     enabled,
-  })
+  });
 
   const taskOpsAuditQuery = useQuery({
-    queryKey: ['admin', 'audit-logs', 'task-ops', activeToken],
-    queryFn: () => fetchAdminAuditLogs({
-      limit: 10,
-      offset: 0,
-      action: 'admin.marketplace.task.ops.recorded',
-      resourceType: 'marketplace_task',
-    }),
+    queryKey: ["admin", "audit-logs", "task-ops", activeToken],
+    queryFn: () =>
+      fetchAdminAuditLogs({
+        limit: 10,
+        offset: 0,
+        action: "admin.marketplace.task.ops.recorded",
+        resourceType: "marketplace_task",
+      }),
     enabled,
-  })
+  });
 
   const refreshAdminData = async () => {
     await Promise.all([
@@ -342,6 +427,7 @@ export function useAdminConsoleState() {
       dojoOverviewQuery.refetch(),
       dojoCoachesQuery.refetch(),
       dojoBindingsQuery.refetch(),
+      sectApplicationsQuery.refetch(),
       employerTemplatesQuery.refetch(),
       employerSkillGrantsQuery.refetch(),
       postsQuery.refetch(),
@@ -350,70 +436,100 @@ export function useAdminConsoleState() {
       moderationAuditQuery.refetch(),
       taskOpsAuditQuery.refetch(),
       expandedPostId !== null ? commentsQuery.refetch() : Promise.resolve(),
-      expandedTaskId !== null ? taskApplicationsQuery.refetch() : Promise.resolve(),
-    ])
-  }
+      expandedTaskId !== null
+        ? taskApplicationsQuery.refetch()
+        : Promise.resolve(),
+    ]);
+  };
 
   const postStatusMutation = useMutation({
-    mutationFn: ({ postId, status }: { postId: string | number; status: 'published' | 'hidden' | 'deleted' }) =>
-      updateAdminPostStatus(postId, status),
+    mutationFn: ({
+      postId,
+      status,
+    }: {
+      postId: string | number;
+      status: "published" | "hidden" | "deleted";
+    }) => updateAdminPostStatus(postId, status),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const agentStatusMutation = useMutation({
-    mutationFn: ({ aid, status }: { aid: string; status: AdminAgentStatus }) => updateAdminAgentStatus(aid, status),
+    mutationFn: ({ aid, status }: { aid: string; status: AdminAgentStatus }) =>
+      updateAdminAgentStatus(aid, status),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const commentStatusMutation = useMutation({
-    mutationFn: ({ commentId, status }: { commentId: string | number; status: 'published' | 'hidden' | 'deleted' }) =>
-      updateAdminCommentStatus(commentId, status),
+    mutationFn: ({
+      commentId,
+      status,
+    }: {
+      commentId: string | number;
+      status: "published" | "hidden" | "deleted";
+    }) => updateAdminCommentStatus(commentId, status),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const batchAgentStatusMutation = useMutation({
-    mutationFn: ({ aids, status }: { aids: string[]; status: AdminAgentStatus }) => batchUpdateAdminAgentStatus(aids, status),
+    mutationFn: ({
+      aids,
+      status,
+    }: {
+      aids: string[];
+      status: AdminAgentStatus;
+    }) => batchUpdateAdminAgentStatus(aids, status),
     onSuccess: async () => {
-      setSelectedAgentAids([])
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      setSelectedAgentAids([]);
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const batchPostStatusMutation = useMutation({
-    mutationFn: ({ ids, status }: { ids: string[]; status: 'published' | 'hidden' | 'deleted' }) => batchUpdateAdminPostStatus(ids, status),
+    mutationFn: ({
+      ids,
+      status,
+    }: {
+      ids: string[];
+      status: "published" | "hidden" | "deleted";
+    }) => batchUpdateAdminPostStatus(ids, status),
     onSuccess: async () => {
-      setSelectedPostIds([])
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      setSelectedPostIds([]);
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const growthEvaluateMutation = useMutation({
     mutationFn: (aid: string) => triggerAdminAgentGrowthEvaluation(aid),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const growthDraftMutation = useMutation({
-    mutationFn: ({ draftId, status }: { draftId: string; status: AdminAgentGrowthSkillDraftStatus }) =>
-      updateAdminAgentGrowthSkillDraft(draftId, { status }),
+    mutationFn: ({
+      draftId,
+      status,
+    }: {
+      draftId: string;
+      status: AdminAgentGrowthSkillDraftStatus;
+    }) => updateAdminAgentGrowthSkillDraft(draftId, { status }),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const dojoAssignCoachMutation = useMutation({
     mutationFn: ({
@@ -423,17 +539,50 @@ export function useAdminConsoleState() {
       schoolKey,
       stage,
     }: {
-      aid: string
-      primaryCoachAid?: string
-      shadowCoachAid?: string
-      schoolKey?: string
-      stage?: string
-    }) => assignAdminDojoCoach(aid, { primaryCoachAid, shadowCoachAid, schoolKey, stage }),
+      aid: string;
+      primaryCoachAid?: string;
+      shadowCoachAid?: string;
+      schoolKey?: string;
+      stage?: string;
+    }) =>
+      assignAdminDojoCoach(aid, {
+        primaryCoachAid,
+        shadowCoachAid,
+        schoolKey,
+        stage,
+      }),
     onSuccess: async () => {
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
+
+  const reviewSectApplicationMutation = useMutation({
+    mutationFn: ({
+      applicationId,
+      status,
+      adminNotes,
+      reviewedBy,
+    }: {
+      applicationId: string;
+      status: "approved" | "rejected";
+      adminNotes?: string;
+      reviewedBy?: string;
+    }) =>
+      reviewAdminSectApplication(applicationId, {
+        status,
+        adminNotes,
+        reviewedBy,
+      }),
+    onSuccess: async (result: AdminSectApplication) => {
+      const dispositionLabel = result.status === "approved" ? "通过" : "驳回";
+      setTaskMaintenanceMessage(
+        `已处理宗门申请 ${result.application_id}：${dispositionLabel}。`,
+      );
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
+    },
+  });
 
   const normalizeLegacyAssignedMutation = useMutation({
     mutationFn: () => normalizeAdminLegacyAssignedTasks(),
@@ -443,16 +592,20 @@ export function useAdminConsoleState() {
           result.skipped_count > 0
             ? `已将 ${result.normalized_count} 条历史 assigned 任务归一化为 in_progress，另有 ${result.skipped_count} 条缺少必要字段未自动修复。`
             : `已将 ${result.normalized_count} 条历史 assigned 任务归一化为 in_progress。`,
-        )
+        );
       } else if (result.legacy_assigned_count > 0) {
-        setTaskMaintenanceMessage(`检测到 ${result.legacy_assigned_count} 条历史 assigned 任务，但有 ${result.skipped_count} 条缺少必要字段，未自动修复。`)
+        setTaskMaintenanceMessage(
+          `检测到 ${result.legacy_assigned_count} 条历史 assigned 任务，但有 ${result.skipped_count} 条缺少必要字段，未自动修复。`,
+        );
       } else {
-        setTaskMaintenanceMessage('当前没有检测到需要归一化的历史 assigned 任务。')
+        setTaskMaintenanceMessage(
+          "当前没有检测到需要归一化的历史 assigned 任务。",
+        );
       }
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const recordTaskOpsMutation = useMutation({
     mutationFn: ({
@@ -463,64 +616,104 @@ export function useAdminConsoleState() {
       issue,
       taskStatus,
     }: {
-      taskId: string
-      queue: AdminTaskOpsQueue
-      disposition: AdminTaskOpsDisposition
-      note?: string | null
-      issue?: string | null
-      taskStatus?: string | null
-    }) => recordAdminTaskOpsRecord(taskId, { queue, disposition, note, issue, taskStatus }),
+      taskId: string;
+      queue: AdminTaskOpsQueue;
+      disposition: AdminTaskOpsDisposition;
+      note?: string | null;
+      issue?: string | null;
+      taskStatus?: string | null;
+    }) =>
+      recordAdminTaskOpsRecord(taskId, {
+        queue,
+        disposition,
+        note,
+        issue,
+        taskStatus,
+      }),
     onSuccess: async (result) => {
-      const dispositionLabel = result.disposition === 'checked' ? '已核对' : '待跟进'
-      setTaskMaintenanceMessage(`已为任务 ${result.task_id} 记录“${dispositionLabel}”运维结果。`)
-      await refreshAdminData()
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      const dispositionLabel =
+        result.disposition === "checked" ? "已核对" : "待跟进";
+      setTaskMaintenanceMessage(
+        `已为任务 ${result.task_id} 记录“${dispositionLabel}”运维结果。`,
+      );
+      await refreshAdminData();
+      await queryClient.invalidateQueries({ queryKey: ["admin"] });
     },
-  })
+  });
 
   const closeAllDetails = () => {
-    setSelectedAgent(null)
-    setSelectedGrowthProfile(null)
-    setSelectedGrowthDraft(null)
-    setSelectedEmployerTemplate(null)
-    setSelectedEmployerSkillGrant(null)
-    setSelectedPost(null)
-    setSelectedTask(null)
-    setSelectedAuditLog(null)
-    setExpandedPostId(null)
-    setExpandedTaskId(null)
-  }
+    setSelectedAgent(null);
+    setSelectedGrowthProfile(null);
+    setSelectedGrowthDraft(null);
+    setSelectedEmployerTemplate(null);
+    setSelectedEmployerSkillGrant(null);
+    setSelectedPost(null);
+    setSelectedTask(null);
+    setSelectedAuditLog(null);
+    setExpandedPostId(null);
+    setExpandedTaskId(null);
+  };
 
-  const sharedError = overviewQuery.error || agentsQuery.error || growthOverviewQuery.error || growthProfilesQuery.error || growthDraftsQuery.error || growthExperienceCardsQuery.error || growthRiskMemoriesQuery.error || dojoOverviewQuery.error || dojoCoachesQuery.error || dojoBindingsQuery.error || employerTemplatesQuery.error || employerSkillGrantsQuery.error || postsQuery.error || tasksQuery.error || auditLogsQuery.error || moderationAuditQuery.error || taskOpsAuditQuery.error
-  const mutationError = agentStatusMutation.error || growthEvaluateMutation.error || growthDraftMutation.error || dojoAssignCoachMutation.error || postStatusMutation.error || commentStatusMutation.error || batchAgentStatusMutation.error || batchPostStatusMutation.error || normalizeLegacyAssignedMutation.error || recordTaskOpsMutation.error
-  const displayError = sharedError || mutationError
+  const sharedError =
+    overviewQuery.error ||
+    agentsQuery.error ||
+    growthOverviewQuery.error ||
+    growthProfilesQuery.error ||
+    growthDraftsQuery.error ||
+    growthExperienceCardsQuery.error ||
+    growthRiskMemoriesQuery.error ||
+    dojoOverviewQuery.error ||
+    dojoCoachesQuery.error ||
+    dojoBindingsQuery.error ||
+    sectApplicationsQuery.error ||
+    employerTemplatesQuery.error ||
+    employerSkillGrantsQuery.error ||
+    postsQuery.error ||
+    tasksQuery.error ||
+    auditLogsQuery.error ||
+    moderationAuditQuery.error ||
+    taskOpsAuditQuery.error;
+  const mutationError =
+    agentStatusMutation.error ||
+    growthEvaluateMutation.error ||
+    growthDraftMutation.error ||
+    dojoAssignCoachMutation.error ||
+    reviewSectApplicationMutation.error ||
+    postStatusMutation.error ||
+    commentStatusMutation.error ||
+    batchAgentStatusMutation.error ||
+    batchPostStatusMutation.error ||
+    normalizeLegacyAssignedMutation.error ||
+    recordTaskOpsMutation.error;
+  const displayError = sharedError || mutationError;
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const token = draftToken.trim()
-    if (!token) return
-    setAdminToken(token)
-    setActiveToken(token)
-  }
+    event.preventDefault();
+    const token = draftToken.trim();
+    if (!token) return;
+    setAdminToken(token);
+    setActiveToken(token);
+  };
 
   const handleClear = () => {
-    clearAdminToken()
-    setDraftToken('')
-    setActiveToken('')
-    setTaskMaintenanceMessage(null)
-    setSelectedAgentAids([])
-    setSelectedPostIds([])
-    closeAllDetails()
-  }
+    clearAdminToken();
+    setDraftToken("");
+    setActiveToken("");
+    setTaskMaintenanceMessage(null);
+    setSelectedAgentAids([]);
+    setSelectedPostIds([]);
+    closeAllDetails();
+  };
 
   const handleRefresh = async () => {
-    await refreshAdminData()
-  }
+    await refreshAdminData();
+  };
 
   const handleNormalizeLegacyAssignedTasks = async () => {
-    if (!window.confirm('确认将历史 assigned 任务归一化为 in_progress 吗？')) return
-    await normalizeLegacyAssignedMutation.mutateAsync()
-  }
+    if (!window.confirm("确认将历史 assigned 任务归一化为 in_progress 吗？"))
+      return;
+    await normalizeLegacyAssignedMutation.mutateAsync();
+  };
 
   const handleRecordTaskOps = async ({
     taskId,
@@ -529,19 +722,19 @@ export function useAdminConsoleState() {
     issue,
     taskStatus,
   }: {
-    taskId: string
-    queue: AdminTaskOpsQueue
-    disposition: AdminTaskOpsDisposition
-    issue?: string | null
-    taskStatus?: string | null
+    taskId: string;
+    queue: AdminTaskOpsQueue;
+    disposition: AdminTaskOpsDisposition;
+    issue?: string | null;
+    taskStatus?: string | null;
   }) => {
     const note = window.prompt(
-      disposition === 'checked'
-        ? '可选：补充本次“已核对”的备注（可留空）'
-        : '可选：补充为什么需要继续跟进（可留空）',
-      issue || '',
-    )
-    if (note === null) return
+      disposition === "checked"
+        ? "可选：补充本次“已核对”的备注（可留空）"
+        : "可选：补充为什么需要继续跟进（可留空）",
+      issue || "",
+    );
+    if (note === null) return;
     await recordTaskOpsMutation.mutateAsync({
       taskId,
       queue,
@@ -549,179 +742,196 @@ export function useAdminConsoleState() {
       note: note.trim() || undefined,
       issue,
       taskStatus,
-    })
-  }
+    });
+  };
 
   const openAgentDetail = (agent: AgentProfile) => {
-    setSelectedAgent(agent)
-  }
+    setSelectedAgent(agent);
+  };
 
   const clearAgentDetail = () => {
-    setSelectedAgent(null)
-  }
+    setSelectedAgent(null);
+  };
 
   const openPostDetail = (post: AdminForumPost) => {
-    setSelectedPost(post)
-    setExpandedPostId(post.post_id || post.id)
-  }
+    setSelectedPost(post);
+    setExpandedPostId(post.post_id || post.id);
+  };
 
   const clearPostDetail = () => {
-    setSelectedPost(null)
-    setExpandedPostId(null)
-  }
+    setSelectedPost(null);
+    setExpandedPostId(null);
+  };
 
   const openTaskDetail = (task: AdminTask) => {
-    setSelectedTask(task)
-    setExpandedTaskId(task.task_id)
-  }
+    setSelectedTask(task);
+    setExpandedTaskId(task.task_id);
+  };
 
   const clearTaskDetail = () => {
-    setSelectedTask(null)
-    setExpandedTaskId(null)
-  }
+    setSelectedTask(null);
+    setExpandedTaskId(null);
+  };
 
   const openGrowthProfileDetail = (profile: AdminAgentGrowthProfile) => {
-    setSelectedGrowthProfile(profile)
-  }
+    setSelectedGrowthProfile(profile);
+  };
 
   const clearGrowthProfileDetail = () => {
-    setSelectedGrowthProfile(null)
-  }
+    setSelectedGrowthProfile(null);
+  };
 
   const openGrowthDraftDetail = (draft: AdminAgentGrowthSkillDraft) => {
-    setSelectedGrowthDraft(draft)
-  }
+    setSelectedGrowthDraft(draft);
+  };
 
   const clearGrowthDraftDetail = () => {
-    setSelectedGrowthDraft(null)
-  }
+    setSelectedGrowthDraft(null);
+  };
 
   const openEmployerTemplateDetail = (template: AdminEmployerTemplate) => {
-    setSelectedEmployerTemplate(template)
-  }
+    setSelectedEmployerTemplate(template);
+  };
 
   const clearEmployerTemplateDetail = () => {
-    setSelectedEmployerTemplate(null)
-  }
+    setSelectedEmployerTemplate(null);
+  };
 
   const openEmployerSkillGrantDetail = (grant: AdminEmployerSkillGrant) => {
-    setSelectedEmployerSkillGrant(grant)
-  }
+    setSelectedEmployerSkillGrant(grant);
+  };
 
   const clearEmployerSkillGrantDetail = () => {
-    setSelectedEmployerSkillGrant(null)
-  }
+    setSelectedEmployerSkillGrant(null);
+  };
 
   const openAuditLogDetail = (log: AdminAuditLog) => {
-    setSelectedAuditLog(log)
-  }
+    setSelectedAuditLog(log);
+  };
 
   const clearAuditLogDetail = () => {
-    setSelectedAuditLog(null)
-  }
+    setSelectedAuditLog(null);
+  };
 
   const handleToggleAgentSelection = (aid: string) => {
-    setSelectedAgentAids((current) => current.includes(aid) ? current.filter((item) => item !== aid) : [...current, aid])
-  }
+    setSelectedAgentAids((current) =>
+      current.includes(aid)
+        ? current.filter((item) => item !== aid)
+        : [...current, aid],
+    );
+  };
 
   const handleTogglePostSelection = (postId: string) => {
-    setSelectedPostIds((current) => current.includes(postId) ? current.filter((item) => item !== postId) : [...current, postId])
-  }
+    setSelectedPostIds((current) =>
+      current.includes(postId)
+        ? current.filter((item) => item !== postId)
+        : [...current, postId],
+    );
+  };
 
   const applyPostFilters = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setPostFilters(postDraftFilters)
-  }
+    event.preventDefault();
+    setPostFilters(postDraftFilters);
+  };
 
   const resetPostFilters = () => {
-    setPostDraftFilters(defaultPostFilters)
-    setPostFilters(defaultPostFilters)
-    setSelectedPostIds([])
-  }
+    setPostDraftFilters(defaultPostFilters);
+    setPostFilters(defaultPostFilters);
+    setSelectedPostIds([]);
+  };
 
   const applyTaskFilters = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setTaskFilters(taskDraftFilters)
-  }
+    event.preventDefault();
+    setTaskFilters(taskDraftFilters);
+  };
 
   const resetTaskFilters = () => {
-    setTaskDraftFilters(defaultTaskFilters)
-    setTaskFilters(defaultTaskFilters)
-  }
+    setTaskDraftFilters(defaultTaskFilters);
+    setTaskFilters(defaultTaskFilters);
+  };
 
   const applyAuditFilters = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setAuditFilters(auditDraftFilters)
-  }
+    event.preventDefault();
+    setAuditFilters(auditDraftFilters);
+  };
 
   const applyDojoFilters = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setDojoFilters(dojoDraftFilters)
-  }
+    event.preventDefault();
+    setDojoFilters(dojoDraftFilters);
+  };
 
   const resetAuditFilters = () => {
-    setAuditDraftFilters(defaultAuditFilters)
-    setAuditFilters(defaultAuditFilters)
-  }
+    setAuditDraftFilters(defaultAuditFilters);
+    setAuditFilters(defaultAuditFilters);
+  };
 
   const resetDojoFilters = () => {
-    setDojoDraftFilters(defaultDojoFilters)
-    setDojoFilters(defaultDojoFilters)
-  }
+    setDojoDraftFilters(defaultDojoFilters);
+    setDojoFilters(defaultDojoFilters);
+  };
 
   const resetAgentControls = () => {
-    setAgentStatusFilter('all')
-    setAgentKeyword('')
-    setHideProtectedAgents(false)
-    setSelectedAgentAids([])
-  }
+    setAgentStatusFilter("all");
+    setAgentKeyword("");
+    setHideProtectedAgents(false);
+    setSelectedAgentAids([]);
+  };
 
   const resetGrowthControls = () => {
-    setGrowthPoolFilter('all')
-    setGrowthDomainFilter('all')
-    setGrowthKeyword('')
-    setGrowthDraftStatusFilter('all')
-    setGrowthDraftKeyword('')
-  }
+    setGrowthPoolFilter("all");
+    setGrowthDomainFilter("all");
+    setGrowthKeyword("");
+    setGrowthDraftStatusFilter("all");
+    setGrowthDraftKeyword("");
+  };
 
   const resetContentControls = () => {
-    setPostDraftFilters(defaultPostFilters)
-    setPostFilters(defaultPostFilters)
-    setSelectedPostIds([])
-  }
+    setPostDraftFilters(defaultPostFilters);
+    setPostFilters(defaultPostFilters);
+    setSelectedPostIds([]);
+  };
 
   const resetTaskControls = () => {
-    setTaskDraftFilters(defaultTaskFilters)
-    setTaskFilters(defaultTaskFilters)
-  }
+    setTaskDraftFilters(defaultTaskFilters);
+    setTaskFilters(defaultTaskFilters);
+  };
 
   const resetAuditControls = () => {
-    setAuditDraftFilters(defaultAuditFilters)
-    setAuditFilters(defaultAuditFilters)
-  }
+    setAuditDraftFilters(defaultAuditFilters);
+    setAuditFilters(defaultAuditFilters);
+  };
 
   const resetDojoControls = () => {
-    setDojoDraftFilters(defaultDojoFilters)
-    setDojoFilters(defaultDojoFilters)
-  }
+    setDojoDraftFilters(defaultDojoFilters);
+    setDojoFilters(defaultDojoFilters);
+  };
 
-  const handlePostAction = async (postId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
-    if (!confirmModeration('该帖子', nextStatus)) return
-    await postStatusMutation.mutateAsync({ postId, status: nextStatus })
-  }
+  const handlePostAction = async (
+    postId: string | number,
+    nextStatus: "published" | "hidden" | "deleted",
+  ) => {
+    if (!confirmModeration("该帖子", nextStatus)) return;
+    await postStatusMutation.mutateAsync({ postId, status: nextStatus });
+  };
 
-  const handleAgentAction = async (aid: string, nextStatus: AdminAgentStatus) => {
-    if (!confirmAgentStatusChange(aid, nextStatus)) return
-    await agentStatusMutation.mutateAsync({ aid, status: nextStatus })
-  }
+  const handleAgentAction = async (
+    aid: string,
+    nextStatus: AdminAgentStatus,
+  ) => {
+    if (!confirmAgentStatusChange(aid, nextStatus)) return;
+    await agentStatusMutation.mutateAsync({ aid, status: nextStatus });
+  };
 
   const handleGrowthEvaluate = async (aid: string) => {
-    await growthEvaluateMutation.mutateAsync(aid)
-  }
+    await growthEvaluateMutation.mutateAsync(aid);
+  };
 
-  const handleGrowthDraftAction = async (draftId: string, status: AdminAgentGrowthSkillDraftStatus) => {
-    await growthDraftMutation.mutateAsync({ draftId, status })
-  }
+  const handleGrowthDraftAction = async (
+    draftId: string,
+    status: AdminAgentGrowthSkillDraftStatus,
+  ) => {
+    await growthDraftMutation.mutateAsync({ draftId, status });
+  };
 
   const handleAssignDojoCoach = async ({
     aid,
@@ -730,60 +940,121 @@ export function useAdminConsoleState() {
     schoolKey,
     stage,
   }: {
-    aid: string
-    primaryCoachAid?: string
-    shadowCoachAid?: string
-    schoolKey?: string
-    stage?: string
+    aid: string;
+    primaryCoachAid?: string;
+    shadowCoachAid?: string;
+    schoolKey?: string;
+    stage?: string;
   }) => {
-    await dojoAssignCoachMutation.mutateAsync({ aid, primaryCoachAid, shadowCoachAid, schoolKey, stage })
-  }
+    await dojoAssignCoachMutation.mutateAsync({
+      aid,
+      primaryCoachAid,
+      shadowCoachAid,
+      schoolKey,
+      stage,
+    });
+  };
 
-  const handleCommentAction = async (commentId: string | number, nextStatus: 'published' | 'hidden' | 'deleted') => {
-    if (!confirmModeration('该评论', nextStatus)) return
-    await commentStatusMutation.mutateAsync({ commentId, status: nextStatus })
-  }
+  const handleReviewSectApplication = async ({
+    applicationId,
+    status,
+  }: {
+    applicationId: string;
+    status: "approved" | "rejected";
+  }) => {
+    const promptLabel =
+      status === "approved" ? "审批备注（可选）" : "驳回原因（会同步给申请人）";
+    const defaultNote =
+      status === "approved" ? "已通过宗门审核，进入正式主修流转。" : "";
+    const note = window.prompt(promptLabel, defaultNote);
+    if (note === null) return;
+
+    await reviewSectApplicationMutation.mutateAsync({
+      applicationId,
+      status,
+      adminNotes: note.trim() || undefined,
+      reviewedBy: "admin_console",
+    });
+  };
+
+  const handleCommentAction = async (
+    commentId: string | number,
+    nextStatus: "published" | "hidden" | "deleted",
+  ) => {
+    if (!confirmModeration("该评论", nextStatus)) return;
+    await commentStatusMutation.mutateAsync({ commentId, status: nextStatus });
+  };
 
   const handleBatchAgentAction = async (nextStatus: AdminAgentStatus) => {
-    if (selectedAgentAids.length === 0) return
-    const actionLabel = nextStatus === 'active' ? '恢复' : nextStatus === 'suspended' ? '暂停' : '封禁'
-    if (!window.confirm(`确认${actionLabel}选中的 ${selectedAgentAids.length} 个 Agent 吗？`)) return
-    await batchAgentStatusMutation.mutateAsync({ aids: selectedAgentAids, status: nextStatus })
-  }
+    if (selectedAgentAids.length === 0) return;
+    const actionLabel =
+      nextStatus === "active"
+        ? "恢复"
+        : nextStatus === "suspended"
+          ? "暂停"
+          : "封禁";
+    if (
+      !window.confirm(
+        `确认${actionLabel}选中的 ${selectedAgentAids.length} 个 Agent 吗？`,
+      )
+    )
+      return;
+    await batchAgentStatusMutation.mutateAsync({
+      aids: selectedAgentAids,
+      status: nextStatus,
+    });
+  };
 
-  const handleBatchPostAction = async (nextStatus: 'published' | 'hidden' | 'deleted') => {
-    if (selectedPostIds.length === 0) return
-    const actionLabel = nextStatus === 'published' ? '恢复发布' : nextStatus === 'hidden' ? '隐藏' : '删除'
-    if (!window.confirm(`确认${actionLabel}选中的 ${selectedPostIds.length} 篇帖子吗？`)) return
-    await batchPostStatusMutation.mutateAsync({ ids: selectedPostIds, status: nextStatus })
-  }
+  const handleBatchPostAction = async (
+    nextStatus: "published" | "hidden" | "deleted",
+  ) => {
+    if (selectedPostIds.length === 0) return;
+    const actionLabel =
+      nextStatus === "published"
+        ? "恢复发布"
+        : nextStatus === "hidden"
+          ? "隐藏"
+          : "删除";
+    if (
+      !window.confirm(
+        `确认${actionLabel}选中的 ${selectedPostIds.length} 篇帖子吗？`,
+      )
+    )
+      return;
+    await batchPostStatusMutation.mutateAsync({
+      ids: selectedPostIds,
+      status: nextStatus,
+    });
+  };
 
-  const overview = overviewQuery.data
-  const agentItems = agentsQuery.data?.items || []
-  const growthOverview = growthOverviewQuery.data
-  const growthProfileItems = growthProfilesQuery.data?.items || []
-  const growthDraftItems = growthDraftsQuery.data?.items || []
-  const growthExperienceCardItems = growthExperienceCardsQuery.data?.items || []
-  const growthRiskMemoryItems = growthRiskMemoriesQuery.data?.items || []
-  const dojoOverview = dojoOverviewQuery.data as AdminDojoOverview | undefined
-  const dojoCoachItems = dojoCoachesQuery.data?.items || []
-  const dojoBindingItems = dojoBindingsQuery.data?.items || []
-  const employerTemplateItems = employerTemplatesQuery.data?.items || []
-  const employerSkillGrantItems = employerSkillGrantsQuery.data?.items || []
-  const postItems = postsQuery.data?.posts || []
-  const taskItems = tasksQuery.data?.items || []
-  const auditLogItems = auditLogsQuery.data?.items || []
-  const moderationAuditItems = moderationAuditQuery.data?.items || []
-  const taskOpsAuditItems = taskOpsAuditQuery.data?.items || []
+  const overview = overviewQuery.data;
+  const agentItems = agentsQuery.data?.items || [];
+  const growthOverview = growthOverviewQuery.data;
+  const growthProfileItems = growthProfilesQuery.data?.items || [];
+  const growthDraftItems = growthDraftsQuery.data?.items || [];
+  const growthExperienceCardItems =
+    growthExperienceCardsQuery.data?.items || [];
+  const growthRiskMemoryItems = growthRiskMemoriesQuery.data?.items || [];
+  const dojoOverview = dojoOverviewQuery.data as AdminDojoOverview | undefined;
+  const dojoCoachItems = dojoCoachesQuery.data?.items || [];
+  const dojoBindingItems = dojoBindingsQuery.data?.items || [];
+  const sectApplicationItems = sectApplicationsQuery.data?.items || [];
+  const employerTemplateItems = employerTemplatesQuery.data?.items || [];
+  const employerSkillGrantItems = employerSkillGrantsQuery.data?.items || [];
+  const postItems = postsQuery.data?.posts || [];
+  const taskItems = tasksQuery.data?.items || [];
+  const auditLogItems = auditLogsQuery.data?.items || [];
+  const moderationAuditItems = moderationAuditQuery.data?.items || [];
+  const taskOpsAuditItems = taskOpsAuditQuery.data?.items || [];
 
-  const keyword = agentKeyword.trim().toLowerCase()
+  const keyword = agentKeyword.trim().toLowerCase();
   const visibleAgents = agentItems.filter((agent) => {
     if (hideProtectedAgents && isProtectedAgent(agent.aid)) {
-      return false
+      return false;
     }
 
     if (!keyword) {
-      return true
+      return true;
     }
 
     return [
@@ -795,12 +1066,12 @@ export function useAdminConsoleState() {
       ...(agent.capabilities || []),
     ]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(keyword))
-  })
+      .some((value) => String(value).toLowerCase().includes(keyword));
+  });
 
-  const growthAgentKeyword = growthKeyword.trim().toLowerCase()
+  const growthAgentKeyword = growthKeyword.trim().toLowerCase();
   const visibleGrowthProfiles = growthProfileItems.filter((agent) => {
-    if (!growthAgentKeyword) return true
+    if (!growthAgentKeyword) return true;
     return [
       agent.aid,
       agent.model,
@@ -813,48 +1084,97 @@ export function useAdminConsoleState() {
       ...(agent.capabilities || []),
     ]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
-  })
+      .some((value) =>
+        String(value).toLowerCase().includes(growthAgentKeyword),
+      );
+  });
 
-  const growthDraftKeywordValue = growthDraftKeyword.trim().toLowerCase()
+  const growthDraftKeywordValue = growthDraftKeyword.trim().toLowerCase();
   const visibleGrowthDrafts = growthDraftItems.filter((draft) => {
-    if (!growthDraftKeywordValue) return true
-    return [draft.draft_id, draft.aid, draft.title, draft.summary, draft.source_task_id]
+    if (!growthDraftKeywordValue) return true;
+    return [
+      draft.draft_id,
+      draft.aid,
+      draft.title,
+      draft.summary,
+      draft.source_task_id,
+    ]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(growthDraftKeywordValue))
-  })
+      .some((value) =>
+        String(value).toLowerCase().includes(growthDraftKeywordValue),
+      );
+  });
 
-  const visibleGrowthExperienceCards = growthExperienceCardItems.filter((card: AdminAgentGrowthExperienceCard) => {
-    if (!growthAgentKeyword) return true
-    return [card.card_id, card.aid, card.title, card.summary, card.source_task_id, card.scenario_key, card.category]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
-  })
+  const visibleGrowthExperienceCards = growthExperienceCardItems.filter(
+    (card: AdminAgentGrowthExperienceCard) => {
+      if (!growthAgentKeyword) return true;
+      return [
+        card.card_id,
+        card.aid,
+        card.title,
+        card.summary,
+        card.source_task_id,
+        card.scenario_key,
+        card.category,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value).toLowerCase().includes(growthAgentKeyword),
+        );
+    },
+  );
 
-  const visibleGrowthRiskMemories = growthRiskMemoryItems.filter((risk: AdminAgentGrowthRiskMemory) => {
-    if (!growthAgentKeyword) return true
-    return [risk.risk_id, risk.aid, risk.source_task_id, risk.risk_type, risk.category, risk.status, risk.severity]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(growthAgentKeyword))
-  })
+  const visibleGrowthRiskMemories = growthRiskMemoryItems.filter(
+    (risk: AdminAgentGrowthRiskMemory) => {
+      if (!growthAgentKeyword) return true;
+      return [
+        risk.risk_id,
+        risk.aid,
+        risk.source_task_id,
+        risk.risk_type,
+        risk.category,
+        risk.status,
+        risk.severity,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value).toLowerCase().includes(growthAgentKeyword),
+        );
+    },
+  );
 
-  const dojoKeyword = dojoFilters.keyword.trim().toLowerCase()
-  const visibleDojoBindings = dojoBindingItems.filter((binding: AdminDojoBinding) => {
-    if (!dojoKeyword) return true
-    return [binding.aid, binding.primary_coach_aid, binding.shadow_coach_aid, binding.school_key, binding.stage]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
-  })
+  const dojoKeyword = dojoFilters.keyword.trim().toLowerCase();
+  const visibleDojoBindings = dojoBindingItems.filter(
+    (binding: AdminDojoBinding) => {
+      if (!dojoKeyword) return true;
+      return [
+        binding.aid,
+        binding.primary_coach_aid,
+        binding.shadow_coach_aid,
+        binding.school_key,
+        binding.stage,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(dojoKeyword));
+    },
+  );
 
-  const visibleDojoCoaches = dojoCoachItems.filter((coach: AdminDojoCoachProfile) => {
-    if (!dojoKeyword) return true
-    return [coach.coach_aid, coach.coach_type, coach.bio, ...(coach.schools || [])]
-      .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
-  })
+  const visibleDojoCoaches = dojoCoachItems.filter(
+    (coach: AdminDojoCoachProfile) => {
+      if (!dojoKeyword) return true;
+      return [
+        coach.coach_aid,
+        coach.coach_type,
+        coach.bio,
+        ...(coach.schools || []),
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(dojoKeyword));
+    },
+  );
 
   const visibleDojoAgents = growthProfileItems.filter((agent) => {
-    if (!dojoKeyword) return true
+    if (!dojoKeyword) return true;
     return [
       agent.aid,
       agent.model,
@@ -864,20 +1184,30 @@ export function useAdminConsoleState() {
       ...(agent.capabilities || []),
     ]
       .filter(Boolean)
-      .some((value) => String(value).toLowerCase().includes(dojoKeyword))
-  })
+      .some((value) => String(value).toLowerCase().includes(dojoKeyword));
+  });
 
-  const agentStatusSummary = summarizeStatuses(agentItems.map((agent) => agent.status))
-  const postStatusSummary = summarizeStatuses(postItems.map((post) => post.status || 'unknown'))
-  const taskStatusSummary = summarizeStatuses(taskItems.map((task) => task.status))
-  const consistencyExamples = overview?.consistency?.examples || []
+  const agentStatusSummary = summarizeStatuses(
+    agentItems.map((agent) => agent.status),
+  );
+  const postStatusSummary = summarizeStatuses(
+    postItems.map((post) => post.status || "unknown"),
+  );
+  const taskStatusSummary = summarizeStatuses(
+    taskItems.map((task) => task.status),
+  );
+  const consistencyExamples = overview?.consistency?.examples || [];
   const moderationActionSummary = moderationAuditItems.reduce(
     (summary, log) => {
-      if (log.action === 'admin.agent.status.updated') summary.agentStatusUpdates += 1
-      if (log.action === 'admin.forum.post.status.updated') summary.postStatusUpdates += 1
-      if (log.action === 'admin.forum.comment.status.updated') summary.commentStatusUpdates += 1
-      if (typeof log.details?.batch === 'boolean' && log.details.batch) summary.batchActions += 1
-      return summary
+      if (log.action === "admin.agent.status.updated")
+        summary.agentStatusUpdates += 1;
+      if (log.action === "admin.forum.post.status.updated")
+        summary.postStatusUpdates += 1;
+      if (log.action === "admin.forum.comment.status.updated")
+        summary.commentStatusUpdates += 1;
+      if (typeof log.details?.batch === "boolean" && log.details.batch)
+        summary.batchActions += 1;
+      return summary;
     },
     {
       agentStatusUpdates: 0,
@@ -885,8 +1215,8 @@ export function useAdminConsoleState() {
       commentStatusUpdates: 0,
       batchActions: 0,
     },
-  )
-  const recentModerationItems = moderationAuditItems.slice(0, 5)
+  );
+  const recentModerationItems = moderationAuditItems.slice(0, 5);
 
   return {
     session: {
@@ -967,6 +1297,7 @@ export function useAdminConsoleState() {
       dojoOverview,
       dojoCoachItems,
       dojoBindingItems,
+      sectApplicationItems,
       employerTemplateItems,
       employerSkillGrantItems,
       postItems,
@@ -999,6 +1330,7 @@ export function useAdminConsoleState() {
       dojoOverviewQuery,
       dojoCoachesQuery,
       dojoBindingsQuery,
+      sectApplicationsQuery,
       employerTemplatesQuery,
       employerSkillGrantsQuery,
       postsQuery,
@@ -1025,6 +1357,7 @@ export function useAdminConsoleState() {
       handleGrowthEvaluate,
       handleGrowthDraftAction,
       handleAssignDojoCoach,
+      handleReviewSectApplication,
       handleCommentAction,
       handleBatchAgentAction,
       handleBatchPostAction,
@@ -1035,6 +1368,7 @@ export function useAdminConsoleState() {
       growthEvaluatePending: growthEvaluateMutation.isPending,
       growthDraftPending: growthDraftMutation.isPending,
       dojoAssignPending: dojoAssignCoachMutation.isPending,
+      reviewSectApplicationPending: reviewSectApplicationMutation.isPending,
       normalizeLegacyAssignedPending: normalizeLegacyAssignedMutation.isPending,
       recordTaskOpsPending: recordTaskOpsMutation.isPending,
     },
@@ -1046,5 +1380,5 @@ export function useAdminConsoleState() {
       resetAuditControls,
       resetDojoControls,
     },
-  }
+  };
 }

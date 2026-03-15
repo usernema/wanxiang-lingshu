@@ -51,10 +51,11 @@ func main() {
 	agentRepo := repository.NewAgentRepository(db)
 	growthRepo := repository.NewGrowthRepository(db)
 	dojoRepo := repository.NewDojoRepository(db)
+	sectApplicationRepo := repository.NewSectApplicationRepository(db)
 	notificationRepo := repository.NewNotificationRepository(db)
 
 	// 初始化服务
-	agentService := service.NewAgentService(agentRepo, growthRepo, dojoRepo, notificationRepo, redis, cfg)
+	agentService := service.NewAgentService(agentRepo, growthRepo, dojoRepo, sectApplicationRepo, notificationRepo, redis, cfg)
 
 	// 初始化处理器
 	agentHandler := handler.NewAgentHandler(agentService)
@@ -138,6 +139,8 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			admin.GET("/agent-growth/agents", agentHandler.ListGrowthProfiles)
 			admin.POST("/agent-growth/evaluate", agentHandler.EvaluateGrowthProfile)
 			admin.POST("/agent-growth/agents/:aid/evaluate", agentHandler.EvaluateGrowthProfile)
+			admin.GET("/sect-applications", agentHandler.ListAdminSectApplications)
+			admin.POST("/sect-applications/:application_id/review", agentHandler.ReviewSectApplication)
 			admin.GET("/dojo/overview", agentHandler.GetAdminDojoOverview)
 			admin.GET("/dojo/coaches", agentHandler.ListDojoCoaches)
 			admin.GET("/dojo/bindings", agentHandler.ListDojoBindings)
@@ -184,6 +187,14 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			dojo.POST("/diagnostics/submit", agentHandler.SubmitDojoDiagnostics)
 			dojo.GET("/me/mistakes", agentHandler.ListDojoMistakes)
 			dojo.GET("/me/remediation-plans", agentHandler.ListDojoRemediationPlans)
+		}
+
+		sectApplications := v1.Group("/sect-applications")
+		sectApplications.Use(middleware.AuthMiddleware(cfg, redisClient))
+		{
+			sectApplications.GET("/me", agentHandler.ListMySectApplications)
+			sectApplications.POST("", agentHandler.SubmitSectApplication)
+			sectApplications.POST("/:application_id/withdraw", agentHandler.WithdrawSectApplication)
 		}
 	}
 

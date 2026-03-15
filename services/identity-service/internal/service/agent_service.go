@@ -53,27 +53,34 @@ type AgentService interface {
 	ListDojoCoaches(ctx context.Context, limit, offset int, status string) ([]*models.CoachProfile, int, error)
 	ListDojoBindings(ctx context.Context, limit, offset int, schoolKey, stage, status string) ([]models.AgentCoachBinding, int, error)
 	AssignAgentCoach(ctx context.Context, aid string, req *AssignCoachRequest) (*models.AgentCoachBinding, error)
+	ListMySectApplications(ctx context.Context, aid string, limit int) ([]models.SectMembershipApplication, error)
+	SubmitSectApplication(ctx context.Context, aid string, req *SubmitSectApplicationRequest) (*models.SectMembershipApplication, error)
+	WithdrawSectApplication(ctx context.Context, aid, applicationID string) (*models.SectMembershipApplication, error)
+	ListAdminSectApplications(ctx context.Context, limit, offset int, status, targetSectKey, applicationType string) ([]models.SectMembershipApplication, int, error)
+	ReviewSectApplication(ctx context.Context, applicationID string, req *ReviewSectApplicationRequest) (*models.SectMembershipApplication, error)
 }
 
 // agentService Agent 服务实现
 type agentService struct {
-	repo             repository.AgentRepository
-	growthRepo       repository.GrowthRepository
-	dojoRepo         repository.DojoRepository
-	notificationRepo repository.NotificationRepository
-	redis            *database.RedisClient
-	config           *config.Config
+	repo                repository.AgentRepository
+	growthRepo          repository.GrowthRepository
+	dojoRepo            repository.DojoRepository
+	sectApplicationRepo repository.SectApplicationRepository
+	notificationRepo    repository.NotificationRepository
+	redis               *database.RedisClient
+	config              *config.Config
 }
 
 // NewAgentService 创建 Agent 服务
-func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, dojoRepo repository.DojoRepository, notificationRepo repository.NotificationRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
+func NewAgentService(repo repository.AgentRepository, growthRepo repository.GrowthRepository, dojoRepo repository.DojoRepository, sectApplicationRepo repository.SectApplicationRepository, notificationRepo repository.NotificationRepository, redis *database.RedisClient, cfg *config.Config) AgentService {
 	return &agentService{
-		repo:             repo,
-		growthRepo:       growthRepo,
-		dojoRepo:         dojoRepo,
-		notificationRepo: notificationRepo,
-		redis:            redis,
-		config:           cfg,
+		repo:                repo,
+		growthRepo:          growthRepo,
+		dojoRepo:            dojoRepo,
+		sectApplicationRepo: sectApplicationRepo,
+		notificationRepo:    notificationRepo,
+		redis:               redis,
+		config:              cfg,
 	}
 }
 

@@ -110,6 +110,36 @@ func (p *PostgresDB) InitSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);
 	CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
 
+	CREATE TABLE IF NOT EXISTS sect_membership_applications (
+		id BIGSERIAL PRIMARY KEY,
+		application_id VARCHAR(64) NOT NULL UNIQUE,
+		aid VARCHAR(128) NOT NULL REFERENCES agents(aid) ON DELETE CASCADE,
+		current_sect_key VARCHAR(64) NOT NULL DEFAULT '',
+		target_sect_key VARCHAR(64) NOT NULL,
+		recommended_sect_key VARCHAR(64) NOT NULL DEFAULT '',
+		application_type VARCHAR(32) NOT NULL DEFAULT 'application',
+		status VARCHAR(32) NOT NULL DEFAULT 'submitted',
+		readiness_score INT NOT NULL DEFAULT 0,
+		summary TEXT NOT NULL DEFAULT '',
+		blockers_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		advantages_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+		evidence_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+		admin_notes TEXT NOT NULL DEFAULT '',
+		submitted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		reviewed_at TIMESTAMP NULL,
+		reviewed_by VARCHAR(128) NOT NULL DEFAULT '',
+		created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_sect_membership_applications_aid ON sect_membership_applications(aid);
+	CREATE INDEX IF NOT EXISTS idx_sect_membership_applications_target_sect_key ON sect_membership_applications(target_sect_key);
+	CREATE INDEX IF NOT EXISTS idx_sect_membership_applications_status ON sect_membership_applications(status);
+	CREATE INDEX IF NOT EXISTS idx_sect_membership_applications_created_at ON sect_membership_applications(created_at DESC);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_sect_membership_applications_active_unique
+		ON sect_membership_applications(aid, target_sect_key)
+		WHERE status = 'submitted';
+
 	CREATE TABLE IF NOT EXISTS agent_capability_profiles (
 		aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
 		owner_email VARCHAR(320) NOT NULL DEFAULT '',
