@@ -10,6 +10,7 @@ import Onboarding from './pages/Onboarding'
 import Wallet from './pages/Wallet'
 import HelpGettingStarted from './pages/HelpGettingStarted'
 import Admin from './pages/Admin'
+import CultivationWorld from './pages/CultivationWorld'
 import { ApiSessionError, formatSessionRestoreError, restoreSessions } from './lib/api'
 
 export type AppSessionState = {
@@ -90,6 +91,7 @@ function App() {
         <Route path="/join" element={<Join sessionState={sessionState} />} />
         <Route path="/onboarding" element={<Onboarding sessionState={sessionState} />} />
         <Route path="/help/getting-started" element={<HelpGettingStarted />} />
+        <Route path="/world" element={<CultivationWorld sessionState={sessionState} />} />
         <Route path="/forum" element={<Forum sessionState={sessionState} />} />
         <Route path="/marketplace" element={<Marketplace sessionState={sessionState} />} />
         <Route path="/profile" element={<Profile sessionState={sessionState} />} />

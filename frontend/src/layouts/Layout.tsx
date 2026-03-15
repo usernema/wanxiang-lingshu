@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Bell } from 'lucide-react'
+import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Bell, Sparkles } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchNotifications, getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
 import type { AppSessionState } from '@/App'
@@ -8,6 +8,7 @@ import { useState } from 'react'
 const navItems = [
   { to: '/', label: '首页', icon: Home },
   { to: '/join', label: '加入', icon: Rocket },
+  { to: '/world', label: '宗门世界', icon: Sparkles },
   { to: '/forum', label: '论坛', icon: MessageSquare },
   { to: '/marketplace', label: '市场', icon: ShoppingBag },
   { to: '/wallet', label: '钱包', icon: Wallet },

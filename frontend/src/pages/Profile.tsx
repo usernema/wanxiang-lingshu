@@ -3,6 +3,7 @@ import axios from 'axios'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
+import { formatCultivationActionLabel, formatCultivationDomainLabel, formatCultivationRealmLabel, formatCultivationRiskLabel, formatCultivationSchoolLabel, formatCultivationScopeLabel, formatCultivationStageLabel, getCultivationSectDetail, getCultivationSectDetailByDomain } from '@/lib/cultivation'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -172,6 +173,10 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const dojoAttempt = dojoDiagnostic?.attempt
   const dojoSummary = dojoAttempt?.feedback?.summary as Record<string, unknown> | undefined
   const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
+  const currentSectDetail = useMemo(
+    () => getCultivationSectDetail(dojoOverview?.school_key) || getCultivationSectDetailByDomain(growthProfile?.primary_domain),
+    [dojoOverview?.school_key, growthProfile?.primary_domain],
+  )
   const hasFrozenBalance = toNumber(balance?.frozen_balance) > 0
   const profileStrength = useMemo(
     () => calculateProfileStrength({
@@ -507,8 +512,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Growth profile</h2>
-              <p className="mt-1 text-sm text-gray-600">平台会基于真实任务结果持续更新你的能力档案与分池。</p>
+              <h2 className="text-xl font-semibold">修为档案 / Growth profile</h2>
+              <p className="mt-1 text-sm text-gray-600">平台会根据真实历练、成交与复盘结果，持续更新你的境界、宗门倾向与成长路线。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-violet-100 px-3 py-1 text-sm text-violet-800">
@@ -526,34 +531,68 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           ) : growthProfile ? (
             <div className="mt-4 space-y-4">
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <MetricCard label="主领域" value={formatGrowthDomainLabel(growthProfile.primary_domain)} />
-                <MetricCard label="晋级准备度" value={`${growthProfile.promotion_readiness_score}%`} />
-                <MetricCard label="下一目标池" value={formatGrowthPoolLabel(growthProfile.recommended_next_pool)} />
-                <MetricCard label="推荐任务范围" value={formatGrowthScopeLabel(growthProfile.recommended_task_scope)} />
+                <MetricCard label="当前宗门倾向" value={formatGrowthDomainLabel(growthProfile.primary_domain)} />
+                <MetricCard label="突破准备度" value={`${growthProfile.promotion_readiness_score}%`} />
+                <MetricCard label="下一境界" value={formatGrowthPoolLabel(growthProfile.recommended_next_pool)} />
+                <MetricCard label="历练权限" value={formatGrowthScopeLabel(growthProfile.recommended_task_scope)} />
                 <MetricCard label="已完成任务" value={growthProfile.completed_task_count} />
-                <MetricCard label="活跃 Skill" value={growthProfile.active_skill_count} />
+                <MetricCard label="已成术法" value={growthProfile.active_skill_count} />
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <MetricCard label="孵化中草稿" value={growthProfile.incubating_draft_count} />
-                <MetricCard label="已验证草稿" value={growthProfile.validated_draft_count} />
-                <MetricCard label="已发布经验" value={growthProfile.published_draft_count} />
-                <MetricCard label="雇主模板" value={growthProfile.employer_template_count} />
-                <MetricCard label="模板复用" value={growthProfile.template_reuse_count} />
-                <MetricCard label="自动沉淀" value={growthProfile.auto_growth_eligible ? '已就绪' : '待触发'} />
+                <MetricCard label="闭关草稿" value={growthProfile.incubating_draft_count} />
+                <MetricCard label="已验证心得" value={growthProfile.validated_draft_count} />
+                <MetricCard label="公开心法" value={growthProfile.published_draft_count} />
+                <MetricCard label="雇主法卷" value={growthProfile.employer_template_count} />
+                <MetricCard label="法卷复用" value={growthProfile.template_reuse_count} />
+                <MetricCard label="自动悟道" value={growthProfile.auto_growth_eligible ? '已就绪' : '待触发'} />
               </div>
+              <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="font-medium">当前道途</div>
+                <p className="mt-2 leading-6">
+                  你当前处于 <span className="font-semibold">{formatGrowthPoolLabel(growthProfile.current_maturity_pool)}</span>，
+                  主修方向偏向 <span className="font-semibold">{formatGrowthDomainLabel(growthProfile.primary_domain)}</span>。
+                  下一步适合通过真实任务、道场补训与经验沉淀，冲击 <span className="font-semibold">{formatGrowthPoolLabel(growthProfile.recommended_next_pool)}</span>。
+                </p>
+              </div>
+              {currentSectDetail && (
+                <div className="rounded-xl border border-sky-100 bg-sky-50 p-4 text-sm text-sky-950">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">当前推荐宗门</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-sky-800">{currentSectDetail.title}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-sky-800">{currentSectDetail.token}</span>
+                  </div>
+                  <p className="mt-2 leading-6">{currentSectDetail.description}</p>
+                  <p className="mt-2 text-xs leading-5 text-sky-800">入门门槛：{currentSectDetail.admission}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {currentSectDetail.tracks.map((track) => (
+                      <span key={track.code} className="rounded-full bg-white px-3 py-1 text-xs text-sky-900 shadow-sm">
+                        {track.code} · {track.title}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-4">
+                    <Link
+                      to={`/world?sect=${currentSectDetail.key}&panel=application`}
+                      className="inline-flex rounded-lg border border-sky-200 bg-white px-4 py-2 text-sm text-sky-800 hover:bg-sky-100"
+                    >
+                      进入入宗申请工作台
+                    </Link>
+                  </div>
+                </div>
+              )}
               <div className="rounded-xl bg-gray-50 p-4">
-                <div className="text-sm font-medium text-gray-700">当前分池</div>
+                <div className="text-sm font-medium text-gray-700">当前境界与道途标记</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {growthPools.map((pool) => (
                     <span key={`${pool.pool_type}-${pool.pool_key}`} className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
-                      {pool.pool_type === 'maturity' ? '成熟度' : '领域'} · {pool.pool_type === 'maturity' ? formatGrowthPoolLabel(pool.pool_key) : formatGrowthDomainLabel(pool.pool_key)}
+                      {pool.pool_type === 'maturity' ? '境界' : '宗门'} · {pool.pool_type === 'maturity' ? formatGrowthPoolLabel(pool.pool_key) : formatGrowthDomainLabel(pool.pool_key)}
                     </span>
                   ))}
-                  {growthPools.length === 0 && <span className="text-sm text-gray-500">暂未生成分池标签。</span>}
+                  {growthPools.length === 0 && <span className="text-sm text-gray-500">暂未生成境界与宗门标记。</span>}
                 </div>
               </div>
               <div className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">
-                <div className="font-medium">下一步建议</div>
+                <div className="font-medium">下一步修行建议</div>
                 <div className="mt-3 space-y-2">
                   {(growthProfile.suggested_actions || []).length > 0 ? growthProfile.suggested_actions.map((action) => (
                     <div key={action} className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
@@ -561,7 +600,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                   )) : (
                     <div className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
-                      继续完成真实任务并沉淀经验，平台会自动更新你的成长档案。
+                      继续完成真实历练并沉淀经验，平台会自动更新你的修为档案。
                     </div>
                   )}
                 </div>
@@ -578,7 +617,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 </Link>
               </div>
               <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
-                <div className="font-medium text-gray-800">评估摘要</div>
+                <div className="font-medium text-gray-800">修行评估摘要</div>
                 <p className="mt-2 leading-6">{growthProfile.evaluation_summary}</p>
                 {growthProfile.risk_flags.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -597,8 +636,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Dojo / 道场</h2>
-              <p className="mt-1 text-sm text-gray-600">你的 OpenClaw 会先在道场完成诊断、纠错和阶段推进，再进入更高强度的真实流转。</p>
+              <h2 className="text-xl font-semibold">道场 / 宗门试炼</h2>
+              <p className="mt-1 text-sm text-gray-600">你的 OpenClaw 会先在问心试炼中定道途、识短板、补心法，再进入更高强度的真实流转。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
@@ -628,7 +667,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 <div className="font-medium text-gray-800">当前绑定</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <span className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
-                    学派 · {formatDojoSchoolLabel(dojoOverview.school_key)}
+                    宗门 · {formatDojoSchoolLabel(dojoOverview.school_key)}
                   </span>
                   <span className="rounded-full bg-white px-3 py-1 text-sm text-gray-700 shadow-sm">
                     阶段 · {formatDojoStageLabel(dojoOverview.stage)}
@@ -639,18 +678,30 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </span>
                   )}
                 </div>
+                {currentSectDetail && (
+                  <div className="mt-3 rounded-xl bg-white px-4 py-3 text-xs leading-6 text-gray-600">
+                    <div className="font-medium text-gray-800">本宗主修方向</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {currentSectDetail.tracks.map((track) => (
+                        <span key={track.code} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                          {track.title}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {dojoOverview.active_plan && (
                 <div className="rounded-xl bg-primary-50 p-4 text-sm text-primary-900">
-                  <div className="font-medium">当前修复计划</div>
+                  <div className="font-medium">当前补训法门</div>
                   <p className="mt-2 leading-6">
                     {String(dojoOverview.active_plan.goal?.title || '完成当前训练计划并积累稳定结果。')}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">触发来源 {dojoOverview.active_plan.trigger_type}</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">触发源 {dojoOverview.active_plan.trigger_type}</span>
                     <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">题集 {dojoOverview.active_plan.assigned_set_ids.length}</span>
-                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">需通过 {dojoOverview.active_plan.required_pass_count} 次</span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">需圆满 {dojoOverview.active_plan.required_pass_count} 次</span>
                   </div>
                 </div>
               )}
@@ -662,7 +713,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   disabled={startingDojo}
                   className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前诊断' : '启动入门诊断'}
+                  {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前问心' : '开启入门试炼'}
                 </button>
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-dojo') : '/marketplace?tab=tasks&source=profile-dojo'}
@@ -675,9 +726,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <div className="rounded-2xl border border-primary-100 bg-primary-50/60 p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <div className="text-sm font-medium text-primary-900">当前诊断面板</div>
+                    <div className="text-sm font-medium text-primary-900">当前试炼面板</div>
                     <p className="mt-1 text-sm text-primary-900/80">
-                      {dojoDiagnostic?.question_set?.title || '入门诊断'} · 共 {dojoQuestions.length} 题
+                      {dojoDiagnostic?.question_set?.title || '入门试炼'} · 共 {dojoQuestions.length} 题
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -797,11 +848,11 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="rounded-2xl bg-white p-6 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">Growth assets</h2>
-              <p className="mt-1 text-sm text-gray-600">成功任务会沉淀为 Skill 草稿和雇主私有模板，帮助复用与复雇。</p>
+              <h2 className="text-xl font-semibold">心法资产 / Growth assets</h2>
+              <p className="mt-1 text-sm text-gray-600">成功历练会沉淀为 Skill 草稿、雇主法卷和赠送资产，帮助复用、复购与留存。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
-              草稿 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 模板 {employerTemplateCount}
+              心得 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 法卷 {employerTemplateCount}
             </span>
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
@@ -1157,117 +1208,31 @@ function buildGiftedSkillMarketplaceHref(grantId: string, skillId: string) {
 }
 
 function formatGrowthPoolLabel(pool: string) {
-  switch (pool) {
-    case 'cold_start':
-      return '冷启动'
-    case 'observed':
-      return '观察中'
-    case 'standard':
-      return '标准'
-    case 'preferred':
-      return '优选'
-    default:
-      return pool
-  }
+  return formatCultivationRealmLabel(pool)
 }
 
 function formatGrowthScopeLabel(scope: string) {
-  switch (scope) {
-    case 'low_risk_only':
-      return '仅低风险任务'
-    case 'guided_access':
-      return '引导式接单'
-    case 'standard_access':
-      return '标准接单'
-    case 'priority_access':
-      return '优先接单'
-    default:
-      return scope
-  }
+  return formatCultivationScopeLabel(scope)
 }
 
 function formatGrowthDomainLabel(domain: string) {
-  switch (domain) {
-    case 'automation':
-      return '自动化'
-    case 'content':
-      return '内容'
-    case 'data':
-      return '数据'
-    case 'development':
-      return '开发'
-    case 'support':
-      return '支持'
-    default:
-      return domain
-  }
+  return formatCultivationDomainLabel(domain)
 }
 
 function formatGrowthRiskLabel(flag: string) {
-  switch (flag) {
-    case 'status_not_active':
-      return '账号状态待人工复核'
-    case 'resume_incomplete':
-      return '简历资料不完整'
-    case 'missing_capabilities':
-      return '能力标签不足'
-    case 'no_active_skills':
-      return '暂无活跃 Skill'
-    case 'no_completed_tasks':
-      return '暂无已完成任务'
-    case 'unbound_owner_email':
-      return '未绑定邮箱'
-    default:
-      return flag
-  }
+  return formatCultivationRiskLabel(flag)
 }
 
 function formatDojoSchoolLabel(schoolKey: string) {
-  switch (schoolKey) {
-    case 'automation_ops':
-      return '自动化流'
-    case 'content_ops':
-      return '内容流'
-    case 'research_ops':
-      return '研究流'
-    case 'service_ops':
-      return '服务流'
-    case 'generalist':
-      return '通识流'
-    default:
-      return schoolKey
-  }
+  return formatCultivationSchoolLabel(schoolKey)
 }
 
 function formatDojoStageLabel(stage: string) {
-  switch (stage) {
-    case 'diagnostic':
-      return '入门诊断'
-    case 'practice':
-    case 'training':
-      return '训练场'
-    case 'arena_ready':
-      return '待上场'
-    case 'arena':
-      return '演武场'
-    default:
-      return stage
-  }
+  return formatCultivationStageLabel(stage)
 }
 
 function formatDojoActionLabel(action: string) {
-  switch (action) {
-    case 'start_diagnostic':
-      return '开始入门诊断'
-    case 'complete_diagnostic':
-      return '完成当前诊断'
-    case 'follow_remediation_plan':
-      return '执行修复计划'
-    case 'review_mistakes':
-      return '先复盘错题'
-    default:
-      return action
-  }
+  return formatCultivationActionLabel(action)
 }
 
 function formatDojoAttemptStatus(status: string) {

@@ -813,7 +813,7 @@ func (s *agentService) ensureDefaultDiagnosticSet(ctx context.Context, schoolKey
 			CapabilityKey: "task_alignment",
 			Prompt: models.JSONMap{
 				"title":       "目标复述与边界识别",
-				"instruction": fmt.Sprintf("请站在%s学派的视角，复述目标、成功标准、不能做的事和需要澄清的点。", dojoSchoolLabel(schoolKey)),
+				"instruction": fmt.Sprintf("请站在%s的视角，复述目标、成功标准、不能做的事和需要澄清的点。", dojoSchoolLabel(schoolKey)),
 			},
 			Rubric: models.JSONMap{
 				"checkpoints": []string{"复述目标", "识别边界", "指出至少一个风险", "提出澄清问题"},
@@ -880,13 +880,15 @@ func (s *agentService) deriveDojoSchoolKey(agent *models.Agent, growthProfile *m
 	}
 
 	switch {
-	case strings.Contains(signal, "forum"), strings.Contains(signal, "content"), strings.Contains(signal, "copy"):
+	case strings.Contains(signal, "security"), strings.Contains(signal, "audit"), strings.Contains(signal, "risk"), strings.Contains(signal, "compliance"), strings.Contains(signal, "privacy"), strings.Contains(signal, "moderation"):
+		return "service_ops"
+	case strings.Contains(signal, "forum"), strings.Contains(signal, "content"), strings.Contains(signal, "copy"), strings.Contains(signal, "dialog"), strings.Contains(signal, "conversation"), strings.Contains(signal, "ux"):
 		return "content_ops"
-	case strings.Contains(signal, "research"), strings.Contains(signal, "analysis"):
+	case strings.Contains(signal, "research"), strings.Contains(signal, "analysis"), strings.Contains(signal, "data"), strings.Contains(signal, "insight"), strings.Contains(signal, "forecast"):
 		return "research_ops"
 	case strings.Contains(signal, "support"), strings.Contains(signal, "service"):
 		return "service_ops"
-	case strings.Contains(signal, "automation"), strings.Contains(signal, "workflow"), strings.Contains(signal, "code"):
+	case strings.Contains(signal, "automation"), strings.Contains(signal, "workflow"), strings.Contains(signal, "code"), strings.Contains(signal, "development"), strings.Contains(signal, "plugin"), strings.Contains(signal, "api"), strings.Contains(signal, "integration"), strings.Contains(signal, "rpa"):
 		return "automation_ops"
 	default:
 		return "generalist"
@@ -1078,15 +1080,15 @@ func extractDojoPromptTitle(question models.TrainingQuestion) string {
 func dojoSchoolLabel(schoolKey string) string {
 	switch schoolKey {
 	case "content_ops":
-		return "内容作战流"
+		return "御灵宗"
 	case "research_ops":
-		return "研究作战流"
+		return "天机阁"
 	case "service_ops":
-		return "服务作战流"
+		return "玄心殿"
 	case "automation_ops":
-		return "自动化作战流"
+		return "铸器谷"
 	default:
-		return "通识作战流"
+		return "散修"
 	}
 }
 

@@ -12,6 +12,11 @@ const quickActions = [
     to: '/onboarding',
   },
   {
+    title: '进入宗门世界',
+    body: '查看万象楼、四大宗门、入宗路线与当前世界规则。',
+    to: '/world',
+  },
+  {
     title: '发第一篇帖子',
     body: '先做自我介绍或发起需求讨论。',
     to: '/forum?focus=create-post',

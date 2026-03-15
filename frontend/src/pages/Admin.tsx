@@ -13,6 +13,7 @@ import {
 } from '@/components/admin/AdminWorkspacePanels'
 import { isProtectedAgent, useAdminConsoleState } from '@/hooks/useAdminConsoleState'
 import { formatAdminError } from '@/lib/admin'
+import { formatCultivationDomainLabel, formatCultivationRealmLabel, formatCultivationRiskLabel, formatCultivationSchoolLabel, formatCultivationScopeLabel, formatCultivationStageLabel } from '@/lib/cultivation'
 
 function formatTime(value?: string | null) {
   if (!value) return '—'
@@ -83,38 +84,19 @@ function summarizeText(content?: string | null, maxLength = 96) {
 }
 
 function growthPoolLabel(pool?: string) {
-  if (pool === 'cold_start') return '冷启动'
-  if (pool === 'observed') return '观察中'
-  if (pool === 'standard') return '标准'
-  if (pool === 'preferred') return '优选'
-  return pool || '未知'
+  return formatCultivationRealmLabel(pool)
 }
 
 function growthScopeLabel(scope?: string) {
-  if (scope === 'low_risk_only') return '仅低风险'
-  if (scope === 'guided_access') return '引导接单'
-  if (scope === 'standard_access') return '标准接单'
-  if (scope === 'priority_access') return '优先接单'
-  return scope || '未知'
+  return formatCultivationScopeLabel(scope)
 }
 
 function growthDomainLabel(domain?: string) {
-  if (domain === 'automation') return '自动化'
-  if (domain === 'content') return '内容'
-  if (domain === 'data') return '数据'
-  if (domain === 'development') return '开发'
-  if (domain === 'support') return '支持'
-  return domain || '未知'
+  return formatCultivationDomainLabel(domain)
 }
 
 function growthRiskLabel(flag?: string) {
-  if (flag === 'status_not_active') return '账号状态待复核'
-  if (flag === 'resume_incomplete') return '简历资料不完整'
-  if (flag === 'missing_capabilities') return '能力标签不足'
-  if (flag === 'no_active_skills') return '暂无活跃 Skill'
-  if (flag === 'no_completed_tasks') return '暂无已完成任务'
-  if (flag === 'unbound_owner_email') return '未绑定邮箱'
-  return flag || '未知'
+  return formatCultivationRiskLabel(flag)
 }
 
 function growthReadinessTone(score: number) {
@@ -125,20 +107,11 @@ function growthReadinessTone(score: number) {
 }
 
 function dojoSchoolLabel(key?: string) {
-  if (key === 'automation_ops') return '自动化流'
-  if (key === 'content_ops') return '内容流'
-  if (key === 'research_ops') return '研究流'
-  if (key === 'service_ops') return '服务流'
-  if (key === 'generalist') return '通识流'
-  return key || '未知'
+  return formatCultivationSchoolLabel(key)
 }
 
 function dojoStageLabel(stage?: string) {
-  if (stage === 'diagnostic') return '入门诊断'
-  if (stage === 'practice' || stage === 'training') return '训练场'
-  if (stage === 'arena_ready') return '待上场'
-  if (stage === 'arena') return '演武场'
-  return stage || '未知'
+  return formatCultivationStageLabel(stage)
 }
 
 function dojoStageTone(stage?: string) {

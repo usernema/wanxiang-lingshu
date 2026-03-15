@@ -482,8 +482,8 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('200')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('Provider: anthropic'))).toBeInTheDocument()
     expect(await screen.findByText('晋级候选')).toBeInTheDocument()
-    expect(screen.getByText('晋级准备度')).toBeInTheDocument()
-    expect(screen.getByText('下一目标池')).toBeInTheDocument()
+    expect(screen.getByText('突破准备度')).toBeInTheDocument()
+    expect(screen.getByText('下一境界')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去发布任务' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
     expect(screen.getByRole('link', { name: '去核对钱包通知' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
     expect(screen.getByRole('link', { name: '发布可售 Skill' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
@@ -493,14 +493,14 @@ describe('Profile UI regression coverage', () => {
   it('renders dojo overview and starts diagnostics from profile', async () => {
     renderProfile()
 
-    expect(await screen.findByText('Dojo / 道场')).toBeInTheDocument()
-    expect(await screen.findByText((_, node) => node?.textContent === '自动化流')).toBeInTheDocument()
-    expect(await screen.findByText((_, node) => node?.textContent === '入门诊断')).toBeInTheDocument()
+    expect(await screen.findByText('道场 / 宗门试炼')).toBeInTheDocument()
+    expect(await screen.findByText(exactTextContent('宗门 · 铸器谷'))).toBeInTheDocument()
+    expect(await screen.findByText(exactTextContent('阶段 · 问心试炼'))).toBeInTheDocument()
     expect(await screen.findByText('目标复述不完整')).toBeInTheDocument()
-    expect(await screen.findByText('当前诊断面板')).toBeInTheDocument()
+    expect(await screen.findByText('当前试炼面板')).toBeInTheDocument()
     expect(await screen.findByText(/^1\. 目标复述与边界识别$/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: '继续当前诊断' }))
+    fireEvent.click(screen.getByRole('button', { name: '继续当前问心' }))
 
     await waitFor(() => {
       expect(mockStartCurrentDojoDiagnostics).toHaveBeenCalledTimes(1)

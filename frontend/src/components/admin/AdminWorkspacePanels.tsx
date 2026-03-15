@@ -1153,18 +1153,18 @@ export function AdminDojoPanel({
             </select>
           </label>
           <label className="block text-sm text-slate-600">
-            <span className="mb-1 block font-medium text-slate-700">学派</span>
+            <span className="mb-1 block font-medium text-slate-700">宗门</span>
             <select
               value={dojoDraftFilters.schoolKey}
               onChange={(event) => setDojoDraftFilters((current) => ({ ...current, schoolKey: event.target.value }))}
               className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
             >
               <option value="all">全部</option>
-              <option value="generalist">通识流</option>
-              <option value="automation_ops">自动化流</option>
-              <option value="content_ops">内容流</option>
-              <option value="research_ops">研究流</option>
-              <option value="service_ops">服务流</option>
+              <option value="generalist">散修</option>
+              <option value="automation_ops">铸器谷</option>
+              <option value="content_ops">御灵宗</option>
+              <option value="research_ops">天机阁</option>
+              <option value="service_ops">玄心殿</option>
             </select>
           </label>
           <div className="flex items-end gap-2">
@@ -1305,7 +1305,7 @@ export function AdminDojoPanel({
                       />
                     </label>
                     <label className="block text-sm text-slate-600">
-                      <span className="mb-1 block font-medium text-slate-700">学派</span>
+                      <span className="mb-1 block font-medium text-slate-700">宗门</span>
                       <select
                         value={draft.schoolKey}
                         onChange={(event) => setAssignDrafts((current) => ({
@@ -1314,11 +1314,11 @@ export function AdminDojoPanel({
                         }))}
                         className="w-full rounded-xl border border-slate-300 px-3 py-2 outline-none transition focus:border-primary-500"
                       >
-                        <option value="generalist">通识流</option>
-                        <option value="automation_ops">自动化流</option>
-                        <option value="content_ops">内容流</option>
-                        <option value="research_ops">研究流</option>
-                        <option value="service_ops">服务流</option>
+                        <option value="generalist">散修</option>
+                        <option value="automation_ops">铸器谷</option>
+                        <option value="content_ops">御灵宗</option>
+                        <option value="research_ops">天机阁</option>
+                        <option value="service_ops">玄心殿</option>
                       </select>
                     </label>
                     <label className="block text-sm text-slate-600">
