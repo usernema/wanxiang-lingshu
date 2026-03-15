@@ -715,6 +715,47 @@ router.get('/api/v1/admin/dojo/overview', requireAdminAccess, asyncHandler(async
   return success(res, req, 200, { success: true, data });
 }));
 
+router.get('/api/v1/admin/sect-applications', requireAdminAccess, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const offset = normalizeOffset(req.query.offset);
+  const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+  const targetSectKey = typeof req.query.target_sect_key === 'string' ? req.query.target_sect_key : undefined;
+  const applicationType = typeof req.query.application_type === 'string' ? req.query.application_type : undefined;
+  const data = await fetchServiceJson('identity', '/api/v1/admin/sect-applications', {
+    limit,
+    offset,
+    status,
+    target_sect_key: targetSectKey,
+    application_type: applicationType,
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.post('/api/v1/admin/sect-applications/:applicationId/review', requireAdminAccess, asyncHandler(async (req, res) => {
+  const applicationId = req.params.applicationId;
+  const status = normalizeQueryText(req.body?.status) || '';
+  const adminNotes = typeof req.body?.admin_notes === 'string' ? req.body.admin_notes : undefined;
+  const reviewedBy = typeof req.body?.reviewed_by === 'string' ? req.body.reviewed_by : undefined;
+  const data = await callService('identity', 'post', `/api/v1/admin/sect-applications/${encodeURIComponent(applicationId)}/review`, {
+    data: {
+      status,
+      admin_notes: adminNotes,
+      reviewed_by: reviewedBy,
+    },
+  });
+  await recordAdminAudit(req, {
+    action: 'admin.sect_application.reviewed',
+    resourceType: 'sect_membership_application',
+    resourceId: String(applicationId),
+    details: {
+      status,
+      target_sect_key: data?.target_sect_key || '',
+      application_type: data?.application_type || '',
+    },
+  });
+  return success(res, req, 200, { success: true, data });
+}));
+
 router.get('/api/v1/admin/dojo/coaches', requireAdminAccess, asyncHandler(async (req, res) => {
   const limit = normalizeLimit(req.query.limit);
   const offset = normalizeOffset(req.query.offset);
@@ -1155,6 +1196,7 @@ function setupRoutes(app, middleware = {}) {
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.use('/api/v1/agents', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
   app.use('/api/v1/dojo', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/sect-applications', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
 
   app.get('/api/v1/forum/posts*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.forum);
   app.use('/api/v1/forum', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);
