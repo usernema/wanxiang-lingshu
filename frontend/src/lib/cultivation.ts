@@ -1,4 +1,4 @@
-import type { AgentGrowthProfile, DojoOverview } from './api'
+import type { AgentGrowthProfile, DojoOverview, SectMembershipApplication } from './api'
 
 export type CultivationRealmCard = {
   key: string
@@ -68,6 +68,8 @@ export type EvaluateCultivationApplicationOptions = {
   targetSectKey?: string | null
   growthProfile?: AgentGrowthProfile | null
   dojoOverview?: DojoOverview | null
+  currentFormalSectKey?: string | null
+  recommendedSectKey?: string | null
   profileBasicsReady: boolean
   completedTaskCount: number
   reusableAssetCount: number
@@ -316,6 +318,60 @@ export function getCultivationSectDetailByDomain(domain?: string) {
   }
 }
 
+type ApprovedSectApplicationLike = Pick<
+  SectMembershipApplication,
+  'aid' | 'status' | 'target_sect_key'
+>
+
+export function getRecommendedCultivationSectKey(options: {
+  dojoOverview?: DojoOverview | null
+  growthProfile?: AgentGrowthProfile | null
+}) {
+  return (
+    normalizeCultivationSectKey(options.dojoOverview?.school_key) ||
+    normalizeCultivationSectKey(
+      getCultivationSectDetailByDomain(options.growthProfile?.primary_domain)
+        ?.key,
+    ) ||
+    null
+  )
+}
+
+export function getCurrentFormalSectKey(
+  applications?: Array<ApprovedSectApplicationLike> | null,
+) {
+  if (!applications) return null
+
+  for (const application of applications) {
+    if (application.status !== 'approved') continue
+    const sectKey = normalizeCultivationSectKey(application.target_sect_key)
+    if (sectKey) {
+      return sectKey
+    }
+  }
+
+  return null
+}
+
+export function buildApprovedCultivationSectMap(
+  applications?: Array<ApprovedSectApplicationLike> | null,
+) {
+  const byAid = new Map<string, string>()
+  if (!applications) return byAid
+
+  for (const application of applications) {
+    const aid = String(application.aid || '').trim()
+    if (!aid || byAid.has(aid) || application.status !== 'approved') continue
+
+    const sectKey = normalizeCultivationSectKey(application.target_sect_key)
+    if (sectKey) {
+      byAid.set(aid, sectKey)
+    }
+  }
+
+  return byAid
+}
+
 export function inferCultivationSectKeyFromText(input?: string | null) {
   const normalized = String(input || '').trim().toLowerCase()
   if (!normalized) return null
@@ -334,9 +390,10 @@ export function inferCultivationSectKeyFromText(input?: string | null) {
 
 export function evaluateCultivationApplication(options: EvaluateCultivationApplicationOptions): CultivationApplicationResult {
   const recommendedSectKey =
-    normalizeCultivationSectKey(options.dojoOverview?.school_key) ||
-    normalizeCultivationSectKey(getCultivationSectDetailByDomain(options.growthProfile?.primary_domain)?.key) ||
-    null
+    normalizeCultivationSectKey(options.recommendedSectKey) ||
+    getRecommendedCultivationSectKey(options)
+  const currentFormalSectKey =
+    normalizeCultivationSectKey(options.currentFormalSectKey)
 
   const targetSectKey = normalizeCultivationSectKey(options.targetSectKey) || recommendedSectKey
   const currentRealm = options.growthProfile?.current_maturity_pool
@@ -350,7 +407,7 @@ export function evaluateCultivationApplication(options: EvaluateCultivationAppli
   const reachedTransferRealm = currentRealm === 'standard' || currentRealm === 'preferred'
 
   const mode: CultivationApplicationResult['mode'] =
-    targetSectKey && recommendedSectKey && targetSectKey !== recommendedSectKey ? 'transfer' : 'application'
+    currentFormalSectKey && targetSectKey && currentFormalSectKey !== targetSectKey ? 'transfer' : 'application'
 
   const checklist: CultivationApplicationChecklistItem[] = [
     {

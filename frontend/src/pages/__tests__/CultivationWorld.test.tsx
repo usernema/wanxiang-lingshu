@@ -201,4 +201,89 @@ describe("CultivationWorld", () => {
       screen.getByText("继续完成真实自动化任务，并把成功经验沉淀成公开法卷。"),
     ).toBeInTheDocument();
   });
+
+  it("separates formal sect membership from recommended route", async () => {
+    mockFetchCurrentAgentGrowth.mockResolvedValue({
+      profile: {
+        aid: "worker-agent",
+        model: "Claude Worker",
+        provider: "anthropic",
+        capabilities: ["coding"],
+        reputation: 88,
+        status: "active",
+        primary_domain: "content",
+        domain_scores: { content: 93 },
+        current_maturity_pool: "standard",
+        recommended_task_scope: "standard_access",
+        auto_growth_eligible: false,
+        completed_task_count: 6,
+        active_skill_count: 3,
+        total_task_count: 8,
+        incubating_draft_count: 1,
+        validated_draft_count: 2,
+        published_draft_count: 1,
+        employer_template_count: 1,
+        template_reuse_count: 1,
+        promotion_readiness_score: 72,
+        recommended_next_pool: "preferred",
+        promotion_candidate: true,
+        suggested_actions: ["继续积累内容交付闭环。"],
+        risk_flags: [],
+        evaluation_summary: "当前处于稳定交付阶段。",
+        last_evaluated_at: "2026-03-15T00:00:00.000Z",
+        updated_at: "2026-03-15T00:00:00.000Z",
+        created_at: "2026-03-15T00:00:00.000Z",
+        headline: "内容型 OpenClaw",
+        bio: "擅长内容任务。",
+      },
+      pools: [],
+    });
+    mockFetchCurrentDojoOverview.mockResolvedValue({
+      aid: "worker-agent",
+      school_key: "content_ops",
+      stage: "practice",
+      mistake_count: 0,
+      open_mistake_count: 0,
+      pending_plan_count: 0,
+      suggested_next_action: "review_mistakes",
+    });
+    mockFetchMySectApplications.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          application_id: "sectapp-approved",
+          aid: "worker-agent",
+          current_sect_key: "",
+          target_sect_key: "automation_ops",
+          recommended_sect_key: "automation_ops",
+          application_type: "application",
+          status: "approved",
+          readiness_score: 100,
+          summary: "已正式入宗铸器谷。",
+          blockers: [],
+          advantages: [],
+          evidence: {},
+          submitted_at: "2026-03-15T00:00:00.000Z",
+          reviewed_at: "2026-03-15T00:00:00.000Z",
+          reviewed_by: "admin",
+          created_at: "2026-03-15T00:00:00.000Z",
+          updated_at: "2026-03-15T00:00:00.000Z",
+        },
+      ],
+      limit: 10,
+    });
+
+    renderWithProviders(
+      <CultivationWorld sessionState={buildSessionState()} />,
+      {
+        initialEntries: ["/world"],
+      },
+    );
+
+    expect(await screen.findByText("正式宗门")).toBeInTheDocument();
+    expect(screen.getByText("推荐路线")).toBeInTheDocument();
+    expect(screen.getByText("当前正式宗门 · 铸器谷")).toBeInTheDocument();
+    expect(screen.getByText("推荐宗门 · 御灵宗")).toBeInTheDocument();
+    expect(screen.getByText("转宗审议：御灵宗")).toBeInTheDocument();
+  });
 });

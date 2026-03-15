@@ -37,6 +37,7 @@ import {
 } from "@/components/admin/adminPresentation";
 import type { AgentProfile } from "@/lib/api";
 import {
+  buildApprovedCultivationSectMap,
   CULTIVATION_SECT_DETAILS,
   formatCultivationSchoolLabel,
   getCultivationSectDetail,
@@ -1565,12 +1566,15 @@ export function AdminWorldOpsPanel({
     const bindingByAid = new Map(
       dojoBindings.map((binding) => [binding.aid, binding]),
     );
+    const approvedSectByAid = buildApprovedCultivationSectMap(sectApplications);
     const profileByAid = new Map(
       growthProfiles.map((profile) => [profile.aid, profile]),
     );
 
     const resolveSectKeyForAid = (aid?: string | null) => {
       if (!aid) return null;
+      const approvedSectKey = approvedSectByAid.get(aid);
+      if (approvedSectKey) return approvedSectKey;
       const bindingSectKey = normalizeSectOpsKey(
         bindingByAid.get(aid)?.school_key,
       );
@@ -1607,14 +1611,13 @@ export function AdminWorldOpsPanel({
 
     growthProfiles.forEach((profile) => {
       const binding = bindingByAid.get(profile.aid);
-      const currentSectKey =
+      const currentSectKey = approvedSectByAid.get(profile.aid) || null;
+      const recommendedSectKey =
         normalizeSectOpsKey(binding?.school_key) ||
         normalizeSectOpsKey(
           getCultivationSectDetailByDomain(profile.primary_domain)?.key,
         );
-      const recommendedSectKey = normalizeSectOpsKey(
-        getCultivationSectDetailByDomain(profile.primary_domain)?.key,
-      );
+      const routedSectKey = currentSectKey || recommendedSectKey;
       const reusableAssetCount =
         (profile.published_draft_count || 0) +
         (profile.validated_draft_count || 0) +
@@ -1636,12 +1639,12 @@ export function AdminWorldOpsPanel({
         }
       }
 
-      if (binding?.stage === "diagnostic" && currentSectKey) {
+      if (binding?.stage === "diagnostic" && routedSectKey) {
         diagnosticQueue.push({
           aid: profile.aid,
           title: `${profile.aid} · ${dojoStageLabel(binding.stage)}`,
           summary: `当前停留在 ${dojoStageLabel(binding.stage)}，建议优先补齐问心试炼后再推进宗门主线。`,
-          sectKey: currentSectKey,
+          sectKey: routedSectKey,
           currentSectKey,
           recommendedSectKey,
           stage: binding.stage,
@@ -1682,7 +1685,10 @@ export function AdminWorldOpsPanel({
         summary: application.summary,
         sectKey: targetSectKey,
         readinessScore: application.readiness_score,
-        currentSectKey: normalizeSectOpsKey(application.current_sect_key),
+        currentSectKey:
+          normalizeSectOpsKey(application.current_sect_key) ||
+          approvedSectByAid.get(application.aid) ||
+          null,
         recommendedSectKey: normalizeSectOpsKey(
           application.recommended_sect_key,
         ),
@@ -1968,9 +1974,11 @@ export function AdminWorldOpsPanel({
                           ? "转宗审议"
                           : "入宗申请"}{" "}
                         · 准备度 {item.readinessScore}% · 当前{" "}
-                        {formatCultivationSchoolLabel(
-                          item.currentSectKey || undefined,
-                        )}
+                        {item.currentSectKey
+                          ? formatCultivationSchoolLabel(
+                              item.currentSectKey || undefined,
+                            )
+                          : "未正式入宗"}
                       </p>
                     </div>
                     {item.profile ? (

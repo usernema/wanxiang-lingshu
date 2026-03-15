@@ -21,8 +21,10 @@ import {
   formatCultivationRealmLabel,
   formatCultivationSchoolLabel,
   formatCultivationStageLabel,
+  getCurrentFormalSectKey,
   getCultivationSectDetail,
   getCultivationSectDetailByDomain,
+  getRecommendedCultivationSectKey,
   inferCultivationSectKeyFromText,
 } from "@/lib/cultivation";
 import type { ForumPost, MarketplaceTask, Skill } from "@/types";
@@ -157,6 +159,22 @@ export default function CultivationWorld({
   const growthProfile = growthQuery.data?.profile;
   const dojoOverview = dojoQuery.data;
   const sectApplications = sectApplicationsQuery.data?.items || [];
+  const currentFormalSectKey = useMemo(
+    () => getCurrentFormalSectKey(sectApplications),
+    [sectApplications],
+  );
+  const recommendedSectKey = useMemo(
+    () => getRecommendedCultivationSectKey({ dojoOverview, growthProfile }),
+    [dojoOverview, growthProfile],
+  );
+  const currentFormalSectDetail = useMemo(
+    () => getCultivationSectDetail(currentFormalSectKey || undefined),
+    [currentFormalSectKey],
+  );
+  const recommendedSectDetail = useMemo(
+    () => getCultivationSectDetail(recommendedSectKey || undefined),
+    [recommendedSectKey],
+  );
 
   const sectBoard = useMemo(
     () => buildSectBoard(publicTasks, publicSkills, publicPosts),
@@ -169,8 +187,9 @@ export default function CultivationWorld({
       if (focusedSect) return focusedSect;
     }
 
-    const dojoSect = getCultivationSectDetail(dojoOverview?.school_key);
-    if (dojoSect) return dojoSect;
+    if (currentFormalSectDetail) return currentFormalSectDetail;
+
+    if (recommendedSectDetail) return recommendedSectDetail;
 
     const growthSect = getCultivationSectDetailByDomain(
       growthProfile?.primary_domain,
@@ -183,7 +202,8 @@ export default function CultivationWorld({
     return hottestSect || CULTIVATION_SECT_DETAILS[0];
   }, [
     focusedSectKey,
-    dojoOverview?.school_key,
+    currentFormalSectDetail,
+    recommendedSectDetail,
     growthProfile?.primary_domain,
     sectBoard,
   ]);
@@ -205,16 +225,24 @@ export default function CultivationWorld({
   const application = useMemo(
     () =>
       evaluateCultivationApplication({
-        targetSectKey: activeSectDetail?.key || focusedSectKey,
+        targetSectKey:
+          focusedSectKey ||
+          recommendedSectKey ||
+          currentFormalSectKey ||
+          activeSectDetail?.key,
         growthProfile,
         dojoOverview,
+        currentFormalSectKey,
+        recommendedSectKey,
         profileBasicsReady,
         completedTaskCount: growthProfile?.completed_task_count || 0,
         reusableAssetCount,
       }),
     [
-      activeSectDetail?.key,
       focusedSectKey,
+      recommendedSectKey,
+      currentFormalSectKey,
+      activeSectDetail?.key,
       growthProfile,
       dojoOverview,
       profileBasicsReady,
@@ -316,7 +344,7 @@ export default function CultivationWorld({
           </div>
           {session && growthProfile ? (
             <div className="mt-4 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <MetricChip
                   label="当前境界"
                   value={formatCultivationRealmLabel(
@@ -324,9 +352,13 @@ export default function CultivationWorld({
                   )}
                 />
                 <MetricChip
-                  label="主修宗门"
+                  label="正式宗门"
+                  value={currentFormalSectDetail?.title || "未正式入宗"}
+                />
+                <MetricChip
+                  label="推荐路线"
                   value={
-                    activeSectDetail?.title ||
+                    recommendedSectDetail?.title ||
                     formatCultivationSchoolLabel(dojoOverview?.school_key)
                   }
                 />
@@ -358,9 +390,23 @@ export default function CultivationWorld({
                       growthProfile.current_maturity_pool,
                     )}
                   </span>
-                  ， 主要被系统判定为{" "}
+                  ，
+                  {currentFormalSectDetail ? (
+                    <>
+                      当前正式宗门为{" "}
+                      <span className="font-semibold">
+                        {currentFormalSectDetail.title}
+                      </span>
+                      ，
+                    </>
+                  ) : (
+                    <>当前仍属散修待入宗，</>
+                  )}
+                  平台当前推荐你沿{" "}
                   <span className="font-semibold">
-                    {activeSectDetail?.title || "散修"}
+                    {recommendedSectDetail?.title ||
+                      activeSectDetail?.title ||
+                      "散修"}
                   </span>{" "}
                   路线。 后续应继续通过真实任务、问心试炼与经验沉淀，冲击{" "}
                   <span className="font-semibold">
@@ -580,6 +626,10 @@ export default function CultivationWorld({
             </div>
             <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                  当前正式宗门 ·{" "}
+                  {currentFormalSectDetail?.title || "未正式入宗"}
+                </span>
                 <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
                   {application.title}
                 </span>
