@@ -88,7 +88,13 @@ func (s *agentService) SubmitSectApplication(ctx context.Context, aid string, re
 		}
 	}
 
-	evaluation := s.evaluateSectApplication(agent, growthProfile, binding, targetSectKey)
+	evaluation := s.evaluateSectApplication(
+		agent,
+		growthProfile,
+		binding,
+		latestApprovedSectKey(existingApplications),
+		targetSectKey,
+	)
 	if evaluation.TargetSectKey == "" {
 		return nil, fmt.Errorf("unable to determine target sect")
 	}
@@ -234,20 +240,19 @@ func (s *agentService) currentDojoBinding(ctx context.Context, aid string) (*mod
 	return binding, nil
 }
 
-func (s *agentService) evaluateSectApplication(agent *models.Agent, growthProfile *models.AgentGrowthProfile, binding *models.AgentCoachBinding, requestedTargetSectKey string) *sectApplicationEvaluation {
+func (s *agentService) evaluateSectApplication(agent *models.Agent, growthProfile *models.AgentGrowthProfile, binding *models.AgentCoachBinding, currentSectKey, requestedTargetSectKey string) *sectApplicationEvaluation {
 	recommendedSectKey := recommendedSectApplicationKey(agent, growthProfile, binding, s)
 	targetSectKey := normalizeSectApplicationTarget(requestedTargetSectKey)
 	if targetSectKey == "" {
 		targetSectKey = recommendedSectKey
 	}
 
-	currentSectKey := ""
+	currentSectKey = normalizeSectApplicationTarget(currentSectKey)
+	dojoSchoolKey := ""
 	dojoStage := ""
 	if binding != nil {
 		dojoStage = normalizeOptionalDojoStage(binding.Stage)
-		if dojoStage != "" && dojoStage != "diagnostic" {
-			currentSectKey = normalizeSectApplicationTarget(binding.SchoolKey)
-		}
+		dojoSchoolKey = normalizeSectApplicationTarget(binding.SchoolKey)
 	}
 
 	currentRealm := ""
@@ -275,7 +280,7 @@ func (s *agentService) evaluateSectApplication(agent *models.Agent, growthProfil
 	reachedTransferRealm := currentRealm == "standard" || currentRealm == "preferred"
 
 	applicationType := sectApplicationTypeApplication
-	if targetSectKey != "" && recommendedSectKey != "" && targetSectKey != recommendedSectKey {
+	if currentSectKey != "" && targetSectKey != "" && currentSectKey != targetSectKey {
 		applicationType = sectApplicationTypeTransfer
 	}
 
@@ -394,6 +399,7 @@ func (s *agentService) evaluateSectApplication(agent *models.Agent, growthProfil
 		Evidence: models.JSONMap{
 			"current_realm":          currentRealm,
 			"current_sect_key":       currentSectKey,
+			"dojo_school_key":        dojoSchoolKey,
 			"recommended_sect_key":   recommendedSectKey,
 			"target_sect_key":        targetSectKey,
 			"dojo_stage":             dojoStage,
@@ -405,6 +411,18 @@ func (s *agentService) evaluateSectApplication(agent *models.Agent, growthProfil
 			"checklist":              checklistItems,
 		},
 	}
+}
+
+func latestApprovedSectKey(applications []models.SectMembershipApplication) string {
+	for _, item := range applications {
+		if item.Status != sectApplicationStatusApproved {
+			continue
+		}
+		if targetSectKey := normalizeSectApplicationTarget(item.TargetSectKey); targetSectKey != "" {
+			return targetSectKey
+		}
+	}
+	return ""
 }
 
 func buildSectApplicationAdvantages(currentRealm string, completedTaskCount, reusableAssetCount int, hasClearedDiagnostic bool, recommendedSectKey, targetSectKey string) models.StringList {
