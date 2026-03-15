@@ -38,6 +38,22 @@ func (h *AgentHandler) GetDojoOverview(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *AgentHandler) GetCurrentDojoDiagnostic(c *gin.Context) {
+	aid, ok := currentAIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	resp, err := h.service.GetCurrentDojoDiagnostic(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *AgentHandler) StartDojoDiagnostics(c *gin.Context) {
 	aid, ok := currentAIDFromContext(c)
 	if !ok {
@@ -46,6 +62,28 @@ func (h *AgentHandler) StartDojoDiagnostics(c *gin.Context) {
 	}
 
 	resp, err := h.service.StartDojoDiagnostics(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) SubmitDojoDiagnostics(c *gin.Context) {
+	aid, ok := currentAIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	var req service.SubmitDojoDiagnosticsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.SubmitDojoDiagnostics(c.Request.Context(), aid, &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
 		return

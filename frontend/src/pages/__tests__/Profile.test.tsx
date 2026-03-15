@@ -13,6 +13,7 @@ import {
 import type { Session, SessionRole } from '@/lib/api'
 
 const mockFetchCurrentAgentGrowth = vi.fn()
+const mockFetchCurrentDojoDiagnostic = vi.fn()
 const mockFetchCurrentDojoOverview = vi.fn()
 const mockFetchCurrentDojoMistakes = vi.fn()
 const mockFetchCurrentDojoRemediationPlans = vi.fn()
@@ -21,6 +22,7 @@ const mockFetchMyEmployerTemplates = vi.fn()
 const mockFetchMyEmployerSkillGrants = vi.fn()
 const mockCreateTaskFromEmployerTemplate = vi.fn()
 const mockStartCurrentDojoDiagnostics = vi.fn()
+const mockSubmitCurrentDojoDiagnostic = vi.fn()
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -29,6 +31,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getActiveRole: () => mockGetActiveRole(),
     getActiveSession: () => mockGetActiveSession(),
     fetchCurrentAgentGrowth: () => mockFetchCurrentAgentGrowth(),
+    fetchCurrentDojoDiagnostic: () => mockFetchCurrentDojoDiagnostic(),
     fetchCurrentDojoOverview: () => mockFetchCurrentDojoOverview(),
     fetchCurrentDojoMistakes: (...args: unknown[]) => mockFetchCurrentDojoMistakes(...args),
     fetchCurrentDojoRemediationPlans: (...args: unknown[]) => mockFetchCurrentDojoRemediationPlans(...args),
@@ -37,6 +40,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
     createTaskFromEmployerTemplate: (...args: unknown[]) => mockCreateTaskFromEmployerTemplate(...args),
     startCurrentDojoDiagnostics: (...args: unknown[]) => mockStartCurrentDojoDiagnostics(...args),
+    submitCurrentDojoDiagnostic: (...args: unknown[]) => mockSubmitCurrentDojoDiagnostic(...args),
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
     },
@@ -158,6 +162,77 @@ function renderProfile(options?: {
     diagnostic_set_id: 'dojo_automation_ops_diagnostic_v1',
     suggested_next_action: 'complete_diagnostic',
   })
+  mockFetchCurrentDojoDiagnostic.mockResolvedValue({
+    overview: {
+      aid: 'worker-agent',
+      school_key: 'automation_ops',
+      stage: 'diagnostic',
+      suggested_next_action: 'complete_diagnostic',
+    },
+    plan: {
+      plan_id: 'plan-1',
+      aid: 'worker-agent',
+      coach_aid: 'official://dojo/general-coach',
+      trigger_type: 'diagnostic',
+      goal: { title: '完成入门诊断并进入训练场' },
+      assigned_set_ids: ['dojo_automation_ops_diagnostic_v1'],
+      required_pass_count: 1,
+      status: 'active',
+    },
+    attempt: {
+      attempt_id: 'attempt-1',
+      aid: 'worker-agent',
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      scene_type: 'diagnostic',
+      score: 0,
+      result_status: 'queued',
+      artifact: {
+        answers: [],
+      },
+      feedback: {
+        coach_recommendation: '请按 checkpoint 完成本道场诊断。',
+      },
+    },
+    question_set: {
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      school_key: 'automation_ops',
+      scene_type: 'diagnostic',
+      title: '自动化流入门诊断',
+      difficulty: 'starter',
+      tags: ['diagnostic'],
+      status: 'active',
+    },
+    questions: [
+      {
+        question_id: 'q1',
+        set_id: 'dojo_automation_ops_diagnostic_v1',
+        capability_key: 'task_alignment',
+        prompt: {
+          title: '目标复述与边界识别',
+          instruction: '复述目标、成功标准、不能做的事和需要澄清的点。',
+        },
+        rubric: {
+          checkpoints: ['复述目标', '识别边界', '指出至少一个风险', '提出澄清问题'],
+        },
+        answer_key: {},
+        sort_order: 1,
+      },
+      {
+        question_id: 'q2',
+        set_id: 'dojo_automation_ops_diagnostic_v1',
+        capability_key: 'execution_design',
+        prompt: {
+          title: '执行方案设计',
+          instruction: '给出三段式执行计划。',
+        },
+        rubric: {
+          checkpoints: ['步骤有先后顺序', '考虑资源和时间', '包含回滚或兜底方案'],
+        },
+        answer_key: {},
+        sort_order: 2,
+      },
+    ],
+  })
   mockFetchCurrentDojoMistakes.mockResolvedValue({
     items: [
       {
@@ -231,6 +306,40 @@ function renderProfile(options?: {
       difficulty: 'starter',
       tags: ['diagnostic'],
       status: 'active',
+    },
+    questions: [],
+  })
+  mockSubmitCurrentDojoDiagnostic.mockResolvedValue({
+    overview: {
+      aid: 'worker-agent',
+      school_key: 'automation_ops',
+      stage: 'practice',
+      suggested_next_action: 'follow_remediation_plan',
+    },
+    attempt: {
+      attempt_id: 'attempt-1',
+      aid: 'worker-agent',
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      scene_type: 'diagnostic',
+      score: 82,
+      result_status: 'passed',
+      artifact: {},
+      feedback: {},
+    },
+    question_set: {
+      set_id: 'dojo_automation_ops_diagnostic_v1',
+      school_key: 'automation_ops',
+      scene_type: 'diagnostic',
+      title: '自动化流入门诊断',
+      difficulty: 'starter',
+      tags: ['diagnostic'],
+      status: 'active',
+    },
+    questions: [],
+    mistakes: [],
+    passed: true,
+    summary: {
+      score: 82,
     },
   })
   mockApiGet.mockImplementation(
@@ -388,11 +497,22 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText((_, node) => node?.textContent === '自动化流')).toBeInTheDocument()
     expect(await screen.findByText((_, node) => node?.textContent === '入门诊断')).toBeInTheDocument()
     expect(await screen.findByText('目标复述不完整')).toBeInTheDocument()
+    expect(await screen.findByText('当前诊断面板')).toBeInTheDocument()
+    expect(await screen.findByText(/^1\. 目标复述与边界识别$/)).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '继续当前诊断' }))
 
     await waitFor(() => {
       expect(mockStartCurrentDojoDiagnostics).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.change(screen.getAllByPlaceholderText('请直接写你的思考过程、执行设计、验收方式与复盘方式。')[0], {
+      target: { value: '我先复述目标、识别边界、列出风险，并提出需要澄清的问题。' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '提交本道场诊断' }))
+
+    await waitFor(() => {
+      expect(mockSubmitCurrentDojoDiagnostic).toHaveBeenCalledTimes(1)
     })
   })
 

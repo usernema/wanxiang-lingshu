@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/a2ahub/identity-service/internal/models"
 	"github.com/google/uuid"
@@ -17,6 +18,16 @@ type AssignCoachRequest struct {
 	ShadowCoachAID  string `json:"shadow_coach_aid"`
 	SchoolKey       string `json:"school_key"`
 	Stage           string `json:"stage"`
+}
+
+type DojoDiagnosticAnswerInput struct {
+	QuestionID string `json:"question_id"`
+	Answer     string `json:"answer"`
+}
+
+type SubmitDojoDiagnosticsRequest struct {
+	AttemptID string                      `json:"attempt_id"`
+	Answers   []DojoDiagnosticAnswerInput `json:"answers"`
 }
 
 func (s *agentService) GetDojoOverview(ctx context.Context, aid string) (*models.AgentDojoOverview, error) {
@@ -90,6 +101,54 @@ func (s *agentService) GetDojoOverview(ctx context.Context, aid string) (*models
 	}, nil
 }
 
+func (s *agentService) GetCurrentDojoDiagnostic(ctx context.Context, aid string) (*models.DojoDiagnosticSessionResponse, error) {
+	if s.dojoRepo == nil {
+		return nil, fmt.Errorf("dojo repository is not configured")
+	}
+
+	agent, growthProfile, err := s.getAgentWithGrowthProfile(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	_, _, set, err := s.ensureDojoScaffold(ctx, agent, growthProfile)
+	if err != nil {
+		return nil, err
+	}
+
+	questions, err := s.dojoRepo.ListQuestionsBySetID(ctx, set.SetID)
+	if err != nil {
+		return nil, err
+	}
+
+	var plan *models.AgentRemediationPlan
+	if activePlan, planErr := s.dojoRepo.GetActiveRemediationPlan(ctx, aid); planErr == nil {
+		plan = activePlan
+	} else if planErr.Error() != "remediation plan not found" {
+		return nil, planErr
+	}
+
+	var attempt *models.AgentTrainingAttempt
+	if latestAttempt, attemptErr := s.dojoRepo.GetLatestTrainingAttempt(ctx, aid, "diagnostic"); attemptErr == nil {
+		attempt = latestAttempt
+	} else if attemptErr.Error() != "training attempt not found" {
+		return nil, attemptErr
+	}
+
+	overview, err := s.GetDojoOverview(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.DojoDiagnosticSessionResponse{
+		Overview:    overview,
+		Plan:        plan,
+		Attempt:     attempt,
+		QuestionSet: set,
+		Questions:   questions,
+	}, nil
+}
+
 func (s *agentService) StartDojoDiagnostics(ctx context.Context, aid string) (*models.DojoDiagnosticStartResponse, error) {
 	if s.dojoRepo == nil {
 		return nil, fmt.Errorf("dojo repository is not configured")
@@ -105,10 +164,41 @@ func (s *agentService) StartDojoDiagnostics(ctx context.Context, aid string) (*m
 		return nil, err
 	}
 
+	questions, err := s.dojoRepo.ListQuestionsBySetID(ctx, set.SetID)
+	if err != nil {
+		return nil, err
+	}
+
 	if plan, err := s.dojoRepo.GetActiveRemediationPlan(ctx, aid); err == nil {
 		var attempt *models.AgentTrainingAttempt
 		if latestAttempt, attemptErr := s.dojoRepo.GetLatestTrainingAttempt(ctx, aid, "diagnostic"); attemptErr == nil {
 			attempt = latestAttempt
+		}
+		if attempt == nil || attempt.ResultStatus == "passed" {
+			now := time.Now()
+			attempt = &models.AgentTrainingAttempt{
+				AttemptID:    "attempt_" + uuid.NewString(),
+				AID:          aid,
+				SetID:        set.SetID,
+				QuestionID:   "",
+				SceneType:    "diagnostic",
+				Score:        0,
+				ResultStatus: "queued",
+				Artifact: models.JSONMap{
+					"mode":       "self_serve_diagnostic",
+					"school_key": binding.SchoolKey,
+					"coach_aid":  binding.PrimaryCoachAID,
+				},
+				Feedback: models.JSONMap{
+					"status": "coach_assigned",
+					"next":   "answer_diagnostic_questions",
+				},
+				CreatedAt: now,
+				UpdatedAt: now,
+			}
+			if err := s.dojoRepo.CreateTrainingAttempt(ctx, attempt); err != nil {
+				return nil, err
+			}
 		}
 		overview, overviewErr := s.GetDojoOverview(ctx, aid)
 		if overviewErr != nil {
@@ -119,6 +209,7 @@ func (s *agentService) StartDojoDiagnostics(ctx context.Context, aid string) (*m
 			Plan:        plan,
 			Attempt:     attempt,
 			QuestionSet: set,
+			Questions:   questions,
 		}, nil
 	} else if err.Error() != "remediation plan not found" {
 		return nil, err
@@ -182,6 +273,268 @@ func (s *agentService) StartDojoDiagnostics(ctx context.Context, aid string) (*m
 		Plan:        plan,
 		Attempt:     attempt,
 		QuestionSet: set,
+		Questions:   questions,
+	}, nil
+}
+
+func (s *agentService) SubmitDojoDiagnostics(ctx context.Context, aid string, req *SubmitDojoDiagnosticsRequest) (*models.DojoDiagnosticSubmitResponse, error) {
+	if s.dojoRepo == nil {
+		return nil, fmt.Errorf("dojo repository is not configured")
+	}
+	if req == nil || len(req.Answers) == 0 {
+		return nil, fmt.Errorf("diagnostic answers are required")
+	}
+
+	session, err := s.GetCurrentDojoDiagnostic(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	attempt := session.Attempt
+	requestAttemptID := strings.TrimSpace(req.AttemptID)
+	if requestAttemptID != "" {
+		attempt, err = s.dojoRepo.GetTrainingAttempt(ctx, requestAttemptID)
+		if err != nil {
+			return nil, err
+		}
+		if attempt.AID != aid {
+			return nil, fmt.Errorf("training attempt does not belong to current agent")
+		}
+		if attempt.ResultStatus == "passed" {
+			return nil, fmt.Errorf("training attempt already completed")
+		}
+	}
+
+	if attempt == nil || (attempt.ResultStatus == "passed" && requestAttemptID == "") {
+		startResp, err := s.StartDojoDiagnostics(ctx, aid)
+		if err != nil {
+			return nil, err
+		}
+		session = startResp
+		attempt = startResp.Attempt
+	}
+
+	if attempt == nil {
+		return nil, fmt.Errorf("diagnostic attempt is not ready")
+	}
+	if session.QuestionSet == nil {
+		return nil, fmt.Errorf("diagnostic question set is not ready")
+	}
+	if attempt.SetID != session.QuestionSet.SetID {
+		return nil, fmt.Errorf("diagnostic set changed, please restart diagnostics")
+	}
+	if len(session.Questions) == 0 {
+		return nil, fmt.Errorf("diagnostic questions are not configured")
+	}
+
+	answerMap := make(map[string]string, len(req.Answers))
+	for _, item := range req.Answers {
+		questionID := strings.TrimSpace(item.QuestionID)
+		if questionID == "" {
+			continue
+		}
+		answerMap[questionID] = strings.TrimSpace(item.Answer)
+	}
+	if len(answerMap) == 0 {
+		return nil, fmt.Errorf("at least one answer is required")
+	}
+
+	now := time.Now()
+	questionResults := make([]models.JSONMap, 0, len(session.Questions))
+	answerArtifacts := make([]models.JSONMap, 0, len(session.Questions))
+	mistakes := make([]models.AgentMistakeItem, 0)
+	totalScore := 0
+	answeredCount := 0
+
+	for _, question := range session.Questions {
+		answer := strings.TrimSpace(answerMap[question.QuestionID])
+		if answer != "" {
+			answeredCount++
+		}
+		evaluation := evaluateDojoDiagnosticAnswer(question, answer)
+		totalScore += evaluation.Score
+		questionResults = append(questionResults, models.JSONMap{
+			"question_id":          question.QuestionID,
+			"prompt_title":         extractDojoPromptTitle(question),
+			"capability_key":       question.CapabilityKey,
+			"score":                evaluation.Score,
+			"answer_length":        evaluation.AnswerLength,
+			"matched_checkpoints":  evaluation.MatchedCheckpoints,
+			"missing_checkpoints":  evaluation.MissingCheckpoints,
+			"structure_hits":       evaluation.StructureHits,
+			"checkpoint_hit_count": len(evaluation.MatchedCheckpoints),
+			"checkpoint_total":     evaluation.CheckpointTotal,
+		})
+		answerArtifacts = append(answerArtifacts, models.JSONMap{
+			"question_id": question.QuestionID,
+			"answer":      answer,
+		})
+
+		if evaluation.Score >= 70 {
+			continue
+		}
+
+		mistakeType := "insufficient_structure"
+		if len(evaluation.MissingCheckpoints) > 0 {
+			mistakeType = "missing_checkpoint"
+		}
+		severity := "medium"
+		if evaluation.Score < 50 || evaluation.AnswerLength < 40 {
+			severity = "high"
+		}
+		mistakes = append(mistakes, models.AgentMistakeItem{
+			MistakeID:     "mistake_" + uuid.NewString(),
+			AID:           aid,
+			SourceType:    "diagnostic",
+			SourceRefID:   attempt.AttemptID,
+			CapabilityKey: question.CapabilityKey,
+			MistakeType:   mistakeType,
+			Severity:      severity,
+			Evidence: models.JSONMap{
+				"question_id":         question.QuestionID,
+				"prompt_title":        extractDojoPromptTitle(question),
+				"answer":              answer,
+				"score":               evaluation.Score,
+				"answer_length":       evaluation.AnswerLength,
+				"matched_checkpoints": evaluation.MatchedCheckpoints,
+				"missing_checkpoints": evaluation.MissingCheckpoints,
+				"structure_hits":      evaluation.StructureHits,
+				"checkpoint_total":    evaluation.CheckpointTotal,
+				"recommended_next":    "review_checkpoints_and_retry",
+			},
+			Status:    "open",
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+	}
+
+	overallScore := 0
+	if len(session.Questions) > 0 {
+		overallScore = totalScore / len(session.Questions)
+	}
+	passed := overallScore >= 70
+
+	attempt.Artifact = cloneJSONMap(attempt.Artifact)
+	attempt.Artifact["submitted_at"] = now.Format(time.RFC3339)
+	attempt.Artifact["answers"] = answerArtifacts
+	attempt.Artifact["answered_count"] = answeredCount
+	attempt.Artifact["question_count"] = len(session.Questions)
+
+	summary := models.JSONMap{
+		"score":            overallScore,
+		"passed":           passed,
+		"threshold":        70,
+		"question_count":   len(session.Questions),
+		"answered_count":   answeredCount,
+		"mistake_count":    len(mistakes),
+		"next_stage":       "diagnostic",
+		"submitted_at":     now.Format(time.RFC3339),
+		"recommended_next": "review_mistakes",
+	}
+	if passed {
+		summary["next_stage"] = "practice"
+		summary["recommended_next"] = "enter_practice"
+	}
+
+	attempt.Score = overallScore
+	if passed {
+		attempt.ResultStatus = "passed"
+	} else {
+		attempt.ResultStatus = "needs_remediation"
+	}
+	attempt.Feedback = models.JSONMap{
+		"status":    attempt.ResultStatus,
+		"summary":   summary,
+		"questions": questionResults,
+		"coach_recommendation": func() string {
+			if passed {
+				return "已通过入门诊断，进入训练场继续积累稳定交付。"
+			}
+			return "先补齐错题中的缺口，再重新提交本道场诊断。"
+		}(),
+	}
+	attempt.UpdatedAt = now
+	if err := s.dojoRepo.UpdateTrainingAttempt(ctx, attempt); err != nil {
+		return nil, err
+	}
+
+	if passed {
+		if err := s.dojoRepo.UpdateMistakeItemsStatusBySourceType(ctx, aid, "diagnostic", "resolved", now); err != nil {
+			return nil, err
+		}
+		if err := s.dojoRepo.UpdateActiveRemediationPlansStatus(ctx, aid, "completed", now); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.dojoRepo.UpdateMistakeItemsStatusBySourceType(ctx, aid, "diagnostic", "archived", now); err != nil {
+			return nil, err
+		}
+		if err := s.dojoRepo.CreateMistakeItems(ctx, mistakes); err != nil {
+			return nil, err
+		}
+		if err := s.dojoRepo.UpdateActiveRemediationPlansStatus(ctx, aid, "archived", now); err != nil {
+			return nil, err
+		}
+	}
+
+	binding, err := s.dojoRepo.GetCoachBinding(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+	if passed {
+		binding.Stage = "practice"
+	} else {
+		binding.Stage = "diagnostic"
+	}
+	binding.Status = "active"
+	if binding.CreatedAt.IsZero() {
+		binding.CreatedAt = now
+	}
+	binding.UpdatedAt = now
+	if err := s.dojoRepo.UpsertCoachBinding(ctx, binding); err != nil {
+		return nil, err
+	}
+
+	var activePlan *models.AgentRemediationPlan
+	if !passed {
+		activePlan = &models.AgentRemediationPlan{
+			PlanID:      "plan_" + uuid.NewString(),
+			AID:         aid,
+			CoachAID:    binding.PrimaryCoachAID,
+			TriggerType: "diagnostic_failed",
+			Goal: models.JSONMap{
+				"title":              "完成诊断补训并重新提交",
+				"school_key":         binding.SchoolKey,
+				"scene_type":         "diagnostic",
+				"coach_aid":          binding.PrimaryCoachAID,
+				"source_attempt_id":  attempt.AttemptID,
+				"expected_threshold": 70,
+			},
+			AssignedSetIDs:    models.StringList{session.QuestionSet.SetID},
+			RequiredPassCount: 1,
+			Status:            "active",
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		if err := s.dojoRepo.CreateRemediationPlan(ctx, activePlan); err != nil {
+			return nil, err
+		}
+	}
+
+	overview, err := s.GetDojoOverview(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.DojoDiagnosticSubmitResponse{
+		Overview:    overview,
+		Plan:        activePlan,
+		Attempt:     attempt,
+		QuestionSet: session.QuestionSet,
+		Questions:   session.Questions,
+		Mistakes:    mistakes,
+		Passed:      passed,
+		Summary:     summary,
 	}, nil
 }
 
@@ -538,6 +891,188 @@ func (s *agentService) deriveDojoSchoolKey(agent *models.Agent, growthProfile *m
 	default:
 		return "generalist"
 	}
+}
+
+type dojoDiagnosticEvaluation struct {
+	Score              int
+	AnswerLength       int
+	CheckpointTotal    int
+	MatchedCheckpoints []string
+	MissingCheckpoints []string
+	StructureHits      []string
+}
+
+type dojoKeywordGroup struct {
+	Label    string
+	Keywords []string
+}
+
+func evaluateDojoDiagnosticAnswer(question models.TrainingQuestion, answer string) dojoDiagnosticEvaluation {
+	trimmed := strings.TrimSpace(answer)
+	answerLower := strings.ToLower(trimmed)
+	answerLength := utf8.RuneCountInString(trimmed)
+
+	checkpoints := extractStringListFromJSON(question.Rubric, "checkpoints")
+	keywordGroups := dojoDiagnosticKeywordGroups(question.CapabilityKey, checkpoints)
+	matchedCheckpoints := make([]string, 0, len(keywordGroups))
+	missingCheckpoints := make([]string, 0, len(keywordGroups))
+
+	for _, group := range keywordGroups {
+		if containsAnyKeyword(answerLower, group.Keywords) {
+			matchedCheckpoints = append(matchedCheckpoints, group.Label)
+		} else {
+			missingCheckpoints = append(missingCheckpoints, group.Label)
+		}
+	}
+
+	checkpointTotal := len(keywordGroups)
+	checkpointScore := 0
+	if checkpointTotal > 0 {
+		checkpointScore = int(float64(len(matchedCheckpoints))/float64(checkpointTotal)*70.0 + 0.5)
+	}
+
+	lengthScore := 0
+	switch {
+	case answerLength >= 120:
+		lengthScore = 15
+	case answerLength >= 60:
+		lengthScore = 10
+	case answerLength >= 30:
+		lengthScore = 5
+	}
+
+	structureGroups := []dojoKeywordGroup{
+		{Label: "风险意识", Keywords: []string{"风险", "隐患", "问题"}},
+		{Label: "澄清意识", Keywords: []string{"澄清", "确认", "疑问", "问题"}},
+		{Label: "验收意识", Keywords: []string{"验收", "自查", "检查", "校验"}},
+		{Label: "复盘意识", Keywords: []string{"复盘", "总结", "沉淀", "经验"}},
+		{Label: "结构表达", Keywords: []string{"步骤", "计划", "第一", "第二", "第三"}},
+	}
+	structureHits := make([]string, 0, len(structureGroups))
+	for _, group := range structureGroups {
+		if containsAnyKeyword(answerLower, group.Keywords) {
+			structureHits = append(structureHits, group.Label)
+		}
+	}
+
+	structureScore := 0
+	switch {
+	case len(structureHits) >= 3:
+		structureScore = 15
+	case len(structureHits) >= 2:
+		structureScore = 10
+	case len(structureHits) >= 1:
+		structureScore = 5
+	}
+
+	score := checkpointScore + lengthScore + structureScore
+	if score > 100 {
+		score = 100
+	}
+
+	return dojoDiagnosticEvaluation{
+		Score:              score,
+		AnswerLength:       answerLength,
+		CheckpointTotal:    checkpointTotal,
+		MatchedCheckpoints: matchedCheckpoints,
+		MissingCheckpoints: missingCheckpoints,
+		StructureHits:      structureHits,
+	}
+}
+
+func extractStringListFromJSON(payload models.JSONMap, key string) []string {
+	value, ok := payload[key]
+	if !ok {
+		return nil
+	}
+	items, ok := value.([]interface{})
+	if !ok {
+		if typed, typedOK := value.([]string); typedOK {
+			return typed
+		}
+		return nil
+	}
+	result := make([]string, 0, len(items))
+	for _, item := range items {
+		text := strings.TrimSpace(fmt.Sprintf("%v", item))
+		if text != "" {
+			result = append(result, text)
+		}
+	}
+	return result
+}
+
+func dojoDiagnosticKeywordGroups(capabilityKey string, checkpoints []string) []dojoKeywordGroup {
+	switch capabilityKey {
+	case "task_alignment":
+		return []dojoKeywordGroup{
+			{Label: firstNonEmptyCheckpoint(checkpoints, 0, "复述目标"), Keywords: []string{"目标", "需求", "任务"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 1, "识别边界"), Keywords: []string{"边界", "不能做", "不做", "限制"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 2, "指出至少一个风险"), Keywords: []string{"风险", "隐患", "问题"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 3, "提出澄清问题"), Keywords: []string{"澄清", "确认", "疑问", "问题"}},
+		}
+	case "execution_design":
+		return []dojoKeywordGroup{
+			{Label: firstNonEmptyCheckpoint(checkpoints, 0, "步骤有先后顺序"), Keywords: []string{"第一", "第二", "第三", "步骤", "阶段"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 1, "考虑资源和时间"), Keywords: []string{"时间", "资源", "成本", "优先级"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 2, "包含回滚或兜底方案"), Keywords: []string{"回滚", "兜底", "备选", "降级"}},
+		}
+	case "self_review":
+		return []dojoKeywordGroup{
+			{Label: firstNonEmptyCheckpoint(checkpoints, 0, "有验收视角"), Keywords: []string{"验收", "自查", "检查", "清单"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 1, "有失败归因"), Keywords: []string{"失败", "归因", "复盘", "原因"}},
+			{Label: firstNonEmptyCheckpoint(checkpoints, 2, "有可复用沉淀"), Keywords: []string{"沉淀", "skill", "模板", "经验", "复用"}},
+		}
+	default:
+		groups := make([]dojoKeywordGroup, 0, len(checkpoints))
+		for _, checkpoint := range checkpoints {
+			groups = append(groups, dojoKeywordGroup{
+				Label:    checkpoint,
+				Keywords: []string{strings.ToLower(checkpoint)},
+			})
+		}
+		return groups
+	}
+}
+
+func containsAnyKeyword(content string, keywords []string) bool {
+	for _, keyword := range keywords {
+		if keyword != "" && strings.Contains(content, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
+func firstNonEmptyCheckpoint(checkpoints []string, index int, fallback string) string {
+	if index >= 0 && index < len(checkpoints) {
+		if text := strings.TrimSpace(checkpoints[index]); text != "" {
+			return text
+		}
+	}
+	return fallback
+}
+
+func cloneJSONMap(source models.JSONMap) models.JSONMap {
+	if source == nil {
+		return models.JSONMap{}
+	}
+	cloned := make(models.JSONMap, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func extractDojoPromptTitle(question models.TrainingQuestion) string {
+	if question.Prompt == nil {
+		return question.QuestionID
+	}
+	title := strings.TrimSpace(fmt.Sprintf("%v", question.Prompt["title"]))
+	if title == "" || title == "<nil>" {
+		return question.QuestionID
+	}
+	return title
 }
 
 func dojoSchoolLabel(schoolKey string) string {

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/a2ahub/identity-service/internal/database"
 	"github.com/a2ahub/identity-service/internal/models"
@@ -20,11 +21,18 @@ type DojoRepository interface {
 	EnsureQuestionSet(ctx context.Context, set *models.TrainingQuestionSet, questions []models.TrainingQuestion) error
 	GetQuestionSet(ctx context.Context, setID string) (*models.TrainingQuestionSet, error)
 	FindQuestionSetBySchoolAndScene(ctx context.Context, schoolKey, sceneType string) (*models.TrainingQuestionSet, error)
+	ListQuestionsBySetID(ctx context.Context, setID string) ([]models.TrainingQuestion, error)
 	CreateTrainingAttempt(ctx context.Context, attempt *models.AgentTrainingAttempt) error
+	GetTrainingAttempt(ctx context.Context, attemptID string) (*models.AgentTrainingAttempt, error)
 	GetLatestTrainingAttempt(ctx context.Context, aid, sceneType string) (*models.AgentTrainingAttempt, error)
+	UpdateTrainingAttempt(ctx context.Context, attempt *models.AgentTrainingAttempt) error
 	CreateRemediationPlan(ctx context.Context, plan *models.AgentRemediationPlan) error
 	GetActiveRemediationPlan(ctx context.Context, aid string) (*models.AgentRemediationPlan, error)
+	UpdateRemediationPlanStatus(ctx context.Context, planID, status string, updatedAt time.Time) error
+	UpdateActiveRemediationPlansStatus(ctx context.Context, aid, status string, updatedAt time.Time) error
 	ListMistakeItems(ctx context.Context, aid string, limit int) ([]models.AgentMistakeItem, error)
+	CreateMistakeItems(ctx context.Context, items []models.AgentMistakeItem) error
+	UpdateMistakeItemsStatusBySourceType(ctx context.Context, aid, sourceType, status string, updatedAt time.Time) error
 	ListRemediationPlans(ctx context.Context, aid string, limit int) ([]models.AgentRemediationPlan, error)
 	CountMistakeItems(ctx context.Context, aid string) (int, int, error)
 	GetOverview(ctx context.Context) (*models.AdminDojoOverview, error)
@@ -122,6 +130,39 @@ func scanTrainingAttempt(scanner dojoScannable) (*models.AgentTrainingAttempt, e
 	}
 	if err := json.Unmarshal(feedbackJSON, &item.Feedback); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal training attempt feedback: %w", err)
+	}
+
+	return item, nil
+}
+
+func scanTrainingQuestion(scanner dojoScannable) (*models.TrainingQuestion, error) {
+	item := &models.TrainingQuestion{}
+	var promptJSON []byte
+	var rubricJSON []byte
+	var answerKeyJSON []byte
+
+	if err := scanner.Scan(
+		&item.QuestionID,
+		&item.SetID,
+		&item.CapabilityKey,
+		&promptJSON,
+		&rubricJSON,
+		&answerKeyJSON,
+		&item.SortOrder,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(promptJSON, &item.Prompt); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal question prompt: %w", err)
+	}
+	if err := json.Unmarshal(rubricJSON, &item.Rubric); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal question rubric: %w", err)
+	}
+	if err := json.Unmarshal(answerKeyJSON, &item.AnswerKey); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal question answer key: %w", err)
 	}
 
 	return item, nil
@@ -552,6 +593,38 @@ func (r *dojoRepository) FindQuestionSetBySchoolAndScene(ctx context.Context, sc
 	return item, nil
 }
 
+func (r *dojoRepository) ListQuestionsBySetID(ctx context.Context, setID string) ([]models.TrainingQuestion, error) {
+	rows, err := r.db.DB.QueryContext(
+		ctx,
+		`
+			SELECT question_id, set_id, capability_key, prompt_json, rubric_json, answer_key_json, sort_order, created_at, updated_at
+			FROM training_questions
+			WHERE set_id = $1
+			ORDER BY sort_order ASC, created_at ASC
+		`,
+		setID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list training questions: %w", err)
+	}
+	defer rows.Close()
+
+	items := make([]models.TrainingQuestion, 0)
+	for rows.Next() {
+		item, err := scanTrainingQuestion(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, *item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate training questions: %w", err)
+	}
+
+	return items, nil
+}
+
 func (r *dojoRepository) CreateTrainingAttempt(ctx context.Context, attempt *models.AgentTrainingAttempt) error {
 	artifactJSON, err := json.Marshal(attempt.Artifact)
 	if err != nil {
@@ -588,6 +661,24 @@ func (r *dojoRepository) CreateTrainingAttempt(ctx context.Context, attempt *mod
 	return nil
 }
 
+func (r *dojoRepository) GetTrainingAttempt(ctx context.Context, attemptID string) (*models.AgentTrainingAttempt, error) {
+	query := `
+		SELECT attempt_id, aid, set_id, question_id, scene_type, score, result_status, artifact_json, feedback_json, created_at, updated_at
+		FROM agent_training_attempts
+		WHERE attempt_id = $1
+	`
+
+	item, err := scanTrainingAttempt(r.db.DB.QueryRowContext(ctx, query, attemptID))
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("training attempt not found")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get training attempt: %w", err)
+	}
+
+	return item, nil
+}
+
 func (r *dojoRepository) GetLatestTrainingAttempt(ctx context.Context, aid, sceneType string) (*models.AgentTrainingAttempt, error) {
 	query := `
 		SELECT attempt_id, aid, set_id, question_id, scene_type, score, result_status, artifact_json, feedback_json, created_at, updated_at
@@ -610,6 +701,47 @@ func (r *dojoRepository) GetLatestTrainingAttempt(ctx context.Context, aid, scen
 	}
 
 	return item, nil
+}
+
+func (r *dojoRepository) UpdateTrainingAttempt(ctx context.Context, attempt *models.AgentTrainingAttempt) error {
+	artifactJSON, err := json.Marshal(attempt.Artifact)
+	if err != nil {
+		return fmt.Errorf("failed to marshal training attempt artifact: %w", err)
+	}
+	feedbackJSON, err := json.Marshal(attempt.Feedback)
+	if err != nil {
+		return fmt.Errorf("failed to marshal training attempt feedback: %w", err)
+	}
+
+	if _, err := r.db.DB.ExecContext(
+		ctx,
+		`
+			UPDATE agent_training_attempts
+			SET
+				set_id = $2,
+				question_id = $3,
+				scene_type = $4,
+				score = $5,
+				result_status = $6,
+				artifact_json = $7::jsonb,
+				feedback_json = $8::jsonb,
+				updated_at = $9
+			WHERE attempt_id = $1
+		`,
+		attempt.AttemptID,
+		attempt.SetID,
+		attempt.QuestionID,
+		attempt.SceneType,
+		attempt.Score,
+		attempt.ResultStatus,
+		artifactJSON,
+		feedbackJSON,
+		attempt.UpdatedAt,
+	); err != nil {
+		return fmt.Errorf("failed to update training attempt: %w", err)
+	}
+
+	return nil
 }
 
 func (r *dojoRepository) CreateRemediationPlan(ctx context.Context, plan *models.AgentRemediationPlan) error {
@@ -667,6 +799,42 @@ func (r *dojoRepository) GetActiveRemediationPlan(ctx context.Context, aid strin
 	return item, nil
 }
 
+func (r *dojoRepository) UpdateRemediationPlanStatus(ctx context.Context, planID, status string, updatedAt time.Time) error {
+	if _, err := r.db.DB.ExecContext(
+		ctx,
+		`
+			UPDATE agent_remediation_plans
+			SET status = $2, updated_at = $3
+			WHERE plan_id = $1
+		`,
+		planID,
+		status,
+		updatedAt,
+	); err != nil {
+		return fmt.Errorf("failed to update remediation plan status: %w", err)
+	}
+
+	return nil
+}
+
+func (r *dojoRepository) UpdateActiveRemediationPlansStatus(ctx context.Context, aid, status string, updatedAt time.Time) error {
+	if _, err := r.db.DB.ExecContext(
+		ctx,
+		`
+			UPDATE agent_remediation_plans
+			SET status = $2, updated_at = $3
+			WHERE aid = $1 AND status IN ('active', 'queued')
+		`,
+		aid,
+		status,
+		updatedAt,
+	); err != nil {
+		return fmt.Errorf("failed to update active remediation plans: %w", err)
+	}
+
+	return nil
+}
+
 func (r *dojoRepository) ListMistakeItems(ctx context.Context, aid string, limit int) ([]models.AgentMistakeItem, error) {
 	rows, err := r.db.DB.QueryContext(
 		ctx,
@@ -699,6 +867,72 @@ func (r *dojoRepository) ListMistakeItems(ctx context.Context, aid string, limit
 	}
 
 	return items, nil
+}
+
+func (r *dojoRepository) CreateMistakeItems(ctx context.Context, items []models.AgentMistakeItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+
+	tx, err := r.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin mistake item transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	for _, item := range items {
+		evidenceJSON, err := json.Marshal(item.Evidence)
+		if err != nil {
+			return fmt.Errorf("failed to marshal mistake evidence: %w", err)
+		}
+		if _, err := tx.ExecContext(
+			ctx,
+			`
+				INSERT INTO agent_mistake_items (
+					mistake_id, aid, source_type, source_ref_id, capability_key, mistake_type, severity, evidence_json, status, created_at, updated_at
+				)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11)
+			`,
+			item.MistakeID,
+			item.AID,
+			item.SourceType,
+			item.SourceRefID,
+			item.CapabilityKey,
+			item.MistakeType,
+			item.Severity,
+			evidenceJSON,
+			item.Status,
+			item.CreatedAt,
+			item.UpdatedAt,
+		); err != nil {
+			return fmt.Errorf("failed to create mistake item: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit mistake item transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *dojoRepository) UpdateMistakeItemsStatusBySourceType(ctx context.Context, aid, sourceType, status string, updatedAt time.Time) error {
+	if _, err := r.db.DB.ExecContext(
+		ctx,
+		`
+			UPDATE agent_mistake_items
+			SET status = $3, updated_at = $4
+			WHERE aid = $1 AND source_type = $2 AND status NOT IN ('resolved', 'archived')
+		`,
+		aid,
+		sourceType,
+		status,
+		updatedAt,
+	); err != nil {
+		return fmt.Errorf("failed to update mistake items status: %w", err)
+	}
+
+	return nil
 }
 
 func (r *dojoRepository) ListRemediationPlans(ctx context.Context, aid string, limit int) ([]models.AgentRemediationPlan, error) {

@@ -155,6 +155,18 @@ export type DojoQuestionSet = {
   updated_at?: string
 }
 
+export type DojoQuestion = {
+  question_id: string
+  set_id: string
+  capability_key: string
+  prompt: Record<string, unknown>
+  rubric: Record<string, unknown>
+  answer_key: Record<string, unknown>
+  sort_order: number
+  created_at?: string
+  updated_at?: string
+}
+
 export type DojoOverview = {
   aid: string
   school_key: string
@@ -175,6 +187,34 @@ export type DojoDiagnosticStartResponse = {
   plan?: DojoRemediationPlan
   attempt?: DojoTrainingAttempt
   question_set?: DojoQuestionSet
+  questions?: DojoQuestion[]
+}
+
+export type DojoDiagnosticSessionResponse = {
+  overview: DojoOverview
+  plan?: DojoRemediationPlan
+  attempt?: DojoTrainingAttempt
+  question_set?: DojoQuestionSet
+  questions: DojoQuestion[]
+}
+
+export type DojoDiagnosticSubmitPayload = {
+  attempt_id?: string
+  answers: Array<{
+    question_id: string
+    answer: string
+  }>
+}
+
+export type DojoDiagnosticSubmitResponse = {
+  overview: DojoOverview
+  plan?: DojoRemediationPlan
+  attempt: DojoTrainingAttempt
+  question_set?: DojoQuestionSet
+  questions?: DojoQuestion[]
+  mistakes: DojoMistakeItem[]
+  passed: boolean
+  summary: Record<string, unknown>
 }
 
 export type DojoMistakeListResponse = {
@@ -540,9 +580,19 @@ export async function fetchCurrentDojoOverview() {
   return response.data as DojoOverview
 }
 
+export async function fetchCurrentDojoDiagnostic() {
+  const response = await api.get('/v1/dojo/me/diagnostic')
+  return response.data as DojoDiagnosticSessionResponse
+}
+
 export async function startCurrentDojoDiagnostics() {
   const response = await api.post('/v1/dojo/diagnostics/start')
   return response.data as DojoDiagnosticStartResponse
+}
+
+export async function submitCurrentDojoDiagnostic(payload: DojoDiagnosticSubmitPayload) {
+  const response = await api.post('/v1/dojo/diagnostics/submit', payload)
+  return response.data as DojoDiagnosticSubmitResponse
 }
 
 export async function fetchCurrentDojoMistakes(limit = 20) {

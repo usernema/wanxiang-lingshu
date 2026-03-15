@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, updateCurrentProfile } from '@/lib/api'
+import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -24,6 +24,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null)
   const [savingProfile, setSavingProfile] = useState(false)
   const [startingDojo, setStartingDojo] = useState(false)
+  const [submittingDojo, setSubmittingDojo] = useState(false)
+  const [dojoAnswers, setDojoAnswers] = useState<Record<string, string>>({})
 
   const profileQuery = useQuery({
     queryKey: ['profile', session?.aid],
@@ -91,6 +93,12 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     queryFn: fetchCurrentDojoOverview,
   })
 
+  const dojoDiagnosticQuery = useQuery({
+    queryKey: ['profile-dojo-diagnostic', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: fetchCurrentDojoDiagnostic,
+  })
+
   const dojoMistakesQuery = useQuery({
     queryKey: ['profile-dojo-mistakes', session?.aid],
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
@@ -130,6 +138,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const growthProfile = growthQuery.data?.profile
   const growthPools = growthQuery.data?.pools || []
   const dojoOverview = dojoOverviewQuery.data
+  const dojoDiagnostic = dojoDiagnosticQuery.data
   const dojoMistakes = dojoMistakesQuery.data?.items || []
   const dojoPlans = dojoPlansQuery.data?.items || []
   const growthDrafts = skillDraftsQuery.data?.items || []
@@ -159,6 +168,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const recentDojoPlans = dojoPlans.slice(0, 2)
   const recentEmployerTemplates = employerTemplates.slice(0, 3)
   const recentEmployerSkillGrants = employerSkillGrants.slice(0, 3)
+  const dojoQuestions = dojoDiagnostic?.questions || []
+  const dojoAttempt = dojoDiagnostic?.attempt
+  const dojoSummary = dojoAttempt?.feedback?.summary as Record<string, unknown> | undefined
   const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
   const hasFrozenBalance = toNumber(balance?.frozen_balance) > 0
   const profileStrength = useMemo(
@@ -182,6 +194,20 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       capabilities: (profile.capabilities || []).join(', '),
     })
   }, [profile])
+
+  useEffect(() => {
+    if (!dojoQuestions.length) return
+    const existingAnswers = Array.isArray(dojoAttempt?.artifact?.answers) ? dojoAttempt?.artifact?.answers : []
+    const nextAnswers = dojoQuestions.reduce<Record<string, string>>((acc, question) => {
+      const stored = existingAnswers.find((item) => typeof item === 'object' && item && (item as Record<string, unknown>).question_id === question.question_id) as Record<string, unknown> | undefined
+      acc[question.question_id] = typeof stored?.answer === 'string' ? stored.answer : ''
+      return acc
+    }, {})
+    setDojoAnswers((current) => {
+      const hasCurrentDraft = Object.values(current).some((value) => value.trim().length > 0)
+      return hasCurrentDraft ? current : nextAnswers
+    })
+  }, [dojoAttempt?.artifact?.answers, dojoQuestions])
 
   const handleSaveProfile = async () => {
     setSavingProfile(true)
@@ -234,6 +260,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       const result = await startCurrentDojoDiagnostics()
       await Promise.all([
         dojoOverviewQuery.refetch(),
+        dojoDiagnosticQuery.refetch(),
         dojoMistakesQuery.refetch(),
         dojoPlansQuery.refetch(),
       ])
@@ -246,6 +273,41 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       setDojoError(error instanceof Error ? error.message : '启动道场诊断失败')
     } finally {
       setStartingDojo(false)
+    }
+  }
+
+  const handleSubmitDojoDiagnostics = async () => {
+    if (!dojoQuestions.length) {
+      setDojoError('当前没有可提交的诊断题。')
+      return
+    }
+
+    setSubmittingDojo(true)
+    setDojoMessage(null)
+    setDojoError(null)
+    try {
+      const result = await submitCurrentDojoDiagnostic({
+        attempt_id: dojoAttempt?.result_status === 'passed' ? undefined : dojoAttempt?.attempt_id,
+        answers: dojoQuestions.map((question) => ({
+          question_id: question.question_id,
+          answer: dojoAnswers[question.question_id] || '',
+        })),
+      })
+      await Promise.all([
+        dojoOverviewQuery.refetch(),
+        dojoDiagnosticQuery.refetch(),
+        dojoMistakesQuery.refetch(),
+        dojoPlansQuery.refetch(),
+      ])
+      setDojoMessage(
+        result.passed
+          ? `诊断通过，当前总分 ${String(result.summary?.score || result.attempt.score)}，已进入训练场。`
+          : `诊断已提交，当前总分 ${String(result.summary?.score || result.attempt.score)}，已生成 ${result.mistakes.length} 条错题与补训计划。`,
+      )
+    } catch (error) {
+      setDojoError(error instanceof Error ? error.message : '提交道场诊断失败')
+    } finally {
+      setSubmittingDojo(false)
     }
   }
 
@@ -608,6 +670,83 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 >
                   {latestActionableTask ? '回到真实任务流' : '去任务市场'}
                 </Link>
+              </div>
+
+              <div className="rounded-2xl border border-primary-100 bg-primary-50/60 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-primary-900">当前诊断面板</div>
+                    <p className="mt-1 text-sm text-primary-900/80">
+                      {dojoDiagnostic?.question_set?.title || '入门诊断'} · 共 {dojoQuestions.length} 题
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">
+                      当前状态 {formatDojoAttemptStatus(dojoAttempt?.result_status || 'queued')}
+                    </span>
+                    <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700">
+                      最近得分 {String(dojoSummary?.score || dojoAttempt?.score || '—')}
+                    </span>
+                  </div>
+                </div>
+
+                {dojoDiagnosticQuery.isLoading ? (
+                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">正在加载诊断题面…</div>
+                ) : dojoQuestions.length > 0 ? (
+                  <div className="mt-4 space-y-4">
+                    {typeof dojoAttempt?.feedback?.coach_recommendation === 'string' && (
+                      <div className="rounded-xl bg-white px-4 py-3 text-sm text-gray-700">
+                        {String(dojoAttempt.feedback.coach_recommendation)}
+                      </div>
+                    )}
+                    {dojoQuestions.map((question, index) => (
+                      <div key={question.question_id} className="rounded-xl bg-white p-4 shadow-sm">
+                        <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <div className="text-sm font-semibold text-gray-900">
+                              {index + 1}. {String(question.prompt?.title || `诊断题 ${index + 1}`)}
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+                              {String(question.prompt?.instruction || '请按题目要求完成回答。')}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                            {formatDojoCapabilityLabel(question.capability_key)}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {extractDojoCheckpoints(question.rubric).map((checkpoint) => (
+                            <span key={checkpoint} className="rounded-full bg-primary-50 px-3 py-1 text-xs text-primary-700">
+                              {checkpoint}
+                            </span>
+                          ))}
+                        </div>
+                        <textarea
+                          value={dojoAnswers[question.question_id] || ''}
+                          onChange={(event) => setDojoAnswers((current) => ({ ...current, [question.question_id]: event.target.value }))}
+                          placeholder="请直接写你的思考过程、执行设计、验收方式与复盘方式。"
+                          className="mt-4 min-h-[144px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
+                        />
+                      </div>
+                    ))}
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={handleSubmitDojoDiagnostics}
+                        disabled={submittingDojo}
+                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                      >
+                        {submittingDojo ? '提交中...' : dojoAttempt?.result_status === 'passed' ? '重新提交诊断' : '提交本道场诊断'}
+                      </button>
+                      <span className="text-xs text-gray-500">
+                        规则评分会根据 checkpoint 覆盖、回答完整度和结构化程度自动判定。
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">当前题面尚未准备好，点击“启动入门诊断”即可创建一轮新诊断。</div>
+                )}
               </div>
 
               <div className="grid gap-4 lg:grid-cols-2">
@@ -1131,6 +1270,34 @@ function formatDojoActionLabel(action: string) {
   }
 }
 
+function formatDojoAttemptStatus(status: string) {
+  switch (status) {
+    case 'queued':
+      return '待作答'
+    case 'in_progress':
+      return '进行中'
+    case 'needs_remediation':
+      return '待补训'
+    case 'passed':
+      return '已通过'
+    default:
+      return status
+  }
+}
+
+function formatDojoCapabilityLabel(capabilityKey: string) {
+  switch (capabilityKey) {
+    case 'task_alignment':
+      return '目标对齐'
+    case 'execution_design':
+      return '执行设计'
+    case 'self_review':
+      return '自我复盘'
+    default:
+      return capabilityKey
+  }
+}
+
 function formatDojoSeverityTone(severity: string) {
   switch (severity) {
     case 'high':
@@ -1140,6 +1307,12 @@ function formatDojoSeverityTone(severity: string) {
     default:
       return 'bg-slate-100 text-slate-700'
   }
+}
+
+function extractDojoCheckpoints(rubric: Record<string, unknown> | undefined) {
+  const checkpoints = rubric?.checkpoints
+  if (!Array.isArray(checkpoints)) return []
+  return checkpoints.map((item) => String(item)).filter(Boolean)
 }
 
 function formatDateTime(value?: string | null) {

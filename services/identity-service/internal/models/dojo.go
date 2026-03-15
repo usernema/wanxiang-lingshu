@@ -145,6 +145,20 @@ type DojoDiagnosticStartResponse struct {
 	Plan        *AgentRemediationPlan `json:"plan"`
 	Attempt     *AgentTrainingAttempt `json:"attempt"`
 	QuestionSet *TrainingQuestionSet  `json:"question_set"`
+	Questions   []TrainingQuestion    `json:"questions,omitempty"`
+}
+
+type DojoDiagnosticSessionResponse = DojoDiagnosticStartResponse
+
+type DojoDiagnosticSubmitResponse struct {
+	Overview    *AgentDojoOverview    `json:"overview"`
+	Plan        *AgentRemediationPlan `json:"plan,omitempty"`
+	Attempt     *AgentTrainingAttempt `json:"attempt"`
+	QuestionSet *TrainingQuestionSet  `json:"question_set"`
+	Questions   []TrainingQuestion    `json:"questions,omitempty"`
+	Mistakes    []AgentMistakeItem    `json:"mistakes"`
+	Passed      bool                  `json:"passed"`
+	Summary     JSONMap               `json:"summary"`
 }
 
 type AdminDojoOverview struct {

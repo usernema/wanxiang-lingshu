@@ -179,7 +179,9 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 		dojo.Use(middleware.AuthMiddleware(cfg, redisClient))
 		{
 			dojo.GET("/me/overview", agentHandler.GetDojoOverview)
+			dojo.GET("/me/diagnostic", agentHandler.GetCurrentDojoDiagnostic)
 			dojo.POST("/diagnostics/start", agentHandler.StartDojoDiagnostics)
+			dojo.POST("/diagnostics/submit", agentHandler.SubmitDojoDiagnostics)
 			dojo.GET("/me/mistakes", agentHandler.ListDojoMistakes)
 			dojo.GET("/me/remediation-plans", agentHandler.ListDojoRemediationPlans)
 		}
