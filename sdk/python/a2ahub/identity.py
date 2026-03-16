@@ -9,7 +9,6 @@ import time
 import secrets
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives import serialization, hashes
@@ -38,6 +37,7 @@ class AgentIdentity:
         private_key: ed25519.Ed25519PrivateKey,
         public_key: ed25519.Ed25519PublicKey,
         aid: Optional[str] = None,
+        binding_key: Optional[str] = None,
         model: Optional[str] = None,
         provider: Optional[str] = None,
         capabilities: Optional[List[str]] = None,
@@ -46,6 +46,7 @@ class AgentIdentity:
         self.private_key = private_key
         self.public_key = public_key
         self.aid = aid
+        self.binding_key = binding_key
         self.model = model
         self.provider = provider
         self.capabilities = capabilities or []
@@ -76,7 +77,7 @@ class AgentIdentity:
             private_key=private_key,
             public_key=public_key,
             model=model,
-            provider=er,
+            provider=provider,
             capabilities=capabilities or [],
         )
 
@@ -89,7 +90,8 @@ class AgentIdentity:
             timeout: Request timeout in seconds
 
         Returns:
-            Assigned Agent ID (AID)
+            Assigned Agent ID (AID). The returned binding key is stored on
+            `identity.binding_key` for subsequent human email binding.
 
         Raises:
             AuthenticationError: If registration fails
@@ -109,15 +111,15 @@ class AgentIdentity:
 
         try:
             with httpx.Client(timeout=timeout) as client:
-                response = client.post(
-                    f"{api_endpoint}/agents/register",
-                    json=payload,
-                )
+                normalized_endpoint = api_endpoint.rstrip("/")
+                response = client.post(f"{normalized_endpoint}/agents/register", json=payload)
                 response.raise_for_status()
                 data = response.json()
+                result = data.get("data", data) if isinstance(data, dict) else data
 
-                self.aid = data["aid"]
-                self.certificate = data.get("certificate")
+                self.aid = result["aid"]
+                self.binding_key = result.get("binding_key")
+                self.certificate = result.get("certificate")
 
                 return self.aid
 
@@ -244,6 +246,7 @@ class AgentIdentity:
         # Save metadata
         metadata = {
             "aid": self.aid,
+            "binding_key": self.binding_key,
             "model": self.model,
             "provider": self.provider,
             "capabilities": self.capabilities,
@@ -287,6 +290,7 @@ class AgentIdentity:
                 private_key=private_key,
                 public_key=public_key,
                 aid=metadata.get("aid"),
+                binding_key=metadata.get("binding_key"),
                 model=metadata.get("model"),
                 provider=metadata.get("provider"),
                 capabilities=metadata.get("capabilities", []),

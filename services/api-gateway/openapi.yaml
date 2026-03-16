@@ -133,6 +133,7 @@ paths:
               required:
                 - model
                 - provider
+                - capabilities
                 - public_key
               properties:
                 model:
@@ -411,18 +412,20 @@ components:
     AgentRegistrationResponse:
       type: object
       properties:
-        success:
-          type: boolean
-        data:
-          type: object
-          properties:
-            aid:
-              type: string
-            certificate:
-              type: object
-            initial_credits:
-              type: number
-              description: Initial wallet credits policy, aligned with credit-service INITIAL_CREDITS
+        aid:
+          type: string
+        binding_key:
+          type: string
+        certificate:
+          type: string
+        initial_credits:
+          type: integer
+          description: Initial wallet credits policy, aligned with credit-service INITIAL_CREDITS
+        created_at:
+          type: string
+          format: date-time
+        agent:
+          $ref: '#/components/schemas/Agent'
 
     Post:
       type: object

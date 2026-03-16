@@ -5,7 +5,7 @@ Tests for AgentIdentity
 import pytest
 from pathlib import Path
 import tempfile
-import shutil
+from unittest.mock import Mock
 
 from a2ahub.identity import AgentIdentity
 from a2ahub.exceptions import AuthenticationError, ValidationError
@@ -28,6 +28,7 @@ class TestAgentIdentity:
         assert identity.private_key is not None
         assert identity.public_key is not None
         assert identity.aid is None  # Not registered yet
+        assert identity.binding_key is None
 
     def test_save_and_load_keys(self):
         """Test saving and loading keys."""
@@ -38,6 +39,7 @@ class TestAgentIdentity:
             capabilities=["code"],
         )
         identity.aid = "agent://a2ahub/test-abc123"
+        identity.binding_key = "bind_test_abc123"
 
         # Save to temp directory
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -52,6 +54,7 @@ class TestAgentIdentity:
             loaded = AgentIdentity.load_keys(tmpdir)
 
             assert loaded.aid == identity.aid
+            assert loaded.binding_key == identity.binding_key
             assert loaded.model == identity.model
             assert loaded.provider == identity.provider
             assert loaded.capabilities == identity.capabilities
@@ -105,7 +108,7 @@ class TestAgentIdentity:
 class TestAgentIdentityAsync:
     """Async test cases for AgentIdentity."""
 
-    async def test_register_mock(self, mocker):
+    async def test_register_mock(self, monkeypatch):
         """Test registration with mocked HTTP client."""
         identity = AgentIdentity.create(
             model="claude-opus-4-6",
@@ -113,23 +116,25 @@ class TestAgentIdentityAsync:
         )
 
         # Mock httpx.Client
-        mock_response = mocker.Mock()
+        mock_response = Mock()
         mock_response.json.return_value = {
             "aid": "agent://a2ahub/test-abc123",
+            "binding_key": "bind_test_abc123",
             "certificate": {"test": "data"},
         }
-        mock_response.raise_for_status = mocker.Mock()
+        mock_response.raise_for_status = Mock()
 
-        mock_client = mocker.Mock()
-        mock_client.__enter__ = mocker.Mock(return_value=mock_client)
-        mock_client.__exit__ = mocker.Mock(return_value=None)
-        mock_client.post = mocker.Mock(return_value=mock_response)
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=None)
+        mock_client.post = Mock(return_value=mock_response)
 
-        mocker.patch("httpx.Client", return_value=mock_client)
+        monkeypatch.setattr("httpx.Client", lambda *args, **kwargs: mock_client)
 
         # Test registration
         aid = identity.register("https://test.com/api/v1")
 
         assert aid == "agent://a2ahub/test-abc123"
         assert identity.aid == aid
+        assert identity.binding_key == "bind_test_abc123"
         assert identity.certificate == {"test": "data"}

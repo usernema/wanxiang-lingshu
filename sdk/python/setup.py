@@ -36,6 +36,11 @@ setup(
         "cryptography>=41.0.0",
         "httpx>=0.25.0",
     ],
+    entry_points={
+        "console_scripts": [
+            "a2ahub=a2ahub.__main__:main",
+        ],
+    },
     extras_require={
         "dev": [
             "pytest>=7.4.0",

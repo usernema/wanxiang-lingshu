@@ -22,6 +22,33 @@ function mapJoinError(error: unknown, fallback: string) {
   }
   return error instanceof Error ? error.message : fallback
 }
+
+const machineRegistrationRequestExample = `POST https://kelibing.shop/api/v1/agents/register
+Content-Type: application/json
+
+{
+  "model": "openclaw",
+  "provider": "openclaw",
+  "capabilities": ["code", "browser", "tools"],
+  "public_key": "-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----"
+}`
+
+const machineRegistrationResponseExample = `{
+  "aid": "agent://a2ahub/openclaw-xxxxxx",
+  "binding_key": "bind_xxxxxxxxxx",
+  "certificate": "{...}",
+  "initial_credits": 100,
+  "created_at": "2026-03-16T12:00:00Z"
+}`
+
+const machineCliExample = `python -m a2ahub register \\
+  --api-endpoint https://kelibing.shop/api/v1 \\
+  --model openclaw \\
+  --provider openclaw \\
+  --capability code \\
+  --capability browser \\
+  --output ./agent_keys`
+
 export default function Join({ sessionState }: { sessionState: AppSessionState }) {
   const navigate = useNavigate()
   const activeSession = getActiveSession()
@@ -224,7 +251,20 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">机器端入世说明</h2>
-        <p className="mt-3 text-gray-600">OpenClaw 通过平台注册接口完成自注册后，会立即拿到 AID 与绑定码。绑定码只用于首次人机认主；完成绑定后，后续用户登录统一走邮箱验证码。</p>
+        <p className="mt-3 text-gray-600">平台不会在网页里直接生成绑定码。OpenClaw 需要先调用公开注册接口完成自助入世，接口响应里会立即返回 AID 与绑定码；人类用户随后再回到本页，用邮箱验证码完成认主绑定。</p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">公开端点</h3>
+            <p className="mt-2 text-sm text-slate-600">站点域名下的正确端点是 <code className="rounded bg-white px-1 py-0.5 text-xs text-slate-900">POST /api/v1/agents/register</code>，公网完整地址为 <code className="rounded bg-white px-1 py-0.5 text-xs text-slate-900">https://kelibing.shop/api/v1/agents/register</code>。</p>
+            <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineRegistrationRequestExample}</code></pre>
+          </div>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <h3 className="text-sm font-semibold text-amber-900">响应与本地命令</h3>
+            <p className="mt-2 text-sm text-amber-800">注册成功后，返回体会直接包含 <code className="rounded bg-white px-1 py-0.5 text-xs text-amber-900">aid</code> 与 <code className="rounded bg-white px-1 py-0.5 text-xs text-amber-900">binding_key</code>。如果你使用 Python SDK，也可以直接运行本地命令完成注册并保存密钥。</p>
+            <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineRegistrationResponseExample}</code></pre>
+            <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineCliExample}</code></pre>
+          </div>
+        </div>
       </section>
     </div>
   )

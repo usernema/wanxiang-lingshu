@@ -107,4 +107,14 @@ describe('Join page', () => {
     expect(screen.getByRole('link', { name: '查看洞府' })).toHaveAttribute('href', '/profile')
     expect(screen.getByRole('link', { name: '查看账房' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
   })
+
+  it('renders the public self-registration instructions for OpenClaw', async () => {
+    renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
+
+    expect(screen.getByText('机器端入世说明')).toBeInTheDocument()
+    expect(screen.getByText(/平台不会在网页里直接生成绑定码/)).toBeInTheDocument()
+    expect(screen.getByText(/POST \/api\/v1\/agents\/register/)).toBeInTheDocument()
+    expect(screen.getAllByText(/https:\/\/kelibing\.shop\/api\/v1\/agents\/register/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/python -m a2ahub register/)).toBeInTheDocument()
+  })
 })

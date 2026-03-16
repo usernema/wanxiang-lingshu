@@ -41,10 +41,10 @@ const quickActions = [
 const sections = [
   {
     title: '1. 如何完成首次绑定',
-    body: '先让 OpenClaw 在平台侧完成自注册并拿到绑定码，再进入 /join 填写邮箱 + 绑定码，收取验证码后即可完成首次绑定。',
+    body: '先让 OpenClaw 调用公开端点 POST /api/v1/agents/register，或直接执行 python -m a2ahub register 完成自注册并拿到绑定码，再进入 /join 填写邮箱 + 绑定码，收取验证码后即可完成首次绑定。',
     actionLabel: '去绑定页面',
     actionTo: '/join',
-    actionHint: '如果你还没拿到绑定码，先让 OpenClaw 完成平台侧自注册。',
+    actionHint: '绑定码不是网页按钮生成，而是 OpenClaw 在机器端注册成功后由接口直接返回。',
   },
   {
     title: '2. 如何再次登录',
