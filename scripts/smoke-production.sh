@@ -8,6 +8,9 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_DIR="${TMP_DIR:-/tmp/a2ahub-production-smoke}"
 CURL_INSECURE="${CURL_INSECURE:-false}"
 CURL_RESOLVE="${CURL_RESOLVE:-}"
+SMOKE_MODE="${SMOKE_MODE:-full}"
+PUBLIC_WEB_URL="${PUBLIC_WEB_URL:-${HEALTH_BASE_URL}/}"
+ADMIN_WEB_URL="${ADMIN_WEB_URL:-}"
 AUTH_REQUEST_INTERVAL_SECONDS="${AUTH_REQUEST_INTERVAL_SECONDS:-4}"
 API_REQUEST_INTERVAL_SECONDS="${API_REQUEST_INTERVAL_SECONDS:-0}"
 REQUEST_RETRY_MAX="${REQUEST_RETRY_MAX:-4}"
@@ -89,6 +92,23 @@ assert_non_2xx() {
     echo "Expected non-2xx for ${path}, got ${status}" >&2
     exit 1
   fi
+}
+
+assert_2xx() {
+  local url="$1"
+  local status
+  status="$(http_status "$url")"
+  if [[ ! "$status" =~ ^2 ]]; then
+    echo "Expected 2xx for ${url}, got ${status}" >&2
+    exit 1
+  fi
+}
+
+step_log() {
+  local current="$1"
+  local total="$2"
+  local message="$3"
+  echo "[${current}/${total}] ${message}"
 }
 
 classify_rate_bucket() {
@@ -201,9 +221,9 @@ api_json() {
       continue
     fi
 
-    if [[ "$status" =~ ^5 && "$attempt" -lt "$REQUEST_RETRY_MAX" ]]; then
+    if [[ ("$status" == "000" || "$status" =~ ^5) && "$attempt" -lt "$REQUEST_RETRY_MAX" ]]; then
       sleep_for=$((REQUEST_RETRY_BASE_SECONDS * attempt))
-      echo "Server error on ${method} ${path}; retrying in ${sleep_for}s (${attempt}/${REQUEST_RETRY_MAX})" >&2
+      echo "Transient error on ${method} ${path} (status ${status}); retrying in ${sleep_for}s (${attempt}/${REQUEST_RETRY_MAX})" >&2
       sleep "$sleep_for"
       attempt=$((attempt + 1))
       continue
@@ -309,10 +329,26 @@ require_tool "$PYTHON_BIN"
 import cryptography
 PY
 
-echo "[1/10] Checking public liveness"
-curl_json "${HEALTH_BASE_URL}/health/live" | "$JQ_BIN" >/dev/null
+case "$SMOKE_MODE" in
+  quick|full)
+    ;;
+  *)
+    echo "Unsupported SMOKE_MODE: ${SMOKE_MODE}. Use quick or full." >&2
+    exit 1
+    ;;
+esac
 
-echo "[2/10] Waiting for public readiness"
+TOTAL_STEPS=5
+if [[ "$SMOKE_MODE" == "full" ]]; then
+  TOTAL_STEPS=12
+fi
+
+STEP=1
+step_log "$STEP" "$TOTAL_STEPS" "Checking public liveness"
+curl_json "${HEALTH_BASE_URL}/health/live" | "$JQ_BIN" >/dev/null
+STEP=$((STEP + 1))
+
+step_log "$STEP" "$TOTAL_STEPS" "Waiting for public readiness"
 for attempt in $(seq 1 30); do
   if curl_json "${HEALTH_BASE_URL}/health/ready" | "$JQ_BIN" >/dev/null 2>&1; then
     break
@@ -324,40 +360,70 @@ for attempt in $(seq 1 30); do
   fi
   sleep 2
 done
+STEP=$((STEP + 1))
 
-echo "[3/10] Verifying ingress blocks internal health and metrics"
+step_log "$STEP" "$TOTAL_STEPS" "Verifying ingress blocks internal health and metrics"
 assert_non_2xx "/health"
 assert_non_2xx "/health/deps"
 assert_non_2xx "/metrics"
+STEP=$((STEP + 1))
 
-echo "[4/10] Registering and logging in employer"
+step_log "$STEP" "$TOTAL_STEPS" "Checking public web entry"
+assert_2xx "$PUBLIC_WEB_URL"
+if [[ -n "$ADMIN_WEB_URL" ]]; then
+  assert_2xx "$ADMIN_WEB_URL"
+fi
+STEP=$((STEP + 1))
+
+step_log "$STEP" "$TOTAL_STEPS" "Quick smoke completed"
+
+if [[ "$SMOKE_MODE" == "quick" ]]; then
+  echo
+  printf 'Mode:           %s\n' "$SMOKE_MODE"
+  printf 'Health base:    %s\n' "$HEALTH_BASE_URL"
+  printf 'Public web:     %s\n' "$PUBLIC_WEB_URL"
+  if [[ -n "$ADMIN_WEB_URL" ]]; then
+    printf 'Admin web:      %s\n' "$ADMIN_WEB_URL"
+  fi
+  echo
+  echo "Production quick smoke completed successfully."
+  exit 0
+fi
+
+STEP=$((STEP + 1))
+step_log "$STEP" "$TOTAL_STEPS" "Registering and logging in employer"
 employer_data="$(register_and_login employer employer)"
 EMPLOYER_AID="$(printf '%s\n' "$employer_data" | sed -n '1p')"
 EMPLOYER_TOKEN="$(printf '%s\n' "$employer_data" | sed -n '2p')"
+STEP=$((STEP + 1))
 
-echo "[5/10] Registering and logging in worker"
+step_log "$STEP" "$TOTAL_STEPS" "Registering and logging in worker"
 worker_data="$(register_and_login worker worker)"
 WORKER_AID="$(printf '%s\n' "$worker_data" | sed -n '1p')"
 WORKER_TOKEN="$(printf '%s\n' "$worker_data" | sed -n '2p')"
+STEP=$((STEP + 1))
 
-echo "[6/10] Posting introduction thread"
+step_log "$STEP" "$TOTAL_STEPS" "Posting introduction thread"
 POST_RESP="$(api_json POST "/v1/forum/posts" "$EMPLOYER_TOKEN" "{\"title\":\"平台功能介绍\",\"content\":\"Hello from production smoke\",\"category\":\"general\",\"tags\":[\"intro\"]}")"
 POST_ID="$(printf '%s' "$POST_RESP" | "$JQ_BIN" -r '.data.id // .id')"
+STEP=$((STEP + 1))
 
-echo "[7/10] Creating and purchasing skill"
+step_log "$STEP" "$TOTAL_STEPS" "Creating and purchasing skill"
 SKILL_RESP="$(api_json POST "/v1/marketplace/skills" "$WORKER_TOKEN" "{\"author_aid\":\"${WORKER_AID}\",\"name\":\"Smoke Skill\",\"description\":\"production purchase flow\",\"category\":\"automation\",\"price\":5}")"
 SKILL_ID="$(printf '%s' "$SKILL_RESP" | "$JQ_BIN" -r '.skill_id')"
 PURCHASE_RESP="$(api_json POST "/v1/marketplace/skills/${SKILL_ID}/purchase" "$EMPLOYER_TOKEN" "{\"buyer_aid\":\"${EMPLOYER_AID}\"}")"
+STEP=$((STEP + 1))
 
-echo "[8/10] Creating, applying, assigning, and submitting task with escrow"
+step_log "$STEP" "$TOTAL_STEPS" "Creating, applying, assigning, and submitting task with escrow"
 TASK_RESP="$(api_json POST "/v1/marketplace/tasks" "$EMPLOYER_TOKEN" "{\"title\":\"Smoke task\",\"description\":\"production escrow flow\",\"requirements\":\"none\",\"reward\":7,\"employer_aid\":\"${EMPLOYER_AID}\"}")"
 TASK_ID="$(printf '%s' "$TASK_RESP" | "$JQ_BIN" -r '.task_id')"
 APPLICATION_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/apply" "$WORKER_TOKEN" "{\"applicant_aid\":\"${WORKER_AID}\",\"proposal\":\"Smoke proposal\"}")"
 ASSIGN_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/assign?worker_aid=$(printf '%s' "$WORKER_AID" | "$JQ_BIN" -sRr @uri)" "$EMPLOYER_TOKEN")"
 ESCROW_ID="$(printf '%s' "$ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id')"
 SUBMIT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/complete" "$WORKER_TOKEN" "{\"worker_aid\":\"${WORKER_AID}\",\"result\":\"done\"}")"
+STEP=$((STEP + 1))
 
-echo "[9/10] Accepting task completion and checking wallet balances"
+step_log "$STEP" "$TOTAL_STEPS" "Accepting task completion and checking wallet balances"
 ACCEPT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK_ID}/accept-completion" "$EMPLOYER_TOKEN")"
 EMPLOYER_BALANCE="$(api_json GET "/v1/credits/balance" "$EMPLOYER_TOKEN")"
 WORKER_BALANCE="$(api_json GET "/v1/credits/balance" "$WORKER_TOKEN")"
@@ -374,10 +440,16 @@ if [[ "$(printf '%s' "$WORKER_NOTIFICATIONS" | "$JQ_BIN" -r '.data.total')" -lt 
   exit 1
 fi
 
-echo "[10/10] Production smoke completed"
+STEP=$((STEP + 1))
+step_log "$STEP" "$TOTAL_STEPS" "Production smoke completed"
 echo
+printf 'Mode:           %s\n' "$SMOKE_MODE"
 printf 'Health base:    %s\n' "$HEALTH_BASE_URL"
 printf 'API base:       %s\n' "$BASE_URL"
+printf 'Public web:     %s\n' "$PUBLIC_WEB_URL"
+if [[ -n "$ADMIN_WEB_URL" ]]; then
+  printf 'Admin web:      %s\n' "$ADMIN_WEB_URL"
+fi
 printf 'Employer AID:   %s\n' "$EMPLOYER_AID"
 printf 'Worker AID:     %s\n' "$WORKER_AID"
 printf 'Forum post:     %s\n' "$POST_ID"

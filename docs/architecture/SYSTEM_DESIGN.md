@@ -399,7 +399,7 @@ services:
   - API：`/api`
   - Liveness：`/health/live`
   - Readiness：`/health/ready`
-- 烟测脚本 `scripts/smoke-production.sh` 默认通过统一入口 `http://localhost/api` 访问；如入口域名或端口不同，可通过 `BASE_URL` 覆盖。
+- 烟测脚本 `scripts/smoke-production.sh` 默认通过统一入口 `http://localhost/api` 访问；如入口域名或端口不同，可通过 `BASE_URL` 覆盖，并支持 `SMOKE_MODE=quick|full` 两种模式。
 - HTTPS / 自签名验证可通过以下环境变量补充：
   - `BASE_URL=https://<host>/api`
   - `HEALTH_BASE_URL=https://<host>`（通常可省略）
@@ -429,9 +429,10 @@ services:
   - 公网发布前保持 `ENABLE_DEBUG_OVERLAY=false`。
   - 只有本机排障时才启用 overlay，且其端口仅绑定到 `127.0.0.1`。
 6. **执行入口验证**
-  - HTTP 本地验证：`ENABLE_TLS=false bash scripts/run-production.sh` 后执行 `bash scripts/smoke-production.sh`。
-  - HTTPS 验证：`ENABLE_TLS=true bash scripts/run-production.sh` 后执行 `BASE_URL=https://<host>/api bash scripts/smoke-production.sh`。
-  - 自签名 / 本机域名验证示例：`BASE_URL=https://app.local/api CURL_INSECURE=true CURL_RESOLVE=app.local:443:127.0.0.1 bash scripts/smoke-production.sh`。
+  - HTTP 本地快速验证：`ENABLE_TLS=false SMOKE_MODE=quick bash scripts/smoke-production.sh`。
+  - HTTP 本地全链路验证：`ENABLE_TLS=false SMOKE_MODE=full bash scripts/smoke-production.sh`。
+  - HTTPS 验证：`ENABLE_TLS=true BASE_URL=https://<host>/api SMOKE_MODE=quick bash scripts/smoke-production.sh`。
+  - 自签名 / 本机域名验证示例：`BASE_URL=https://app.local/api CURL_INSECURE=true CURL_RESOLVE=app.local:443:127.0.0.1 SMOKE_MODE=quick bash scripts/smoke-production.sh`。
   - HTTP → HTTPS 跳转验证示例：`curl -I -H 'Host: app.local' http://127.0.0.1/`，应返回 `301` 并跳转到 `https://app.local/`。
 7. **确认暴露边界**
   - **允许公开**：`/`、静态资源、`/api/`、`/health/live`、`/health/ready`

@@ -187,6 +187,30 @@ bash scripts/deploy-production-bundle.sh
 - 清理 `.worktrees/`、`.venv/` 等本地开发残留
 - 调用 `scripts/run-production.sh` 重建生产服务
 
+### 发布后 smoke 建议
+
+快速检查公网入口与暴露边界：
+
+```bash
+SMOKE_MODE=quick \
+BASE_URL=https://kelibing.shop/api \
+HEALTH_BASE_URL=https://kelibing.shop \
+PUBLIC_WEB_URL=https://kelibing.shop/ \
+ADMIN_WEB_URL=https://console.kelibing.shop/ \
+bash scripts/smoke-production.sh
+```
+
+全链路验收注册、论坛、交易、托管、结算：
+
+```bash
+SMOKE_MODE=full \
+BASE_URL=https://kelibing.shop/api \
+HEALTH_BASE_URL=https://kelibing.shop \
+PUBLIC_WEB_URL=https://kelibing.shop/ \
+ADMIN_WEB_URL=https://console.kelibing.shop/ \
+bash scripts/smoke-production.sh
+```
+
 ## 生产抗滥用默认值
 
 - Ingress：`/api/` 默认 `12r/s`，鉴权接口默认 `10r/m`，单 IP 并发连接默认 `30`

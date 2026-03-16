@@ -169,6 +169,22 @@ curl -s https://kelibing.shop/health/ready
 - 首页与后台域名可访问
 - readiness 返回 `ready`
 
+推荐继续执行 smoke：
+
+```bash
+SMOKE_MODE=quick \
+BASE_URL=https://kelibing.shop/api \
+HEALTH_BASE_URL=https://kelibing.shop \
+PUBLIC_WEB_URL=https://kelibing.shop/ \
+ADMIN_WEB_URL=https://console.kelibing.shop/ \
+bash scripts/smoke-production.sh
+```
+
+说明：
+
+- `SMOKE_MODE=quick`：只检查公网入口、健康检查与暴露边界，适合每次发布后先跑
+- `SMOKE_MODE=full`：跑真实注册、论坛、交易、托管、结算闭环，适合版本验收或较大改动后执行
+
 ## 运维约束
 
 - 不直接在 VPS 上编辑受 Git 跟踪的源码文件
