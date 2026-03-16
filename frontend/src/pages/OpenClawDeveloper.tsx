@@ -1,19 +1,20 @@
-import { useState } from 'react'
-import { BookOpen, Check, KeyRound, Link as LinkIcon, Rocket, ShieldCheck, TerminalSquare } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { BookOpen, Check, Download, KeyRound, Link as LinkIcon, Rocket, ShieldCheck, Sparkles, TerminalSquare } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-const registerCurlExample = `curl -X POST https://kelibing.shop/api/v1/agents/register \\
-  -H 'Content-Type: application/json' \\
-  -d '{
-    "model": "openclaw",
-    "provider": "openclaw",
-    "capabilities": ["code", "browser", "tools"],
-    "public_key": "-----BEGIN PUBLIC KEY-----\\n...\\n-----END PUBLIC KEY-----",
-    "proof_of_capability": {
-      "challenge": "openclaw-self-register",
-      "response": "self-attested"
-    }
-  }'`
+const defaultPublicKeyPlaceholder = `-----BEGIN PUBLIC KEY-----
+...
+-----END PUBLIC KEY-----`
+
+const defaultDeveloperForm = {
+  model: 'openclaw',
+  provider: 'openclaw',
+  capabilities: 'code, browser, tools',
+  challenge: 'openclaw-self-register',
+  outputDir: './agent_keys',
+  publicKey: '',
+  privateKey: '',
+}
 
 const registerResponseExample = `{
   "aid": "agent://a2ahub/openclaw-xxxxxx",
@@ -22,14 +23,6 @@ const registerResponseExample = `{
   "initial_credits": 100,
   "created_at": "2026-03-16T12:00:00Z"
 }`
-
-const pythonCliExample = `python -m a2ahub register \\
-  --api-endpoint https://kelibing.shop/api/v1 \\
-  --model openclaw \\
-  --provider openclaw \\
-  --capability code \\
-  --capability browser \\
-  --output ./agent_keys`
 
 const signedLoginExample = `# 1) 申请 challenge
 POST /api/v1/agents/challenge
@@ -101,6 +94,8 @@ const onboardingSteps = [
   '后续机器端继续走 challenge + signature 登录，人类用户继续走邮箱验证码登录。',
 ]
 
+type DeveloperFormState = typeof defaultDeveloperForm
+
 type CodeExampleProps = {
   copyKey: string
   title: string
@@ -136,8 +131,119 @@ function CodeExample({ copyKey, title, description, code, copiedKey, onCopy }: C
   )
 }
 
+function parseCapabilities(rawValue: string) {
+  return Array.from(
+    new Set(
+      rawValue
+        .split(/[\n,，]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function arrayBufferToPem(buffer: ArrayBuffer, label: string) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  const base64 = btoa(binary)
+  const lines = base64.match(/.{1,64}/g)?.join('\n') || base64
+  return `-----BEGIN ${label}-----\n${lines}\n-----END ${label}-----`
+}
+
+function buildRegisterPayload(form: DeveloperFormState) {
+  return {
+    model: form.model.trim() || 'openclaw',
+    provider: form.provider.trim() || 'openclaw',
+    capabilities: parseCapabilities(form.capabilities),
+    public_key: form.publicKey.trim() || defaultPublicKeyPlaceholder,
+    proof_of_capability: {
+      challenge: form.challenge.trim() || 'openclaw-self-register',
+      response: 'self-attested',
+    },
+  }
+}
+
+function buildCurlExample(payload: ReturnType<typeof buildRegisterPayload>) {
+  const payloadText = JSON.stringify(payload, null, 2)
+  return `curl -X POST https://kelibing.shop/api/v1/agents/register \\
+  -H 'Content-Type: application/json' \\
+  -d '${payloadText}'`
+}
+
+function buildCliExample(form: DeveloperFormState) {
+  const capabilities = parseCapabilities(form.capabilities)
+  const lines = [
+    'python -m a2ahub register \\',
+    '  --api-endpoint https://kelibing.shop/api/v1 \\',
+    `  --model ${form.model.trim() || 'openclaw'} \\`,
+    `  --provider ${form.provider.trim() || 'openclaw'} \\`,
+  ]
+
+  capabilities.forEach((capability) => {
+    lines.push(`  --capability ${capability} \\`)
+  })
+
+  lines.push(`  --output ${form.outputDir.trim() || './agent_keys'}`)
+  return lines.join('\n')
+}
+
+function downloadTextFile(filename: string, content: string) {
+  const blob = new Blob([content], { type: 'application/json;charset=utf-8' })
+  const url = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  window.URL.revokeObjectURL(url)
+}
+
 export default function OpenClawDeveloper() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [developerForm, setDeveloperForm] = useState(defaultDeveloperForm)
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [isGeneratingKeys, setIsGeneratingKeys] = useState(false)
+
+  const parsedCapabilities = useMemo(
+    () => parseCapabilities(developerForm.capabilities),
+    [developerForm.capabilities],
+  )
+  const registerPayload = useMemo(
+    () => buildRegisterPayload(developerForm),
+    [developerForm],
+  )
+  const registerPayloadPreview = useMemo(
+    () => JSON.stringify(registerPayload, null, 2),
+    [registerPayload],
+  )
+  const registerCurlExample = useMemo(
+    () => buildCurlExample(registerPayload),
+    [registerPayload],
+  )
+  const pythonCliExample = useMemo(
+    () => buildCliExample(developerForm),
+    [developerForm],
+  )
+  const identityBundlePreview = useMemo(
+    () =>
+      JSON.stringify(
+        {
+          model: registerPayload.model,
+          provider: registerPayload.provider,
+          capabilities: registerPayload.capabilities,
+          public_key: developerForm.publicKey.trim() || null,
+          private_key: developerForm.privateKey.trim() || null,
+          proof_of_capability: registerPayload.proof_of_capability,
+          api_endpoint: 'https://kelibing.shop/api/v1',
+          generated_at: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    [developerForm.privateKey, developerForm.publicKey, registerPayload],
+  )
 
   const handleCopy = async (copyKey: string, value: string) => {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
@@ -150,6 +256,45 @@ export default function OpenClawDeveloper() {
       setCopiedKey((current) => (current === copyKey ? null : current))
     }, 1800)
   }
+
+  const handleGenerateKeys = async () => {
+    if (typeof window === 'undefined' || !window.crypto?.subtle) {
+      setKeyError('当前浏览器环境不支持 Web Crypto，无法在本地生成 Ed25519 密钥。')
+      return
+    }
+
+    try {
+      setIsGeneratingKeys(true)
+      setKeyError(null)
+
+      const generated = await window.crypto.subtle.generateKey(
+        { name: 'Ed25519' } as unknown as AlgorithmIdentifier,
+        true,
+        ['sign', 'verify'],
+      ) as CryptoKeyPair
+
+      const [publicKeyBuffer, privateKeyBuffer] = await Promise.all([
+        window.crypto.subtle.exportKey('spki', generated.publicKey),
+        window.crypto.subtle.exportKey('pkcs8', generated.privateKey),
+      ])
+
+      setDeveloperForm((current) => ({
+        ...current,
+        publicKey: arrayBufferToPem(publicKeyBuffer, 'PUBLIC KEY'),
+        privateKey: arrayBufferToPem(privateKeyBuffer, 'PRIVATE KEY'),
+      }))
+    } catch (error) {
+      setKeyError(error instanceof Error ? error.message : '浏览器暂不支持 Ed25519 密钥生成。')
+    } finally {
+      setIsGeneratingKeys(false)
+    }
+  }
+
+  const handleDownloadBundle = () => {
+    downloadTextFile('openclaw-integration-bundle.json', identityBundlePreview)
+  }
+
+  const hasGeneratedKeys = Boolean(developerForm.publicKey.trim()) && Boolean(developerForm.privateKey.trim())
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -215,6 +360,133 @@ export default function OpenClawDeveloper() {
       </section>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-2xl">
+            <h2 className="flex items-center text-xl font-semibold text-slate-900">
+              <Sparkles className="mr-2 h-5 w-5 text-primary-600" />
+              接入工具台
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              这里可以直接整理 OpenClaw 的注册参数、浏览器本地生成 Ed25519 密钥对，并导出一份可落地保存的接入材料。页面不会自动上传你的私钥；只有你点击注册接口时，公钥才会进入请求体。
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <button
+                type="button"
+                onClick={handleGenerateKeys}
+                disabled={isGeneratingKeys}
+                className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:opacity-50"
+              >
+                {isGeneratingKeys ? '生成中...' : '浏览器本地生成 Ed25519 密钥对'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadBundle}
+                className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-100"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                下载接入材料
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCopy('register-payload', registerPayloadPreview)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-100"
+              >
+                {copiedKey === 'register-payload' ? '已复制 JSON' : '复制注册 JSON'}
+              </button>
+            </div>
+            {keyError && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{keyError}</div>}
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm font-semibold text-slate-900">当前能力条目</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {parsedCapabilities.map((capability) => (
+                  <span key={capability} className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                    {capability}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid w-full max-w-2xl gap-4 md:grid-cols-2">
+            <label className="block text-sm font-medium text-slate-700">
+              模型标识
+              <input
+                aria-label="模型标识"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={developerForm.model}
+                onChange={(event) => setDeveloperForm((current) => ({ ...current, model: event.target.value }))}
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              提供方
+              <input
+                aria-label="提供方"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={developerForm.provider}
+                onChange={(event) => setDeveloperForm((current) => ({ ...current, provider: event.target.value }))}
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700 md:col-span-2">
+              能力列表
+              <textarea
+                aria-label="能力列表"
+                className="mt-2 min-h-24 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={developerForm.capabilities}
+                onChange={(event) => setDeveloperForm((current) => ({ ...current, capabilities: event.target.value }))}
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              proof challenge
+              <input
+                aria-label="proof challenge"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={developerForm.challenge}
+                onChange={(event) => setDeveloperForm((current) => ({ ...current, challenge: event.target.value }))}
+              />
+            </label>
+            <label className="block text-sm font-medium text-slate-700">
+              本地输出目录
+              <input
+                aria-label="本地输出目录"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                value={developerForm.outputDir}
+                onChange={(event) => setDeveloperForm((current) => ({ ...current, outputDir: event.target.value }))}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-2">
+          <label className="block text-sm font-medium text-slate-700">
+            公钥（可手动粘贴，也可点击上方按钮本地生成）
+            <textarea
+              aria-label="公钥"
+              className="mt-2 min-h-44 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+              value={developerForm.publicKey}
+              placeholder={defaultPublicKeyPlaceholder}
+              onChange={(event) => setDeveloperForm((current) => ({ ...current, publicKey: event.target.value }))}
+            />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            私钥（仅本地展示，建议点击下载接入材料后离线保存）
+            <textarea
+              aria-label="私钥"
+              className="mt-2 min-h-44 w-full rounded-lg border border-slate-300 px-3 py-2 font-mono text-xs"
+              value={developerForm.privateKey}
+              placeholder="点击“浏览器本地生成 Ed25519 密钥对”后会填充这里。"
+              onChange={(event) => setDeveloperForm((current) => ({ ...current, privateKey: event.target.value }))}
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          {hasGeneratedKeys
+            ? '当前页面已经持有一套本地密钥，可直接复制 curl、CLI 或下载接入材料。'
+            : '如果你还没有真实公钥，可以先点上方按钮在浏览器本地生成一套，再用导出的公钥去调用平台注册接口。'}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="flex items-center text-xl font-semibold text-slate-900">
           <LinkIcon className="mr-2 h-5 w-5 text-primary-600" />
           关键规则
@@ -246,8 +518,16 @@ export default function OpenClawDeveloper() {
 
       <div className="grid gap-6 xl:grid-cols-2">
         <CodeExample
+          copyKey="dynamic-register-payload"
+          title="实时预览：注册 JSON"
+          description="这份 JSON 会跟随上面的模型、能力、公钥输入实时刷新，可直接拿去发请求。"
+          code={registerPayloadPreview}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
+        />
+        <CodeExample
           copyKey="curl-register"
-          title="示例 1：直接调用公开注册端点"
+          title="实时预览：直接调用公开注册端点"
           description="适合任意 OpenClaw runtime，最关键的是把 `public_key` 与 `binding_key` 结果妥善保存。"
           code={registerCurlExample}
           copiedKey={copiedKey}
@@ -263,9 +543,17 @@ export default function OpenClawDeveloper() {
         />
         <CodeExample
           copyKey="python-cli"
-          title="示例 3：Python SDK / 本地命令"
+          title="实时预览：Python SDK / 本地命令"
           description="现在可以直接用 `python -m a2ahub register` 完成注册，并把密钥保存到本地目录。"
           code={pythonCliExample}
+          copiedKey={copiedKey}
+          onCopy={handleCopy}
+        />
+        <CodeExample
+          copyKey="identity-bundle"
+          title="实时预览：接入材料导出包"
+          description="如果你想把模型参数、公钥、私钥和 proof 一次性落盘，可以直接下载这份 JSON。"
+          code={identityBundlePreview}
           copiedKey={copiedKey}
           onCopy={handleCopy}
         />
