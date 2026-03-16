@@ -43,17 +43,13 @@ describe('Home page', () => {
     mockGetActiveSession.mockReturnValue(null)
     mockGetActiveRole.mockReturnValue('default')
     mockApiGet.mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/health/ready') {
-        return { data: { status: 'ready' } }
-      }
-
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
-    expect(screen.queryByText('本周修行指引')).not.toBeInTheDocument()
+    expect(screen.queryByText('代理当前主线')).not.toBeInTheDocument()
     expect(await screen.findByText('修行主链路')).toBeInTheDocument()
   })
 
@@ -80,9 +76,6 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/health/ready') {
-        return { data: { status: 'ready' } }
-      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -146,6 +139,16 @@ describe('Home page', () => {
               suggested_actions: [],
               risk_flags: [],
               evaluation_summary: 'ok',
+              forum_post_count: 0,
+              autopilot_state: 'in_market_loop',
+              intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+              next_action: {
+                key: 'advance_market_loop',
+                title: '推进首轮真实流转',
+                description: '它已经进入万象楼，当前目标是把首轮任务推进到交卷、验卷与结算。',
+                href: '/marketplace?tab=tasks&source=growth-autopilot',
+                cta: '查看流转链路',
+              },
               last_evaluated_at: '2026-03-14T00:00:00.000Z',
               updated_at: '2026-03-14T00:00:00.000Z',
               created_at: '2026-03-14T00:00:00.000Z',
@@ -211,27 +214,33 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect((await screen.findAllByText('本周修行指引')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('代理当前主线')).toBeInTheDocument()
     expect(screen.getByText('当前修行身份')).toBeInTheDocument()
+    expect(await screen.findByText((_, node) => node?.textContent === '自动流转：首轮流转中')).toBeInTheDocument()
     expect(screen.getAllByText('行脚人视角').length).toBeGreaterThan(0)
-    expect(screen.getByText('历练流转漏斗')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '代理态势' })).toHaveAttribute('aria-selected', 'true')
+    const taskActionTitles = await screen.findAllByText('推进首轮真实流转')
+    expect(taskActionTitles.length).toBeGreaterThan(0)
+    const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '查看流转链路' })
+    expect(taskWorkspaceLinks.length).toBeGreaterThan(0)
+    taskWorkspaceLinks.forEach((link) => {
+      expect(link).toHaveAttribute('href', '/marketplace?tab=tasks&source=growth-autopilot')
+    })
+    expect(screen.getAllByRole('link', { name: '去看飞剑传书' }).every((link) => (
+      link.getAttribute('href') === '/wallet?focus=notifications&source=home'
+    ))).toBe(true)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+
     expect(screen.getByText('可接悬赏')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去浏览悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&queue=open&source=home-worker-funnel',
     )
-    const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '回到历练工作台' })
-    expect(taskWorkspaceLinks.length).toBeGreaterThan(0)
-    taskWorkspaceLinks.forEach((link) => {
-      expect(link).toHaveAttribute('href', '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=home-worker')
-    })
-    const taskActionTitles = await screen.findAllByText('继续当前历练')
-    expect(taskActionTitles.length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: '去看飞剑传书' })).toHaveAttribute(
-      'href',
-      '/wallet?focus=notifications&source=home',
-    )
-    expect(screen.getByText('七日入道路径')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: '成长沉淀' }))
+    expect(screen.getByText('系统成长刻度')).toBeInTheDocument()
     expect(screen.getByText('第七日')).toBeInTheDocument()
     expect(screen.getByText('沉淀并发布首卷法卷')).toBeInTheDocument()
     expect(mockSetActiveRole).toHaveBeenCalledWith('worker')
@@ -248,9 +257,6 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/health/ready') {
-        return { data: { status: 'ready' } }
-      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -371,7 +377,7 @@ describe('Home page', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '发榜人视角' }))
 
-    expect((await screen.findAllByText('发榜人视角')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getAllByText('发榜人视角').length).toBeGreaterThan(0)
     expect((await screen.findAllByText('继续推进当前悬赏')).length).toBeGreaterThan(0)
     const employerWorkspaceLinks = screen.getAllByRole('link', { name: '回到发榜工作台' })
     expect(employerWorkspaceLinks.length).toBeGreaterThan(0)
@@ -381,7 +387,8 @@ describe('Home page', () => {
         '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer',
       )
     })
-    expect(screen.getByText('历练流转漏斗')).toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+    expect(screen.getByRole('tab', { name: '黑箱流转' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('待验卷')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去验卷' })).toHaveAttribute(
       'href',
@@ -401,9 +408,6 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/health/ready') {
-        return { data: { status: 'ready' } }
-      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -509,6 +513,8 @@ describe('Home page', () => {
     expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
     ))).toBe(true)
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
     expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
     ))).toBe(true)
@@ -526,9 +532,6 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
-      if (endpoint === '/health/ready') {
-        return { data: { status: 'ready' } }
-      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -637,6 +640,7 @@ describe('Home page', () => {
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-assets'
     ))).toBe(true)
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-funnel-completed'
     ))).toBe(true)

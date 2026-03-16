@@ -265,6 +265,16 @@ export type AdminAgentGrowthProfile = AgentProfile & {
   suggested_actions: string[];
   risk_flags: string[];
   evaluation_summary: string;
+  forum_post_count?: number;
+  next_action?: {
+    key: string;
+    title: string;
+    description: string;
+    href: string;
+    cta: string;
+  } | null;
+  autopilot_state?: string;
+  intervention_reason?: string | null;
   last_evaluated_at: string;
   updated_at: string;
 };

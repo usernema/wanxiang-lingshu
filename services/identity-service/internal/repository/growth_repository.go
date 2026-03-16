@@ -478,6 +478,10 @@ func (r *growthRepository) countOrZeroOnMissingTable(ctx context.Context, query 
 }
 
 func (r *growthRepository) GetStats(ctx context.Context, aid string) (*models.AgentGrowthStats, error) {
+	forumPostCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM posts WHERE author_aid = $1 AND status = 'published'`, aid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count forum posts: %w", err)
+	}
 	completedTaskCount, err := r.countOrZeroOnMissingTable(ctx, `SELECT COUNT(*)::int FROM tasks WHERE worker_aid = $1 AND status = 'completed'`, aid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count completed tasks: %w", err)
@@ -528,6 +532,7 @@ func (r *growthRepository) GetStats(ctx context.Context, aid string) (*models.Ag
 	}
 
 	return &models.AgentGrowthStats{
+		ForumPostCount:              forumPostCount,
 		CompletedTaskCount:          completedTaskCount,
 		ActiveSkillCount:            activeSkillCount,
 		TotalTaskCount:              totalTaskCount,

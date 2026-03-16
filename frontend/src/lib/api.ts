@@ -49,6 +49,14 @@ export type AgentGrowthPool = {
   created_at: string;
 };
 
+export type AgentGrowthNextAction = {
+  key: string;
+  title: string;
+  description: string;
+  href: string;
+  cta: string;
+};
+
 export type AgentGrowthProfile = AgentProfile & {
   owner_email?: string;
   primary_domain: string;
@@ -70,6 +78,10 @@ export type AgentGrowthProfile = AgentProfile & {
   suggested_actions: string[];
   risk_flags: string[];
   evaluation_summary: string;
+  forum_post_count?: number;
+  next_action?: AgentGrowthNextAction | null;
+  autopilot_state?: string;
+  intervention_reason?: string | null;
   last_evaluated_at: string;
   updated_at: string;
 };

@@ -499,6 +499,172 @@ func dedupeGrowthActions(actions models.StringList) models.StringList {
 	return deduped
 }
 
+func hasGrowthProfileBasics(profile *models.AgentGrowthProfile) bool {
+	if profile == nil {
+		return false
+	}
+	return strings.TrimSpace(profile.Headline) != "" &&
+		strings.TrimSpace(profile.Bio) != "" &&
+		countNonEmptyCapabilities(profile.Capabilities) > 0
+}
+
+func hasGrowthReusableAsset(profile *models.AgentGrowthProfile) bool {
+	if profile == nil {
+		return false
+	}
+	return profile.ActiveSkillCount > 0 ||
+		profile.PublishedDraftCount > 0 ||
+		profile.ValidatedDraftCount > 0 ||
+		profile.IncubatingDraftCount > 0 ||
+		profile.EmployerTemplateCount > 0 ||
+		profile.TemplateReuseCount > 0 ||
+		profile.ExperienceCardCount > 0
+}
+
+func stringPointer(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return &value
+}
+
+func buildGrowthInterventionReason(profile *models.AgentGrowthProfile) *string {
+	if profile == nil {
+		return nil
+	}
+
+	reasons := []string{}
+	if profile.Status != "active" {
+		reasons = append(reasons, "当前 Agent 状态不是 active，系统不会继续把它推向公开流转。")
+	}
+	if profile.HighRiskMemoryCount > 0 {
+		reasons = append(reasons, "存在高风险记忆，建议先完成人工复核或清理。")
+	} else if profile.ActiveRiskMemoryCount > 0 {
+		reasons = append(reasons, "近期存在风险记录，建议重点观察验卷、结算与回访节点。")
+	}
+	if strings.TrimSpace(profile.OwnerEmail) == "" {
+		reasons = append(reasons, "建议尽快绑定观察邮箱，否则人类无法稳定接收告警、验收和登录恢复提醒。")
+	}
+
+	return stringPointer(strings.Join(reasons, " "))
+}
+
+func buildGrowthNextAction(profile *models.AgentGrowthProfile) (string, *models.AgentGrowthNextAction) {
+	if profile == nil {
+		return "unknown", nil
+	}
+
+	if profile.Status != "active" {
+		return "blocked_status_review", &models.AgentGrowthNextAction{
+			Key:         "status_review",
+			Title:       "等待恢复公开流转",
+			Description: "当前状态不是 active，系统会暂停把这个 OpenClaw 继续推向公开市场与训练闭环。",
+			Href:        "/profile",
+			CTA:         "查看代理状态",
+		}
+	}
+
+	if profile.HighRiskMemoryCount > 0 {
+		return "blocked_risk_review", &models.AgentGrowthNextAction{
+			Key:         "risk_review",
+			Title:       "等待风险复核",
+			Description: "系统检测到高风险记忆，当前会先冻结外放节奏，等待人工复核或风险清理。",
+			Href:        "/profile",
+			CTA:         "查看风险状态",
+		}
+	}
+
+	if !hasGrowthProfileBasics(profile) {
+		return "awaiting_profile", &models.AgentGrowthNextAction{
+			Key:         "complete_profile",
+			Title:       "补齐代理命牌",
+			Description: "先把 headline、bio 和能力标签补齐，系统才知道该把它送往哪条修炼主线。",
+			Href:        "/profile",
+			CTA:         "查看命牌状态",
+		}
+	}
+
+	marketStarted := profile.TotalTaskCount > 0 || profile.EmployerTemplateCount > 0 || profile.TemplateReuseCount > 0
+	if marketStarted && profile.CompletedTaskCount == 0 {
+		return "in_market_loop", &models.AgentGrowthNextAction{
+			Key:         "advance_market_loop",
+			Title:       "推进首轮真实流转",
+			Description: "它已经进入万象楼，当前目标是把首轮任务推进到交卷、验卷与结算，而不是停在接入完成。",
+			Href:        "/marketplace?tab=tasks&source=growth-autopilot",
+			CTA:         "查看流转链路",
+		}
+	}
+
+	if profile.CompletedTaskCount > 0 && !hasGrowthReusableAsset(profile) {
+		return "awaiting_asset_consolidation", &models.AgentGrowthNextAction{
+			Key:         "consolidate_assets",
+			Title:       "沉淀首轮成功经验",
+			Description: "首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板，系统会优先收口这一环。",
+			Href:        "/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot",
+			CTA:         "查看成长资产",
+		}
+	}
+
+	if profile.ForumPostCount == 0 {
+		return "awaiting_first_signal", &models.AgentGrowthNextAction{
+			Key:         "publish_first_signal",
+			Title:       "发出首个公开信号",
+			Description: "论道台里还没有它的公开信号，先完成一次亮相，让市场与教练池能识别这个 OpenClaw。",
+			Href:        "/forum?focus=create-post&source=growth-autopilot",
+			CTA:         "查看论道台",
+		}
+	}
+
+	if !marketStarted {
+		return "awaiting_first_market_loop", &models.AgentGrowthNextAction{
+			Key:         "start_market_loop",
+			Title:       "进入首轮真实历练",
+			Description: "当前还没有形成真实任务闭环，系统下一步会把它推向第一笔可验收的市场流转。",
+			Href:        "/marketplace?tab=tasks&source=growth-autopilot",
+			CTA:         "查看历练入口",
+		}
+	}
+
+	if profile.PromotionCandidate {
+		return "promotion_window", &models.AgentGrowthNextAction{
+			Key:         "promotion_window",
+			Title:       "进入晋级窗口",
+			Description: fmt.Sprintf("当前主线已经比较稳定，下一步是补齐最后一项证据，冲击%s池。", growthPoolLabel(profile.RecommendedNextPool)),
+			Href:        "/profile?source=growth-promotion",
+			CTA:         "查看成长档案",
+		}
+	}
+
+	if profile.ActiveRiskMemoryCount > 0 {
+		return "caution_watch", &models.AgentGrowthNextAction{
+			Key:         "watch_risk",
+			Title:       "继续低风险自动流转",
+			Description: "主线仍在推进，但近期存在风险记录，系统会收紧节奏并等待更多正向样本。",
+			Href:        "/wallet?focus=notifications&source=growth-autopilot",
+			CTA:         "查看提醒",
+		}
+	}
+
+	return "healthy_autopilot", &models.AgentGrowthNextAction{
+		Key:         "healthy_autopilot",
+		Title:       "维持自动流转并扩大样本",
+		Description: "主线状态健康，系统会继续接任务、沉淀经验并扩大复用，不需要人为逐步指挥。",
+		Href:        "/onboarding",
+		CTA:         "查看代理看板",
+	}
+}
+
+func applyGrowthRuntimeState(profile *models.AgentGrowthProfile) {
+	if profile == nil {
+		return
+	}
+
+	autopilotState, nextAction := buildGrowthNextAction(profile)
+	profile.AutopilotState = autopilotState
+	profile.NextAction = nextAction
+	profile.InterventionReason = buildGrowthInterventionReason(profile)
+}
+
 func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool, nextPool string, promotionCandidate bool) models.StringList {
 	actions := models.StringList{}
 
@@ -510,6 +676,9 @@ func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthS
 	}
 	if countNonEmptyCapabilities(agent.Capabilities) < 3 {
 		actions = append(actions, "至少补充 3 个能力标签，提升分池准确度和任务匹配率。")
+	}
+	if stats.ForumPostCount == 0 {
+		actions = append(actions, "先发 1 篇论道帖或自述，给市场与教练池一个公开可见的首个信号。")
 	}
 
 	if stats.CompletedTaskCount == 0 {
@@ -728,10 +897,12 @@ func (s *agentService) evaluateGrowthProfile(ctx context.Context, aid, triggerTy
 		SuggestedActions:            suggestedActions,
 		RiskFlags:                   riskFlags,
 		EvaluationSummary:           buildGrowthSummary(agent, primaryDomain, maturityPool, recommendedNextPool, stats, growthScore, riskScore, promotionReadinessScore, autoGrowthEligible, promotionCandidate),
+		ForumPostCount:              stats.ForumPostCount,
 		LastEvaluatedAt:             now,
 		CreatedAt:                   now,
 		UpdatedAt:                   now,
 	}
+	applyGrowthRuntimeState(profile)
 
 	if err := s.growthRepo.UpsertProfile(ctx, profile); err != nil {
 		return nil, err
@@ -776,6 +947,12 @@ func (s *agentService) GetGrowthProfile(ctx context.Context, aid string) (*model
 		}
 		return nil, err
 	}
+	if stats, statsErr := s.growthRepo.GetStats(ctx, aid); statsErr != nil {
+		logrus.WithError(statsErr).WithField("aid", aid).Warn("Failed to refresh growth runtime signals")
+	} else {
+		profile.ForumPostCount = stats.ForumPostCount
+	}
+	applyGrowthRuntimeState(profile)
 
 	pools, err := s.growthRepo.ListPoolMemberships(ctx, aid)
 	if err != nil {

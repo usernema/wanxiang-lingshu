@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event'
 import { screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import Onboarding from '@/pages/Onboarding'
@@ -14,6 +15,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return {
     ...actual,
     getActiveSession: () => mockGetActiveSession(),
+    fetchCurrentAgentGrowth: async () => (await mockApiGet('/v1/agents/me/growth')).data,
     fetchMySkillDrafts: (...args: unknown[]) => mockFetchMySkillDrafts(...args),
     fetchMyEmployerTemplates: (...args: unknown[]) => mockFetchMyEmployerTemplates(...args),
     fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
@@ -165,6 +167,53 @@ describe('Onboarding deep links', () => {
           ],
         }
       }
+      if (endpoint === '/v1/agents/me/growth') {
+        return {
+          data: {
+            profile: {
+              aid: 'worker-agent',
+              model: 'Claude Worker',
+              provider: 'openclaw',
+              capabilities: ['reasoning', 'coding'],
+              reputation: 88,
+              status: 'active',
+              primary_domain: 'automation',
+              domain_scores: { automation: 10 },
+              current_maturity_pool: 'observed',
+              recommended_task_scope: 'guided_access',
+              auto_growth_eligible: false,
+              completed_task_count: 1,
+              active_skill_count: 0,
+              total_task_count: 1,
+              incubating_draft_count: 0,
+              validated_draft_count: 0,
+              published_draft_count: 0,
+              employer_template_count: 0,
+              template_reuse_count: 0,
+              promotion_readiness_score: 35,
+              recommended_next_pool: 'standard',
+              promotion_candidate: false,
+              suggested_actions: ['沉淀首轮经验。'],
+              risk_flags: [],
+              evaluation_summary: 'observed profile',
+              forum_post_count: 1,
+              autopilot_state: 'awaiting_asset_consolidation',
+              intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+              next_action: {
+                key: 'consolidate_assets',
+                title: '沉淀首轮成功经验',
+                description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+                href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
+                cta: '查看成长资产',
+              },
+              last_evaluated_at: '2026-03-13T00:00:00.000Z',
+              updated_at: '2026-03-13T00:00:00.000Z',
+              created_at: '2026-03-13T00:00:00.000Z',
+            },
+            pools: [],
+          },
+        }
+      }
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
   })
@@ -173,9 +222,15 @@ describe('Onboarding deep links', () => {
     renderWithProviders(<Onboarding sessionState={buildSessionState()} />, {
       initialEntries: ['/onboarding'],
     })
+    const user = userEvent.setup()
+
+    expect((await screen.findAllByText('沉淀首轮成功经验')).length).toBeGreaterThan(0)
+    expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
 
     const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)
+
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
 
     const employerTaskLinks = screen.getAllByRole('link', { name: '查看我的悬赏' })
     expect(employerTaskLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-employer-2&focus=task-workspace&source=onboarding')).toBe(true)
@@ -183,9 +238,12 @@ describe('Onboarding deep links', () => {
     const taskLoopLinks = screen.getAllByRole('link', { name: '查看历练闭环' })
     expect(taskLoopLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-worker-2&focus=task-workspace&source=onboarding')).toBe(true)
 
+    await user.click(screen.getByRole('tab', { name: '成长资产' }))
+
     const assetLinks = screen.getAllByRole('link', { name: '查看成长资产' })
     expect(assetLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gift-1')).toBe(true)
 
-    expect(screen.getAllByRole('link', { name: '查看入道手册' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
+    await user.click(screen.getByRole('tab', { name: '系统任务' }))
+    expect(screen.getAllByRole('link', { name: '查看系统说明' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })
 })

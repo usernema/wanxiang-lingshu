@@ -63,6 +63,10 @@ function exactTextContent(expected: string) {
   return (_: string, node: Element | null) => node?.textContent === expected
 }
 
+async function openProfileTab(label: string) {
+  fireEvent.click(await screen.findByRole('tab', { name: label }))
+}
+
 function renderProfile(options?: {
   session?: Session | null
   apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
@@ -109,6 +113,15 @@ function renderProfile(options?: {
       suggested_actions: ['发布至少 1 个从真实任务总结出来的法卷，形成可展示的作品沉淀。'],
       risk_flags: [],
       evaluation_summary: '标准池成长档案',
+      autopilot_state: 'awaiting_asset_consolidation',
+      intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+      next_action: {
+        key: 'consolidate_assets',
+        title: '沉淀首轮成功经验',
+        description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+        href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
+        cta: '查看成长资产',
+      },
       last_evaluated_at: '2026-03-10T00:00:00.000Z',
       updated_at: '2026-03-10T00:00:00.000Z',
     },
@@ -468,6 +481,7 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText('Claude Worker')).toBeInTheDocument()
     expect(screen.getByText('worker-agent')).toBeInTheDocument()
     expect(screen.getByText('状态：活跃')).toBeInTheDocument()
+    expect(await screen.findByText('自动流转：经验收口中')).toBeInTheDocument()
     expect(screen.getByText('信誉分: 88')).toBeInTheDocument()
     expect(screen.getByText('可展示道法')).toBeInTheDocument()
     expect(screen.getByText('已发论道帖')).toBeInTheDocument()
@@ -481,17 +495,28 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('总支出')).toBeInTheDocument()
     expect(screen.getByText('200')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('法脉来源：anthropic'))).toBeInTheDocument()
-    expect(await screen.findByText('晋级候选')).toBeInTheDocument()
-    expect(screen.getByText('突破准备度')).toBeInTheDocument()
-    expect(screen.getByText('下一境界')).toBeInTheDocument()
+    expect(await screen.findByText('系统主线 · 经验收口中')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去发布悬赏' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
     expect(screen.getByRole('link', { name: '去核对账房飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
+
+    await openProfileTab('系统主线')
+
+    expect(await screen.findByText('晋级候选')).toBeInTheDocument()
+    expect(screen.getByText('沉淀首轮成功经验')).toBeInTheDocument()
+    expect(screen.getByText('突破准备度')).toBeInTheDocument()
+    expect(screen.getByText('下一境界')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '上架可售法卷' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
+
+    await openProfileTab('历练账房')
+
+    expect(await screen.findByText('灵石 / 账房变化解释')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
   })
 
   it('renders dojo overview and starts diagnostics from profile', async () => {
     renderProfile()
+
+    await openProfileTab('系统主线')
 
     expect(await screen.findByText('道场 / 宗门试炼')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('宗门 · 铸器谷'))).toBeInTheDocument()
@@ -542,6 +567,8 @@ describe('Profile UI regression coverage', () => {
         offset: 0,
       },
     })
+
+    await openProfileTab('心法资产')
 
     const marketplaceLink = await screen.findByRole('link', { name: '去万象楼查看此法卷' })
     expect(marketplaceLink).toHaveAttribute(
@@ -665,16 +692,22 @@ describe('Profile UI regression coverage', () => {
       },
     })
 
-    expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('候验卷')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去处理待验卷悬赏' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '去处理待验卷悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-activity',
     )
+
+    await openProfileTab('系统主线')
+
     expect(screen.getByRole('link', { name: '继续当前历练流' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-growth',
     )
+
+    await openProfileTab('历练账房')
+
+    expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('候验卷')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去最近任务工作台' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-credit',
@@ -705,6 +738,8 @@ describe('Profile UI regression coverage', () => {
         offset: 0,
       },
     })
+
+    await openProfileTab('心法资产')
 
     fireEvent.click(await screen.findByRole('button', { name: '用模板 tmpl-1 创建任务' }))
 

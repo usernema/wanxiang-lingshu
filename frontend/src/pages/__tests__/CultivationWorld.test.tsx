@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import CultivationWorld from "@/pages/CultivationWorld";
 import { renderWithProviders } from "@/test/renderWithProviders";
@@ -67,6 +67,14 @@ describe("CultivationWorld", () => {
         ],
         risk_flags: [],
         evaluation_summary: "当前处于稳定交付阶段。",
+        autopilot_state: "healthy_autopilot",
+        next_action: {
+          key: "healthy_autopilot",
+          title: "维持自动流转并扩大样本",
+          description: "主线状态健康，系统会继续接任务、沉淀经验并扩大复用。",
+          href: "/onboarding",
+          cta: "查看代理看板",
+        },
         last_evaluated_at: "2026-03-15T00:00:00.000Z",
         updated_at: "2026-03-15T00:00:00.000Z",
         created_at: "2026-03-15T00:00:00.000Z",
@@ -188,9 +196,10 @@ describe("CultivationWorld", () => {
     expect(await screen.findByText("万象楼 / 宗门世界")).toBeInTheDocument();
     expect(await screen.findByText("世界视角总结")).toBeInTheDocument();
     expect(screen.getByText("你的当前道途")).toBeInTheDocument();
+    expect(screen.getByText("系统主线 · 自动流转稳定")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "宗门观察" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "入宗工作台" })).toBeInTheDocument();
     expect(screen.getByText("宗门总榜")).toBeInTheDocument();
-    expect(screen.getByText("五境界修行图")).toBeInTheDocument();
-    expect(screen.getByText("散修 → 入宗主线")).toBeInTheDocument();
     expect(screen.getByText("当前境界")).toBeInTheDocument();
     expect(screen.getAllByText("金丹期").length).toBeGreaterThan(0);
     expect(screen.getAllByText("铸器谷").length).toBeGreaterThan(0);
@@ -200,6 +209,10 @@ describe("CultivationWorld", () => {
     expect(
       screen.getByText("继续完成真实自动化任务，并把成功经验沉淀成公开法卷。"),
     ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "入宗工作台" }));
+    expect(screen.getByText("五境界修行图")).toBeInTheDocument();
+    expect(screen.getByText("散修 → 入宗主线")).toBeInTheDocument();
   });
 
   it("separates formal sect membership from recommended route", async () => {
@@ -230,6 +243,14 @@ describe("CultivationWorld", () => {
         suggested_actions: ["继续积累内容交付闭环。"],
         risk_flags: [],
         evaluation_summary: "当前处于稳定交付阶段。",
+        autopilot_state: "promotion_window",
+        next_action: {
+          key: "promotion_window",
+          title: "进入晋级窗口",
+          description: "当前主线已经比较稳定，下一步是补齐最后一项证据。",
+          href: "/profile?source=growth-promotion",
+          cta: "查看成长档案",
+        },
         last_evaluated_at: "2026-03-15T00:00:00.000Z",
         updated_at: "2026-03-15T00:00:00.000Z",
         created_at: "2026-03-15T00:00:00.000Z",
@@ -282,6 +303,8 @@ describe("CultivationWorld", () => {
 
     expect(await screen.findByText("正式宗门")).toBeInTheDocument();
     expect(screen.getByText("推荐路线")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "入宗工作台" }));
     expect(screen.getByText("当前正式宗门 · 铸器谷")).toBeInTheDocument();
     expect(screen.getByText("推荐宗门 · 御灵宗")).toBeInTheDocument();
     expect(screen.getByText("转宗审议：御灵宗")).toBeInTheDocument();

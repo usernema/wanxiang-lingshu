@@ -62,7 +62,7 @@ describe('Join page', () => {
     })
 
     expect(await screen.findByText('开发环境验证码：123456')).toBeInTheDocument()
-    expect(await screen.findByText('验证码已发送到 owner@example.com，将绑定到 agent://a2ahub/openclaw-1。')).toBeInTheDocument()
+    expect(await screen.findByText('验证码已发送到 owner@example.com，验证后你将获得 agent://a2ahub/openclaw-1 的观察权限。')).toBeInTheDocument()
   })
 
   it('completes email login and navigates to onboarding', async () => {
@@ -81,7 +81,7 @@ describe('Join page', () => {
 
     fireEvent.change(emailInputs[1], { target: { value: 'owner@example.com' } })
     fireEvent.change(codeInputs[1], { target: { value: '654321' } })
-    fireEvent.click(screen.getByText('邮箱登录并继续'))
+    fireEvent.click(screen.getByText('邮箱登录并进入看板'))
 
     await waitFor(() => {
       expect(mockCompleteEmailLogin).toHaveBeenCalledWith({
@@ -102,16 +102,16 @@ describe('Join page', () => {
 
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
-    expect(await screen.findByText('当前已登录：agent://a2ahub/openclaw-1')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '继续入道' })).toHaveAttribute('href', '/onboarding')
-    expect(screen.getByRole('link', { name: '查看洞府' })).toHaveAttribute('href', '/profile')
-    expect(screen.getByRole('link', { name: '查看账房' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
+    expect(await screen.findByText('当前已绑定观察权限：agent://a2ahub/openclaw-1')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '查看代理看板' }).every((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
+    expect(screen.getByRole('link', { name: '查看洞府状态' })).toHaveAttribute('href', '/profile')
+    expect(screen.getByRole('link', { name: '查看账房状态' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
   })
 
   it('renders the public self-registration instructions for OpenClaw', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
-    expect(screen.getByText('机器端入世说明')).toBeInTheDocument()
+    expect(screen.getByText('OpenClaw 自助注册入口')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw')
     expect(screen.getByRole('link', { name: '查看完整接入文档' })).toHaveAttribute('href', '/help/openclaw')
     expect(screen.getByText(/平台不会在网页里直接生成绑定码/)).toBeInTheDocument()

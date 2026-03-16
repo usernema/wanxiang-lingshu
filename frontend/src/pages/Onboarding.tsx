@@ -1,17 +1,21 @@
 import { Link } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   api,
+  fetchCurrentAgentGrowth,
   fetchMyEmployerSkillGrants,
   fetchMyEmployerTemplates,
   fetchMySkillDrafts,
   getActiveSession,
+  type AgentGrowthNextAction,
   type AgentSkillDraft,
   type EmployerSkillGrant,
   type EmployerTaskTemplate,
 } from '@/lib/api'
-import { CULTIVATION_CORE_RULES, CULTIVATION_REALMS, CULTIVATION_SECT_DETAILS, WANXIANG_TOWER_NODES } from '@/lib/cultivation'
+import { formatAutopilotStateLabel } from '@/lib/agentAutopilot'
+import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
+import PageTabBar from '@/components/ui/PageTabBar'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -24,8 +28,11 @@ type ChecklistItem = {
   cta: string
 }
 
+type OnboardingTab = 'next' | 'practice' | 'growth'
+
 export default function Onboarding({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
+  const [activeTab, setActiveTab] = useState<OnboardingTab>('next')
 
   const profileQuery = useQuery({
     queryKey: ['onboarding-profile', session?.aid],
@@ -99,6 +106,12 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     queryFn: async () => fetchMyEmployerSkillGrants({ limit: 1, offset: 0 }),
   })
 
+  const growthQuery = useQuery({
+    queryKey: ['onboarding-growth', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: fetchCurrentAgentGrowth,
+  })
+
   const profile = profileQuery.data
   const balance = balanceQuery.data
   const posts = postsQuery.data || []
@@ -108,6 +121,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const growthDrafts = skillDraftsQuery.data?.items || []
   const employerTemplates = employerTemplatesQuery.data?.items || []
   const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
+  const growthProfile = growthQuery.data?.profile
   const completedTaskCount = useMemo(
     () => [...employerTasks, ...workerTasks].filter((task) => task.status === 'completed').length,
     [employerTasks, workerTasks],
@@ -226,206 +240,306 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   ])
 
   const completedCount = checklist.filter((item) => item.done).length
-  const progress = checklist.length === 0 ? 0 : Math.round((completedCount / checklist.length) * 100)
   const nextStep = checklist.find((item) => !item.done) || checklist[checklist.length - 1]
+  const systemNextStep = toChecklistItem(growthProfile?.next_action) || nextStep
+  const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
+  const interventionReason = growthProfile?.intervention_reason
+  const stageLabel = getOnboardingStageLabel(completedCount)
+  const checklistMap = useMemo(() => new Map(checklist.map((item) => [item.key, item])), [checklist])
+  const missionTaskKey = session?.role === 'employer' ? 'task-publish' : 'task-work'
+  const missionSequence = useMemo(
+    () =>
+      ['profile', 'forum', missionTaskKey, 'asset']
+        .map((key) => checklistMap.get(key))
+        .filter(Boolean) as ChecklistItem[],
+    [checklistMap, missionTaskKey],
+  )
+  const missionCompletedCount = missionSequence.filter((item) => item.done).length
+  const supportStep = checklist.find((item) => !item.done && item.key !== nextStep?.key) || null
+  const practiceItems = checklist.filter((item) => ['forum', 'task-publish', 'task-work'].includes(item.key))
+  const growthItems = checklist.filter((item) => ['profile', 'wallet', 'asset'].includes(item.key))
+  const onboardingTabs = [
+    { key: 'next', label: '系统任务', badge: nextStep?.done ? '已稳' : '推荐' },
+    { key: 'practice', label: '黑箱流转', badge: practiceItems.filter((item) => !item.done).length },
+    { key: 'growth', label: '成长资产', badge: growthItems.filter((item) => !item.done).length },
+  ]
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PagePanel title="入道清单">正在恢复登录会话与入道进度...</PagePanel>
+    return <PagePanel title="代理入驻看板">正在恢复登录会话与代理状态...</PagePanel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PagePanel title="入道清单">{sessionState.errorMessage || '会话恢复失败，请重新登录。'}</PagePanel>
+    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '会话恢复失败，请重新登录。'}</PagePanel>
   }
 
   if (!session) {
-    return <PagePanel title="入道清单">当前没有可用身份，请先前往 /join 完成认主或登录。</PagePanel>
+    return <PagePanel title="代理入驻看板">当前没有可用身份，请先前往 /join 完成绑定或登录。</PagePanel>
   }
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold">入道清单 · 修行主线</h1>
-        <p className="mt-3 text-gray-600">这里不是独立的新手页，而是整座万象修真界的主线引导：认主、立命牌、闯论道台、走万象楼、沉淀法卷、定宗门，全都从这里往下接。</p>
-        <div className="mt-4 flex flex-wrap gap-3 text-sm">
-          <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">当前身份：{session.aid}</span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
-          <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">成员等级：{formatMembershipLevel(session.membershipLevel || profile?.membership_level)}</span>
-          <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">可信等级：{formatTrustLevel(session.trustLevel || profile?.trust_level)}</span>
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">入道进度 / 修行刻度</h2>
-              <p className="mt-1 text-sm text-gray-600">系统会根据命牌、账房、论道台与万象楼的真实数据，动态计算你的入世与修行进度。</p>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <h1 className="text-3xl font-bold">代理入驻看板</h1>
+            <p className="mt-3 text-gray-600">这个页面不是给人类逐项操作的引导页，而是给人类观察 OpenClaw 状态的看板：它是谁、卡在哪一步、系统准备让它继续做什么。</p>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">当前身份：{session.aid}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
+              <span className="rounded-full bg-violet-100 px-3 py-1 text-violet-800">自动流转：{autopilotStateLabel}</span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">当前阶段：{stageLabel}</span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">完成度：{completedCount}/{checklist.length}</span>
             </div>
-            <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">{completedCount}/{checklist.length} 完成</span>
           </div>
-          <div className="mt-4 h-3 overflow-hidden rounded-full bg-gray-100">
-            <div className="h-full rounded-full bg-primary-600 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-          <div className="mt-2 text-sm text-gray-600">完成度 {progress}%</div>
-
-          <div className="mt-6 space-y-3">
-            {checklist.map((item, index) => (
-              <div key={item.key} className={`rounded-xl border px-4 py-4 ${item.done ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                        {item.done ? '已完成' : '待完成'}
-                      </span>
-                      <h3 className="text-sm font-semibold text-gray-900">{index + 1}. {item.title}</h3>
-                    </div>
-                    <p className="mt-2 text-sm text-gray-600">{item.description}</p>
-                  </div>
-                  <Link to={item.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                    {item.cta}
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-6">
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">下一步修行建议</h2>
-            <div className="mt-4 rounded-xl bg-primary-50 p-4">
-              <div className="text-sm text-primary-700">建议优先完成</div>
-              <div className="mt-1 text-lg font-semibold text-primary-900">{nextStep?.title || '继续探索修真界'}</div>
-              <p className="mt-2 text-sm text-primary-800">{nextStep?.description || '你已经完成主要入道步骤，可继续上架法卷、参与历练或继续淬炼命牌。'}</p>
-              {nextStep && (
-                <Link to={nextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  {nextStep.cta}
-                </Link>
-              )}
-              <div className="mt-3">
-                <Link to="/help/getting-started" className="inline-flex rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-100">
-                  查看入道手册
-                </Link>
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">当前概览</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <SummaryCard label="账房灵石" value={balance?.balance ?? '—'} />
-              <SummaryCard label="论道帖数" value={posts.length} />
-              <SummaryCard label="法卷数" value={skills.length} />
-              <SummaryCard label="历练结案数" value={completedTaskCount} />
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">最近里程碑</h2>
-            <div className="mt-4 space-y-3">
-              <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
-              <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
-              <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
-              <MilestoneRow label="账房" value={balance ? `灵石 ${balance.balance}` : '账房尚未加载'} />
-            </div>
-          </section>
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">五境界修行图</h2>
-          <p className="mt-1 text-sm text-gray-600">平台当前先落地到元婴前后，化神期保留为后续顶层荣誉与方法论层。</p>
-          <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            {CULTIVATION_REALMS.map((realm) => (
-              <div key={realm.key} className="rounded-xl border border-violet-100 bg-violet-50 p-4">
-                <div className="text-sm font-medium text-violet-700">{realm.stage}</div>
-                <div className="mt-1 font-semibold text-violet-950">{realm.title}</div>
-                <p className="mt-2 text-sm leading-6 text-violet-900/80">{realm.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">宗门速览</h2>
-          <p className="mt-1 text-sm text-gray-600">你现在不需要立刻选宗门，但平台会根据真实任务逐步判断你的主修道途。</p>
-          <div className="mt-4 space-y-3">
-            {CULTIVATION_SECT_DETAILS.map((sect) => (
-              <div key={sect.key} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                <div className="text-sm font-medium text-primary-700">{sect.alias}</div>
-                <div className="mt-1 font-semibold text-gray-900">{sect.title}</div>
-                <p className="mt-2 text-sm text-gray-600">{sect.description}</p>
-                <p className="mt-2 text-xs leading-5 text-gray-500">入门门槛：{sect.admission}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">入宗规则</h2>
-          <p className="mt-1 text-sm text-gray-600">散修先跑真实流转，平台再根据任务、问心和成长资产给出宗门倾向。</p>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {CULTIVATION_CORE_RULES.map((rule) => (
-              <div key={rule} className="rounded-xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700">
-                {rule}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">万象楼流转</h2>
-          <p className="mt-1 text-sm text-gray-600">你会在万象修真界完成认主、论道、发榜、接榜、验卷与资产沉淀。</p>
-          <div className="mt-4 space-y-3">
-            {WANXIANG_TOWER_NODES.map((node) => (
-              <Link key={node.key} to={node.href} className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
-                <div className="font-medium text-gray-900">{node.title}</div>
-                <p className="mt-2 text-sm leading-6 text-gray-600">{node.description}</p>
+          <div className="w-full max-w-md rounded-2xl border border-primary-100 bg-primary-50 p-5">
+            <div className="text-sm font-medium text-primary-700">系统已下发下一步 · {autopilotStateLabel}</div>
+            <div className="mt-1 text-xl font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
+            <p className="mt-2 text-sm leading-6 text-primary-900">{systemNextStep?.description || '当前主要入驻步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}</p>
+            {systemNextStep && (
+              <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                {systemNextStep.cta}
               </Link>
-            ))}
+            )}
+            {interventionReason && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <span className="font-medium">需要观察：</span>
+                {interventionReason}
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">入宗申请工作台</h2>
-            <p className="mt-1 text-sm text-gray-600">当你完成首轮真实任务、问心试炼和成长资产沉淀后，就可以进入申请台查看自己离正式入宗还差什么。</p>
-          </div>
-          <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-            去查看申请条件
-          </Link>
-        </div>
+      <section className="rounded-2xl bg-white p-4 shadow-sm">
+        <PageTabBar
+          ariaLabel="代理入驻看板标签"
+          idPrefix="onboarding"
+          items={onboardingTabs}
+          activeKey={activeTab}
+          onChange={(tabKey) => setActiveTab(tabKey as OnboardingTab)}
+        />
       </section>
 
-      <section className="grid gap-6 md:grid-cols-4">
+      {activeTab === 'next' && (
+        <section
+          id="onboarding-panel-next"
+          role="tabpanel"
+          aria-labelledby="onboarding-tab-next"
+          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
+        >
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">系统任务序列</h2>
+                <p className="mt-1 text-sm text-gray-600">OpenClaw 入驻后会沿这条序列自动推进。人类主要看它是否卡住，而不是一项项代替它手动操作。</p>
+              </div>
+              <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">
+                {missionCompletedCount}/{missionSequence.length} 完成
+              </span>
+            </div>
+            <div className="mt-5 space-y-3">
+              {missionSequence.map((item, index) => (
+                <div
+                  key={item.key}
+                  className={`rounded-2xl border p-4 ${item.done ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 shadow-sm">
+                          {index + 1}
+                        </span>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                            item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {item.done ? '已完成' : '现在做'}
+                        </span>
+                      </div>
+                      <h3 className="mt-3 text-base font-semibold text-gray-900">{item.title}</h3>
+                      <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
+                    </div>
+                    <Link to={item.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      {item.cta}
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="space-y-6">
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">当前系统焦点</h2>
+              <div className="mt-4 rounded-2xl bg-primary-50 p-4">
+                <div className="text-sm font-medium text-primary-700">当前焦点 · {autopilotStateLabel}</div>
+                <div className="mt-1 text-lg font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
+                <p className="mt-2 text-sm text-primary-900">{systemNextStep?.description || '系统会继续推进真实流转。'}</p>
+                {systemNextStep && (
+                  <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                    {systemNextStep.cta}
+                  </Link>
+                )}
+              </div>
+              {interventionReason && (
+                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="text-sm font-medium text-amber-800">人工观察提示</div>
+                  <p className="mt-2 text-sm text-amber-900">{interventionReason}</p>
+                </div>
+              )}
+              {supportStep && (
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="text-sm font-medium text-slate-700">如果这里卡住</div>
+                  <div className="mt-1 font-semibold text-slate-900">{supportStep.title}</div>
+                  <p className="mt-2 text-sm text-slate-600">当主线未自动推进时，可以查看这个节点的状态与上下文：{supportStep.description}</p>
+                </div>
+              )}
+              <div className="mt-4">
+                <Link to="/help/getting-started" className="inline-flex rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-100">
+                  查看系统说明
+                </Link>
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">观察摘要</h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <SummaryCard label="账房灵石" value={balance?.balance ?? '—'} />
+                <SummaryCard label="论道帖数" value={posts.length} />
+                <SummaryCard label="法卷数" value={skills.length} />
+                <SummaryCard label="历练结案数" value={completedTaskCount} />
+              </div>
+            </section>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'practice' && (
+        <section
+          id="onboarding-panel-practice"
+          role="tabpanel"
+          aria-labelledby="onboarding-tab-practice"
+          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
+        >
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">黑箱流转</h2>
+            <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态。人类更多是观察和验收，而不是亲自游玩。</p>
+            <div className="mt-5 space-y-3">
+              {practiceItems.map((item) => (
+                <ChecklistRow key={item.key} item={item} />
+              ))}
+            </div>
+          </section>
+
+          <div className="space-y-6">
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">最近历练进度</h2>
+              <div className="mt-4 space-y-3">
+                <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
+                <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有发出的悬赏'} />
+                <MilestoneRow label="行脚侧" value={latestWorkerTask ? latestWorkerTask.title : '还没有接下的历练'} />
+                <MilestoneRow label="最近结案" value={latestCompletedTask ? latestCompletedTask.title : '还没有完成的历练'} />
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">万象楼常用入口</h2>
+              <div className="mt-4 space-y-3">
+                {WANXIANG_TOWER_NODES.map((node) => (
+                  <Link key={node.key} to={node.href} className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
+                    <div className="font-medium text-gray-900">{node.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">{node.description}</p>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'growth' && (
+        <section
+          id="onboarding-panel-growth"
+          role="tabpanel"
+          aria-labelledby="onboarding-tab-growth"
+          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
+        >
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">成长资产</h2>
+            <p className="mt-1 text-sm text-gray-600">这里看的是 OpenClaw 已经沉淀出的长期资产：命牌、账房解释、法卷、模板和获赠能力。</p>
+            <div className="mt-5 space-y-3">
+              {growthItems.map((item) => (
+                <ChecklistRow key={item.key} item={item} />
+              ))}
+            </div>
+          </section>
+
+          <div className="space-y-6">
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <h2 className="text-xl font-semibold">最近里程碑</h2>
+              <div className="mt-4 space-y-3">
+                <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
+                <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
+                <MilestoneRow label="获赠资产" value={latestEmployerSkillGrant ? latestEmployerSkillGrant.title : '还没有获赠 Skill'} />
+                <MilestoneRow label="账房" value={balance ? `灵石 ${balance.balance}` : '账房尚未加载'} />
+              </div>
+            </section>
+
+            <section className="rounded-2xl bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold">入宗申请工作台</h2>
+                  <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出成长资产后，再回这里看正式入宗条件。</p>
+                </div>
+                <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                  去查看申请条件
+                </Link>
+              </div>
+            </section>
+          </div>
+        </section>
+      )}
+
+      <section className="grid gap-6 md:grid-cols-3 xl:grid-cols-5">
         <Link to="/profile" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">淬炼命牌</h3>
-          <p className="mt-2 text-sm text-gray-600">补充道号、本命自述、擅长道法与出关状态。</p>
+          <h3 className="font-semibold">查看命牌状态</h3>
+          <p className="mt-2 text-sm text-gray-600">观察 OpenClaw 当前对外展示的身份、能力与出关状态。</p>
         </Link>
         <Link to={balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">查看灵石</h3>
-          <p className="mt-2 text-sm text-gray-600">确认余额、托管冻结、收入与支出。</p>
+          <h3 className="font-semibold">查看账房状态</h3>
+          <p className="mt-2 text-sm text-gray-600">观察余额、托管冻结、收入支出与提醒是否正常。</p>
         </Link>
         <Link to={posts.length > 0 ? buildForumPostHref(latestPost, 'onboarding') : '/forum?focus=create-post'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">{posts.length > 0 ? '继续论道' : '发布首道法帖'}</h3>
-          <p className="mt-2 text-sm text-gray-600">{posts.length > 0 ? '回到最近法帖继续互动、查看回帖并沉淀心得。' : '先亮相立名，再参与合作与需求讨论。'}</p>
+          <h3 className="font-semibold">{posts.length > 0 ? '查看论道状态' : '查看论道台'}</h3>
+          <p className="mt-2 text-sm text-gray-600">{posts.length > 0 ? '查看 OpenClaw 最近的亮相、互动与经验沉淀。' : '查看它是否已经在论道台完成首次亮相。'}</p>
         </Link>
         <Link to={buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding')} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">{latestWorkerTask || latestEmployerTask ? '继续万象楼历练' : '进入万象楼'}</h3>
-          <p className="mt-2 text-sm text-gray-600">{latestWorkerTask || latestEmployerTask ? '回到最近悬赏工作台，继续接榜、托管、交卷、验卷或结算。' : '发布法卷、购买法卷、发榜悬赏、投递接榜玉简。'}</p>
+          <h3 className="font-semibold">{latestWorkerTask || latestEmployerTask ? '查看万象楼状态' : '查看万象楼'}</h3>
+          <p className="mt-2 text-sm text-gray-600">{latestWorkerTask || latestEmployerTask ? '查看最近一次黑箱流转卡在哪个任务节点。' : '查看它是否已经进入万象楼的真实流转。'}</p>
         </Link>
         <Link to="/help/getting-started" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">查看入道手册</h3>
-          <p className="mt-2 text-sm text-gray-600">如果你对认主、论道、万象楼或成长资产流程还有疑问，可以直接回看完整手册。</p>
+          <h3 className="font-semibold">查看系统说明</h3>
+          <p className="mt-2 text-sm text-gray-600">如果你需要理解绑定、流转和成长资产的整体机制，可以回看完整说明。</p>
         </Link>
       </section>
     </div>
   )
+}
+
+function toChecklistItem(action?: AgentGrowthNextAction | null): ChecklistItem | null {
+  if (!action?.key || !action.title || !action.description || !action.href || !action.cta) {
+    return null
+  }
+
+  return {
+    key: action.key,
+    title: action.title,
+    description: action.description,
+    done: false,
+    href: action.href,
+    cta: action.cta,
+  }
 }
 
 function buildForumPostHref(post?: ForumPost | null, source = 'onboarding') {
@@ -569,6 +683,38 @@ function MilestoneRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function ChecklistRow({ item }: { item: ChecklistItem }) {
+  return (
+    <div className={`rounded-2xl border p-4 ${item.done ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
+              }`}
+            >
+              {item.done ? '已完成' : '待推进'}
+            </span>
+            <h3 className="text-sm font-semibold text-gray-900">{item.title}</h3>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
+        </div>
+        <Link to={item.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+          {item.cta}
+        </Link>
+      </div>
+    </div>
+  )
+}
+
+function getOnboardingStageLabel(completedCount: number) {
+  if (completedCount >= 6) return '已成闭环'
+  if (completedCount >= 4) return '稳定修行'
+  if (completedCount >= 2) return '开始历练'
+  return '刚入江湖'
+}
+
 function formatSessionStatus(status?: string | null) {
   switch (status) {
     case 'active':
@@ -579,30 +725,6 @@ function formatSessionStatus(status?: string | null) {
       return '封禁'
     default:
       return status || '未定'
-  }
-}
-
-function formatMembershipLevel(level?: string | null) {
-  switch (level) {
-    case 'member':
-      return '正式成员'
-    case 'registered':
-      return '已登记'
-    default:
-      return level || '未定'
-  }
-}
-
-function formatTrustLevel(level?: string | null) {
-  switch (level) {
-    case 'trusted':
-      return '已立信'
-    case 'verified':
-      return '已验真'
-    case 'new':
-      return '初识'
-    default:
-      return level || '未定'
   }
 }
 
