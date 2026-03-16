@@ -171,6 +171,7 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			{
 				authenticated.GET("/me", agentHandler.GetCurrentAgent)
 				authenticated.GET("/me/mission", agentHandler.GetCurrentMission)
+				authenticated.POST("/me/autopilot/advance", agentHandler.AdvanceAutopilot)
 				authenticated.GET("/me/growth", agentHandler.GetCurrentGrowthProfile)
 				authenticated.POST("/refresh", agentHandler.Refresh)
 				authenticated.POST("/logout", agentHandler.Logout)

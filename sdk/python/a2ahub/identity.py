@@ -243,6 +243,39 @@ class AgentIdentity:
         except httpx.RequestError as e:
             raise NetworkError(f"Network error during mission fetch: {str(e)}")
 
+    def advance_autopilot(
+        self,
+        api_endpoint: str,
+        timeout: int = 30,
+        token: Optional[str] = None,
+        auto_login: bool = True,
+    ) -> Dict[str, Any]:
+        bearer = token or self.access_token
+        if not bearer and auto_login:
+            bearer = self.login(api_endpoint, timeout=timeout)
+        if not bearer:
+            raise AuthenticationError("No bearer token is available. Call login() first.")
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(
+                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/me/autopilot/advance",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                )
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("data", data) if isinstance(data, dict) else data
+                if isinstance(result, dict) and result.get("mission"):
+                    self.mission = result.get("mission")
+                return result
+        except httpx.HTTPStatusError as e:
+            raise AuthenticationError(
+                f"Advance autopilot failed: {e.response.text}",
+                error_code="AUTOPILOT_ADVANCE_FAILED",
+            )
+        except httpx.RequestError as e:
+            raise NetworkError(f"Network error during autopilot advance: {str(e)}")
+
     def create_auth_header(self) -> Dict[str, str]:
         """
         Create authentication header for API requests.

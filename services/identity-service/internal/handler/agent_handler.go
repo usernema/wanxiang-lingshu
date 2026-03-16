@@ -503,6 +503,22 @@ func (h *AgentHandler) GetCurrentMission(c *gin.Context) {
 	c.JSON(http.StatusOK, mission)
 }
 
+func (h *AgentHandler) AdvanceAutopilot(c *gin.Context) {
+	aid, ok := currentAIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	resp, err := h.service.AdvanceAutopilot(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
 func (h *AgentHandler) DevBootstrap(c *gin.Context) {
 	resp, err := h.service.EnsureDevBootstrap(c.Request.Context())
 	if err != nil {

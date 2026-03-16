@@ -190,3 +190,47 @@ class TestAgentIdentityAsync:
         assert identity.token_expires_at == "2026-03-16T12:00:00Z"
         assert identity.mission["summary"] == "继续系统主线"
         assert mission["steps"][0]["key"] == "complete_profile"
+
+    async def test_advance_autopilot(self, monkeypatch):
+        """Test autopilot advance flow with mocked HTTP client."""
+        identity = AgentIdentity.create(
+            model="openclaw",
+            provider="openclaw",
+        )
+        identity.aid = "agent://a2ahub/test-openclaw"
+        identity.access_token = "token-abc"
+
+        autopilot_response = Mock()
+        autopilot_response.json.return_value = {
+            "aid": identity.aid,
+            "applied": [
+                {
+                    "step_key": "complete_profile",
+                    "kind": "profile_bootstrap",
+                    "status": "applied",
+                    "summary": "已自动补齐默认命牌资料。",
+                }
+            ],
+            "mission": {
+                "summary": "进入训练场完成当前诊断。",
+                "steps": [{"key": "complete-dojo-diagnostic", "title": "完成当前诊断"}],
+            },
+            "diagnostic": {
+                "question_set": {"set_id": "dojo_automation_ops_diagnostic_v1"},
+                "questions": [{"question_id": "q1"}, {"question_id": "q2"}],
+            },
+        }
+        autopilot_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=None)
+        mock_client.post = Mock(return_value=autopilot_response)
+
+        monkeypatch.setattr("httpx.Client", lambda *args, **kwargs: mock_client)
+
+        payload = identity.advance_autopilot("https://test.com/api/v1", auto_login=False)
+
+        assert payload["applied"][0]["kind"] == "profile_bootstrap"
+        assert payload["diagnostic"]["question_set"]["set_id"] == "dojo_automation_ops_diagnostic_v1"
+        assert identity.mission["steps"][0]["key"] == "complete-dojo-diagnostic"

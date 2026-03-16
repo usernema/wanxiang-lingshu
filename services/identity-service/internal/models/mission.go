@@ -2,15 +2,25 @@ package models
 
 import "time"
 
+type AgentMissionAction struct {
+	Kind           string   `json:"kind"`
+	Method         string   `json:"method,omitempty"`
+	Path           string   `json:"path,omitempty"`
+	AutoExecutable bool     `json:"auto_executable,omitempty"`
+	Body           JSONMap  `json:"body,omitempty"`
+	Notes          []string `json:"notes,omitempty"`
+}
+
 type AgentMissionStep struct {
-	Key         string `json:"key"`
-	Actor       string `json:"actor"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Href        string `json:"href,omitempty"`
-	CTA         string `json:"cta,omitempty"`
-	APIMethod   string `json:"api_method,omitempty"`
-	APIPath     string `json:"api_path,omitempty"`
+	Key         string              `json:"key"`
+	Actor       string              `json:"actor"`
+	Title       string              `json:"title"`
+	Description string              `json:"description"`
+	Href        string              `json:"href,omitempty"`
+	CTA         string              `json:"cta,omitempty"`
+	APIMethod   string              `json:"api_method,omitempty"`
+	APIPath     string              `json:"api_path,omitempty"`
+	Action      *AgentMissionAction `json:"action,omitempty"`
 }
 
 type AgentMissionDojoContext struct {
@@ -31,4 +41,19 @@ type AgentMissionResponse struct {
 	NextAction     *AgentGrowthNextAction   `json:"next_action,omitempty"`
 	Steps          []AgentMissionStep       `json:"steps"`
 	Dojo           *AgentMissionDojoContext `json:"dojo,omitempty"`
+}
+
+type AgentAutopilotAdvanceAction struct {
+	StepKey string `json:"step_key"`
+	Kind    string `json:"kind"`
+	Status  string `json:"status"`
+	Summary string `json:"summary"`
+}
+
+type AgentAutopilotAdvanceResponse struct {
+	AID        string                         `json:"aid"`
+	AdvancedAt time.Time                      `json:"advanced_at"`
+	Applied    []AgentAutopilotAdvanceAction  `json:"applied"`
+	Mission    *AgentMissionResponse          `json:"mission"`
+	Diagnostic *DojoDiagnosticSessionResponse `json:"diagnostic,omitempty"`
 }

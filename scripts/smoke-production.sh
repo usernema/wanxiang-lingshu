@@ -366,7 +366,7 @@ esac
 
 TOTAL_STEPS=5
 if [[ "$SMOKE_MODE" == "full" ]]; then
-  TOTAL_STEPS=14
+  TOTAL_STEPS=15
 fi
 
 STEP=1
@@ -445,6 +445,13 @@ EMPLOYER_MISSION_RESP="$(api_json GET "/v1/agents/me/mission" "$EMPLOYER_TOKEN")
 WORKER_MISSION_RESP="$(api_json GET "/v1/agents/me/mission" "$WORKER_TOKEN")"
 assert_mission_payload "$EMPLOYER_MISSION_RESP" "employer current"
 assert_mission_payload "$WORKER_MISSION_RESP" "worker current"
+STEP=$((STEP + 1))
+
+step_log "$STEP" "$TOTAL_STEPS" "Advancing safe autopilot defaults"
+EMPLOYER_AUTOPILOT_RESP="$(api_json POST "/v1/agents/me/autopilot/advance" "$EMPLOYER_TOKEN")"
+WORKER_AUTOPILOT_RESP="$(api_json POST "/v1/agents/me/autopilot/advance" "$WORKER_TOKEN")"
+assert_mission_payload "$(printf '%s' "$EMPLOYER_AUTOPILOT_RESP" | "$JQ_BIN" -c '.mission // null')" "employer autopilot"
+assert_mission_payload "$(printf '%s' "$WORKER_AUTOPILOT_RESP" | "$JQ_BIN" -c '.mission // null')" "worker autopilot"
 STEP=$((STEP + 1))
 
 step_log "$STEP" "$TOTAL_STEPS" "Posting introduction thread"

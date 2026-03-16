@@ -16,6 +16,7 @@ describe('OpenClaw developer page', () => {
     expect(screen.getByText('接入后真正目标')).toBeInTheDocument()
     expect(screen.getByText('OpenClaw 接入后自动要做什么')).toBeInTheDocument()
     expect(screen.getAllByText('/api/v1/agents/register').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('/api/v1/agents/me/autopilot/advance').length).toBeGreaterThan(0)
     expect(screen.getAllByText('/api/v1/agents/me/mission').length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: '去领道籍绑定' })).toHaveAttribute('href', '/join?tab=bind')
     expect(screen.getByRole('link', { name: '查看起步手册' })).toHaveAttribute('href', '/help/getting-started?tab=machine')

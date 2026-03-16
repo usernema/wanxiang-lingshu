@@ -48,6 +48,11 @@ func TestBuildAgentMissionForUnboundOpenClaw(t *testing.T) {
 	assert.Equal(t, "machine", profileStep.Actor)
 	assert.Equal(t, "PUT", profileStep.APIMethod)
 	assert.Equal(t, "/api/v1/agents/me/profile", profileStep.APIPath)
+	require.NotNil(t, profileStep.Action)
+	assert.Equal(t, "profile_bootstrap", profileStep.Action.Kind)
+	assert.True(t, profileStep.Action.AutoExecutable)
+	assert.Equal(t, "/api/v1/agents/me/profile", profileStep.Action.Path)
+	assert.Equal(t, "OpenClaw 自动流转代理", profileStep.Action.Body["headline"])
 }
 
 func TestBuildAgentMissionIncludesDojoAndGrowthActions(t *testing.T) {
@@ -99,10 +104,16 @@ func TestBuildAgentMissionIncludesDojoAndGrowthActions(t *testing.T) {
 	require.NotNil(t, dojoStep)
 	assert.Equal(t, "POST", dojoStep.APIMethod)
 	assert.Equal(t, "/api/v1/dojo/diagnostics/start", dojoStep.APIPath)
+	require.NotNil(t, dojoStep.Action)
+	assert.Equal(t, "dojo_start_diagnostic", dojoStep.Action.Kind)
+	assert.True(t, dojoStep.Action.AutoExecutable)
 
 	forumStep := findMissionStep(mission.Steps, "publish_first_signal")
 	require.NotNil(t, forumStep)
-	assert.Equal(t, "/api/v1/forum/posts", forumStep.APIPath)
+	assert.Empty(t, forumStep.APIPath)
+	require.NotNil(t, forumStep.Action)
+	assert.Equal(t, "wait_for_platform_dispatch", forumStep.Action.Kind)
+	assert.False(t, forumStep.Action.AutoExecutable)
 
 	observerStep := findMissionStep(mission.Steps, "observer-dashboard")
 	require.NotNil(t, observerStep)

@@ -29,6 +29,12 @@ def build_parser() -> argparse.ArgumentParser:
     mission.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
     mission.add_argument("--json", action="store_true", help="Print raw mission JSON")
 
+    autopilot = subparsers.add_parser("autopilot", help="Advance safe autopilot steps and return the refreshed mission package")
+    autopilot.add_argument("--api-endpoint", default="https://kelibing.shop/api/v1", help="API base URL, e.g. https://kelibing.shop/api/v1")
+    autopilot.add_argument("--keys", required=True, help="Directory containing private_key.pem/public_key.pem/metadata.json")
+    autopilot.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
+    autopilot.add_argument("--json", action="store_true", help="Print raw autopilot JSON")
+
     return parser
 
 
@@ -79,6 +85,28 @@ def main(argv: Optional[List[str]] = None) -> int:
                 print(f"{index}. [{actor}] {step.get('title', '')}")
                 if step.get("api_path"):
                     print(f"   API: {step.get('api_method', 'GET')} {step.get('api_path')}")
+        return 0
+
+    if args.command == "autopilot":
+        identity = AgentIdentity.load_keys(args.keys)
+        payload = identity.advance_autopilot(args.api_endpoint, timeout=args.timeout)
+
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(f"AID: {identity.aid}")
+            for item in payload.get("applied", []):
+                print(f"- {item.get('step_key', '')}: {item.get('summary', '')}")
+
+            mission = payload.get("mission") or {}
+            if mission:
+                print(f"Mission summary: {mission.get('summary', '')}")
+
+            diagnostic = payload.get("diagnostic") or {}
+            if diagnostic.get("question_set"):
+                question_set = diagnostic["question_set"]
+                question_count = len(diagnostic.get("questions", []))
+                print(f"Diagnostic ready: {question_set.get('set_id', '')} ({question_count} questions)")
         return 0
 
     parser.error(f"Unsupported command: {args.command}")

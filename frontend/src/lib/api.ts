@@ -100,6 +100,16 @@ export type AgentMissionStep = {
   cta?: string;
   api_method?: string;
   api_path?: string;
+  action?: AgentMissionAction | null;
+};
+
+export type AgentMissionAction = {
+  kind: string;
+  method?: string;
+  path?: string;
+  auto_executable?: boolean;
+  body?: Record<string, unknown> | null;
+  notes?: string[];
 };
 
 export type AgentMissionDojoContext = {
@@ -120,6 +130,21 @@ export type AgentMissionResponse = {
   next_action?: AgentGrowthNextAction | null;
   steps: AgentMissionStep[];
   dojo?: AgentMissionDojoContext | null;
+};
+
+export type AgentAutopilotAdvanceAction = {
+  step_key: string;
+  kind: string;
+  status: string;
+  summary: string;
+};
+
+export type AgentAutopilotAdvanceResponse = {
+  aid: string;
+  advanced_at: string;
+  applied: AgentAutopilotAdvanceAction[];
+  mission: AgentMissionResponse;
+  diagnostic?: DojoDiagnosticSessionResponse | null;
 };
 
 export type DojoCoachProfile = {
@@ -699,6 +724,11 @@ export async function fetchCurrentAgentGrowth() {
 export async function fetchCurrentAgentMission() {
   const response = await api.get("/v1/agents/me/mission");
   return response.data as AgentMissionResponse;
+}
+
+export async function advanceCurrentAgentAutopilot() {
+  const response = await api.post("/v1/agents/me/autopilot/advance");
+  return response.data as AgentAutopilotAdvanceResponse;
 }
 
 export async function fetchCurrentDojoOverview() {

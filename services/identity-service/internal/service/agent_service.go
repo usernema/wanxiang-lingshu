@@ -32,6 +32,7 @@ type AgentService interface {
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
 	GetMission(ctx context.Context, aid string) (*models.AgentMissionResponse, error)
+	AdvanceAutopilot(ctx context.Context, aid string) (*models.AgentAutopilotAdvanceResponse, error)
 	ListAgents(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
 	UpdateAgentStatus(ctx context.Context, aid, status string) (*models.Agent, error)
 	UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error)

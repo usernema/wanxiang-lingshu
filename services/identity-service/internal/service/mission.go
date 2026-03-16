@@ -89,7 +89,7 @@ func buildAgentMission(
 
 	appendMissionStep(&mission.Steps, buildBindingMissionStep(agent, bindingKey))
 	appendMissionStep(&mission.Steps, buildDojoMissionStep(dojoOverview))
-	appendMissionStep(&mission.Steps, buildGrowthMissionStep(growthProfile))
+	appendMissionStep(&mission.Steps, buildGrowthMissionStep(agent, growthProfile))
 	appendMissionStep(&mission.Steps, buildObserverMissionStep(agent, growthProfile))
 
 	if len(mission.Steps) == 0 {
@@ -102,6 +102,15 @@ func buildAgentMission(
 			CTA:         "查看系统主线",
 			APIMethod:   "GET",
 			APIPath:     "/api/v1/agents/me/mission",
+			Action: &models.AgentMissionAction{
+				Kind:           "poll_mission",
+				Method:         "GET",
+				Path:           "/api/v1/agents/me/mission",
+				AutoExecutable: true,
+				Notes: []string{
+					"当没有额外阻塞项时，保持登录态并持续轮询 mission。",
+				},
+			},
 		})
 	}
 
@@ -151,6 +160,15 @@ func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.Age
 		CTA:         "去绑定看板",
 		APIMethod:   "POST",
 		APIPath:     "/api/v1/agents/email/register/request-code",
+		Action: &models.AgentMissionAction{
+			Kind:   "observer_email_binding",
+			Method: "POST",
+			Path:   "/api/v1/agents/email/register/request-code",
+			Notes: []string{
+				"由人类观察者提交邮箱与 binding_key 请求验证码。",
+				"完成绑定后，人类后续只使用邮箱验证码登录，不再接触 AID 或私钥。",
+			},
+		},
 	}
 }
 
@@ -170,8 +188,30 @@ func buildDojoMissionStep(dojoOverview *models.AgentDojoOverview) *models.AgentM
 			CTA:         "进入训练场",
 			APIMethod:   "POST",
 			APIPath:     "/api/v1/dojo/diagnostics/start",
+			Action: &models.AgentMissionAction{
+				Kind:           "dojo_start_diagnostic",
+				Method:         "POST",
+				Path:           "/api/v1/dojo/diagnostics/start",
+				AutoExecutable: true,
+				Notes: []string{
+					"这是安全的默认机器动作，可以直接执行。",
+					"执行成功后，再读取当前诊断题集与 attempt。",
+				},
+			},
 		}
 	case "complete_diagnostic":
+		body := models.JSONMap{
+			"attempt_id": "",
+			"answers": []models.JSONMap{
+				{
+					"question_id": "<from:/api/v1/dojo/me/diagnostic>",
+					"answer":      "<model-generated-answer>",
+				},
+			},
+		}
+		if dojoOverview.LastDiagnosticAttempt != nil {
+			body["attempt_id"] = dojoOverview.LastDiagnosticAttempt.AttemptID
+		}
 		return &models.AgentMissionStep{
 			Key:         "complete-dojo-diagnostic",
 			Actor:       "machine",
@@ -181,6 +221,16 @@ func buildDojoMissionStep(dojoOverview *models.AgentDojoOverview) *models.AgentM
 			CTA:         "继续诊断",
 			APIMethod:   "GET/POST",
 			APIPath:     "/api/v1/dojo/me/diagnostic → /api/v1/dojo/diagnostics/submit",
+			Action: &models.AgentMissionAction{
+				Kind:   "dojo_complete_diagnostic",
+				Method: "POST",
+				Path:   "/api/v1/dojo/diagnostics/submit",
+				Body:   body,
+				Notes: []string{
+					"先 GET /api/v1/dojo/me/diagnostic 拉题，再把结构化答案提交到 submit 接口。",
+					"如果 attempt_id 为空，说明需要先执行 dojo_start_diagnostic。",
+				},
+			},
 		}
 	case "follow_remediation_plan":
 		return &models.AgentMissionStep{
@@ -192,6 +242,14 @@ func buildDojoMissionStep(dojoOverview *models.AgentDojoOverview) *models.AgentM
 			CTA:         "查看补训计划",
 			APIMethod:   "GET",
 			APIPath:     "/api/v1/dojo/me/remediation-plans",
+			Action: &models.AgentMissionAction{
+				Kind:   "dojo_fetch_remediation_plan",
+				Method: "GET",
+				Path:   "/api/v1/dojo/me/remediation-plans",
+				Notes: []string{
+					"先读取当前补训计划，再继续执行训练动作。",
+				},
+			},
 		}
 	case "review_mistakes":
 		return &models.AgentMissionStep{
@@ -203,13 +261,21 @@ func buildDojoMissionStep(dojoOverview *models.AgentDojoOverview) *models.AgentM
 			CTA:         "查看错题",
 			APIMethod:   "GET",
 			APIPath:     "/api/v1/dojo/me/mistakes",
+			Action: &models.AgentMissionAction{
+				Kind:   "dojo_review_mistakes",
+				Method: "GET",
+				Path:   "/api/v1/dojo/me/mistakes",
+				Notes: []string{
+					"先读取系统记录的错题与反馈，再决定是否继续接任务。",
+				},
+			},
 		}
 	default:
 		return nil
 	}
 }
 
-func buildGrowthMissionStep(growthProfile *models.AgentGrowthProfile) *models.AgentMissionStep {
+func buildGrowthMissionStep(agent *models.Agent, growthProfile *models.AgentGrowthProfile) *models.AgentMissionStep {
 	if growthProfile == nil || growthProfile.NextAction == nil {
 		return nil
 	}
@@ -227,24 +293,48 @@ func buildGrowthMissionStep(growthProfile *models.AgentGrowthProfile) *models.Ag
 	case "complete_profile":
 		step.APIMethod = "PUT"
 		step.APIPath = "/api/v1/agents/me/profile"
-	case "publish_first_signal":
-		step.APIMethod = "POST"
-		step.APIPath = "/api/v1/forum/posts"
-	case "start_market_loop":
-		step.APIMethod = "GET"
-		step.APIPath = "/api/v1/marketplace/tasks?status=open"
-	case "advance_market_loop":
-		step.APIMethod = "GET"
-		step.APIPath = "/api/v1/marketplace/tasks"
-	case "consolidate_assets":
-		step.APIMethod = "GET"
-		step.APIPath = "/api/v1/marketplace/agents/me/skill-drafts"
+		step.Action = &models.AgentMissionAction{
+			Kind:           "profile_bootstrap",
+			Method:         "PUT",
+			Path:           "/api/v1/agents/me/profile",
+			AutoExecutable: true,
+			Body:           buildMissionProfilePayload(agent),
+			Notes: []string{
+				"这是平台给 OpenClaw 的默认命牌补全包，直接提交即可。",
+				"如果本地模型有更准确的自述，可以在后续阶段再覆盖更新。",
+			},
+		}
+	case "publish_first_signal", "start_market_loop", "advance_market_loop", "consolidate_assets":
+		step.Action = &models.AgentMissionAction{
+			Kind: "wait_for_platform_dispatch",
+			Notes: []string{
+				"这一阶段暂时不要求 OpenClaw 自己猜测额外 API。",
+				"保持 mission 轮询，等待平台后续下发可执行动作或通过 Web 工作台承接。",
+			},
+		}
 	case "promotion_window", "watch_risk":
 		step.APIMethod = "GET"
 		step.APIPath = "/api/v1/agents/me/growth"
+		step.Action = &models.AgentMissionAction{
+			Kind:   "growth_snapshot",
+			Method: "GET",
+			Path:   "/api/v1/agents/me/growth",
+			Notes: []string{
+				"读取最新成长档案与风险结论，不需要猜测其它动作。",
+			},
+		}
 	case "healthy_autopilot":
 		step.APIMethod = "GET"
 		step.APIPath = "/api/v1/agents/me/mission"
+		step.Action = &models.AgentMissionAction{
+			Kind:           "poll_mission",
+			Method:         "GET",
+			Path:           "/api/v1/agents/me/mission",
+			AutoExecutable: true,
+			Notes: []string{
+				"系统主线健康时，只需要继续拉取 mission。",
+			},
+		}
 	}
 
 	return step
@@ -269,6 +359,14 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 		CTA:         "查看观察看板",
 		APIMethod:   "GET",
 		APIPath:     "/api/v1/agents/me/mission",
+		Action: &models.AgentMissionAction{
+			Kind:   "observer_dashboard",
+			Method: "GET",
+			Path:   "/api/v1/agents/me/mission",
+			Notes: []string{
+				"人类只看黑箱结论、告警和资金提醒，不接管机器主线。",
+			},
+		},
 	}
 }
 
@@ -309,4 +407,100 @@ func buildMissionObserverHint(agent *models.Agent, dojoOverview *models.AgentDoj
 		return "训练场存在待处理错题，人类优先看结论和提醒，不要手工重做训练流程。"
 	}
 	return "默认由系统推进主线，人类只在冻结、风险或验收告警出现时介入。"
+}
+
+func buildMissionProfilePayload(agent *models.Agent) models.JSONMap {
+	req := buildAutopilotProfileUpdateRequest(agent)
+	if req == nil {
+		return nil
+	}
+
+	return models.JSONMap{
+		"headline":            req.Headline,
+		"bio":                 req.Bio,
+		"availability_status": req.AvailabilityStatus,
+		"capabilities":        req.Capabilities,
+	}
+}
+
+func buildAutopilotProfileUpdateRequest(agent *models.Agent) *UpdateProfileRequest {
+	if agent == nil {
+		return nil
+	}
+
+	capabilities := normalizeMissionCapabilities(agent.Capabilities, agent.Provider, agent.Model)
+	headline := strings.TrimSpace(agent.Headline)
+	if headline == "" {
+		headline = fmt.Sprintf("%s 自动流转代理", missionProviderLabel(agent.Provider, agent.Model))
+	}
+
+	bio := strings.TrimSpace(agent.Bio)
+	if bio == "" {
+		bio = fmt.Sprintf(
+			"由 %s/%s 驱动，已接入 A2Ahub。默认按 mission 自动完成训练场诊断、真实流转与经验沉淀。",
+			defaultMissionToken(agent.Provider, "openclaw"),
+			defaultMissionToken(agent.Model, "openclaw"),
+		)
+	}
+
+	availabilityStatus := strings.TrimSpace(agent.AvailabilityStatus)
+	if availabilityStatus == "" {
+		availabilityStatus = "available"
+	}
+
+	return &UpdateProfileRequest{
+		Headline:           headline,
+		Bio:                bio,
+		AvailabilityStatus: availabilityStatus,
+		Capabilities:       capabilities,
+	}
+}
+
+func missionProviderLabel(provider, model string) string {
+	if strings.EqualFold(strings.TrimSpace(provider), "openclaw") || strings.EqualFold(strings.TrimSpace(model), "openclaw") {
+		return "OpenClaw"
+	}
+	return strings.ToUpper(defaultMissionToken(provider, "Agent"))
+}
+
+func defaultMissionToken(value, fallback string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return fallback
+	}
+	return normalized
+}
+
+func normalizeMissionCapabilities(capabilities models.Capabilities, provider, model string) []string {
+	normalized := make([]string, 0, len(capabilities)+3)
+	seen := map[string]struct{}{}
+
+	add := func(value string) {
+		key := strings.ToLower(strings.TrimSpace(value))
+		if key == "" {
+			return
+		}
+		if _, exists := seen[key]; exists {
+			return
+		}
+		seen[key] = struct{}{}
+		normalized = append(normalized, key)
+	}
+
+	for _, capability := range capabilities {
+		add(capability)
+	}
+
+	if len(normalized) == 0 {
+		if strings.EqualFold(strings.TrimSpace(provider), "openclaw") || strings.EqualFold(strings.TrimSpace(model), "openclaw") {
+			add("automation")
+			add("planning")
+			add("execution")
+		} else {
+			add("analysis")
+			add("execution")
+		}
+	}
+
+	return normalized
 }
