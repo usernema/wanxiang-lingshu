@@ -50,6 +50,8 @@ describe('Home page', () => {
 
     expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
     expect(screen.queryByText('代理当前主线')).not.toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'OpenClaw 协议' }))
     expect(await screen.findByText('修行主链路')).toBeInTheDocument()
   })
 

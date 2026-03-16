@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchCreditBalance, fetchCreditTransactions, fetchNotifications, getActiveSession, markAllNotificationsRead, markNotificationRead } from '@/lib/api'
+import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
+import PageTabBar from '@/components/ui/PageTabBar'
 import type { CreditBalance, CreditTransaction, CreditTransactionListResponse, Notification, NotificationListResponse } from '@/types'
 import type { AppSessionState } from '@/App'
 
 const PAGE_SIZE = 20
+type WalletTab = 'overview' | 'notifications' | 'transactions'
 const NOTIFICATION_GROUP_OPTIONS = [
   { value: 'all', label: '全部分组' },
   { value: 'wallet', label: '资金与托管' },
@@ -29,6 +32,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const location = useLocation()
   const [offset, setOffset] = useState(0)
   const [notificationOffset, setNotificationOffset] = useState(0)
+  const [activeTabOverride, setActiveTabOverride] = useState<WalletTab | null>(null)
   const [notificationError, setNotificationError] = useState<string | null>(null)
   const [notificationGroupFilter, setNotificationGroupFilter] = useState<(typeof NOTIFICATION_GROUP_OPTIONS)[number]['value']>('all')
   const [notificationTypeFilter, setNotificationTypeFilter] = useState<(typeof NOTIFICATION_TYPE_OPTIONS)[number]['value']>('all')
@@ -105,27 +109,97 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const hasPreviousNotificationPage = notificationOffset > 0
   const hasNextNotificationPage = notificationOffset + notifications.length < filteredNotificationTotal
   const flowSummary = useMemo(() => summarizeTransactions(transactions, session?.aid), [transactions, session?.aid])
-  const recommendedActions = useMemo(
-    () => buildWalletRecommendedActions({
+  const frozenBalance = toNumber(balanceQuery.data?.frozen_balance)
+  const walletInterventionReason = useMemo(
+    () => buildWalletInterventionReason({ unreadNotificationCount, frozenBalance, notifications, transactions }),
+    [frozenBalance, notifications, transactions, unreadNotificationCount],
+  )
+  const observerStatus = useMemo(
+    () => getAgentObserverStatus({
+      unreadCount: unreadNotificationCount,
+      frozenBalance,
+      interventionReason: walletInterventionReason,
+    }),
+    [frozenBalance, unreadNotificationCount, walletInterventionReason],
+  )
+  const observerTone = getAgentObserverTone(observerStatus.level)
+  const observerSignals = useMemo(
+    () => buildWalletObserverSignals({
       unreadNotificationCount,
-      frozenBalance: toNumber(balanceQuery.data?.frozen_balance),
+      frozenBalance,
       notifications,
       transactions,
     }),
-    [unreadNotificationCount, balanceQuery.data?.frozen_balance, notifications, transactions],
+    [frozenBalance, notifications, transactions, unreadNotificationCount],
   )
+  const walletTabs = useMemo(
+    () => [
+      { key: 'overview', label: '观察总览', badge: observerStatus.title },
+      { key: 'notifications', label: '飞剑传书', badge: unreadNotificationCount },
+      { key: 'transactions', label: '流水记录', badge: transactions.length },
+    ],
+    [observerStatus.title, transactions.length, unreadNotificationCount],
+  )
+  const inferredActiveTab = useMemo(
+    () => inferWalletTab({
+      focus,
+      unreadNotificationCount,
+      notificationTotal: filteredNotificationTotal,
+      transactionCount: transactions.length,
+    }),
+    [filteredNotificationTotal, focus, transactions.length, unreadNotificationCount],
+  )
+  const activeTab = activeTabOverride || inferredActiveTab
+  const recommendedActions = useMemo(
+    () => buildWalletRecommendedActions({
+      unreadNotificationCount,
+      frozenBalance,
+      notifications,
+      transactions,
+    }),
+    [frozenBalance, notifications, transactions, unreadNotificationCount],
+  )
+
+  useEffect(() => {
+    setActiveTabOverride(null)
+  }, [location.search])
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold">灵石钱庄 / 账房</h1>
-        <p className="mt-3 text-gray-600">查看可用灵石、冻结灵石，以及购卷、托管、放款、结算相关的账本变化。</p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">灵石钱庄 / 账房</h1>
+            <p className="mt-3 text-gray-600">这里不讲复杂账务细节，只告诉观察者：资金流转是否正常、哪里需要你介入，以及该去哪个入口。</p>
+          </div>
+          <span className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-medium ${observerTone.badge}`}>{observerStatus.title}</span>
+        </div>
+
+        <div className={`mt-5 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
+          <div className="text-sm font-medium text-slate-900">账房观察结论</div>
+          <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {observerSignals.map((signal) => (
+              <ObserverSignalCard key={signal.label} signal={signal} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-transparent">
+        <PageTabBar
+          ariaLabel="账房页面标签"
+          idPrefix="wallet"
+          items={walletTabs}
+          activeKey={activeTab}
+          onChange={(key) => setActiveTabOverride(key as WalletTab)}
+        />
       </section>
 
       {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载账房...</div>}
       {(balanceQuery.isError || transactionsQuery.isError) && <div className="rounded-2xl bg-red-50 p-6 text-sm text-red-700">加载账房失败，请检查 gateway 与 credit service。</div>}
 
-      {balanceQuery.data && (
+      {activeTab === 'overview' && balanceQuery.data && (
         <section className="grid gap-6 md:grid-cols-4">
           <Card label="可用余额" value={balanceQuery.data.balance} tone="primary" />
           <Card label="冻结中" value={balanceQuery.data.frozen_balance} tone="amber" />
@@ -134,11 +208,13 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </section>
       )}
 
-      <section className="grid gap-6 md:grid-cols-3">
-        <Card label="入账笔数" value={flowSummary.incoming} tone="green" />
-        <Card label="出账笔数" value={flowSummary.outgoing} tone="slate" />
-        <Card label="托管相关" value={flowSummary.escrowRelated} tone="amber" />
-      </section>
+      {activeTab === 'overview' && (
+        <section className="grid gap-6 md:grid-cols-3">
+          <Card label="入账笔数" value={flowSummary.incoming} tone="green" />
+          <Card label="出账笔数" value={flowSummary.outgoing} tone="slate" />
+          <Card label="托管相关" value={flowSummary.escrowRelated} tone="amber" />
+        </section>
+      )}
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -153,9 +229,30 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
             <WalletRecommendationCard key={`${action.label}-${action.href}`} action={action} />
           ))}
         </div>
+
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
+      {activeTab === 'overview' && (
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <WalletPreviewCard
+              title="飞剑摘要"
+              description={notifications[0]?.title ? `${notifications[0].title} · 未读 ${unreadNotificationCount}` : '当前没有新的飞剑提醒。'}
+              actionLabel="切到飞剑传书"
+              onAction={() => setActiveTabOverride('notifications')}
+            />
+            <WalletPreviewCard
+              title="流水摘要"
+              description={transactions[0] ? `最近一笔 ${formatTransactionType(transactions[0].type)}，建议继续核对关联对象。` : '当前还没有流水，可先去万象楼形成首轮闭环。'}
+              actionLabel="切到流水记录"
+              onAction={() => setActiveTabOverride('transactions')}
+            />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'notifications' && (
+      <section className="rounded-2xl bg-white p-6 shadow-sm" id="wallet-panel-notifications" role="tabpanel" aria-labelledby="wallet-tab-notifications">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">飞剑传书</h2>
@@ -321,8 +418,10 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           </div>
         )}
       </section>
+      )}
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
+      {activeTab === 'transactions' && (
+      <section className="rounded-2xl bg-white p-6 shadow-sm" id="wallet-panel-transactions" role="tabpanel" aria-labelledby="wallet-tab-transactions">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">流水记录</h2>
@@ -391,6 +490,57 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           </div>
         )}
       </section>
+      )}
+    </div>
+  )
+}
+
+function ObserverSignalCard({
+  signal,
+}: {
+  signal: {
+    label: string
+    value: string
+    tone: 'primary' | 'amber' | 'green' | 'slate'
+  }
+}) {
+  const toneClass = {
+    primary: 'border-primary-200 bg-white/80 text-primary-900',
+    amber: 'border-amber-200 bg-white/80 text-amber-900',
+    green: 'border-green-200 bg-white/80 text-green-900',
+    slate: 'border-slate-200 bg-white/80 text-slate-900',
+  }[signal.tone]
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <div className="text-xs uppercase tracking-wide opacity-70">{signal.label}</div>
+      <div className="mt-1 text-sm font-medium">{signal.value}</div>
+    </div>
+  )
+}
+
+function WalletPreviewCard({
+  title,
+  description,
+  actionLabel,
+  onAction,
+}: {
+  title: string
+  description: string
+  actionLabel: string
+  onAction: () => void
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-sm font-medium text-slate-900">{title}</div>
+      <p className="mt-2 text-sm text-slate-600">{description}</p>
+      <button
+        type="button"
+        onClick={onAction}
+        className="mt-4 rounded-lg bg-white px-3 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-100"
+      >
+        {actionLabel}
+      </button>
     </div>
   )
 }
@@ -567,6 +717,92 @@ function dedupeWalletRecommendations(actions: WalletRecommendation[]) {
     seen.add(key)
     return true
   })
+}
+
+function inferWalletTab({
+  focus,
+  unreadNotificationCount,
+  notificationTotal,
+  transactionCount,
+}: {
+  focus: string | null
+  unreadNotificationCount: number
+  notificationTotal: number
+  transactionCount: number
+}): WalletTab {
+  if (focus === 'notifications') return 'notifications'
+  if (focus === 'transactions') return 'transactions'
+  if (unreadNotificationCount > 0 || notificationTotal > 0) return 'notifications'
+  if (transactionCount > 0) return 'transactions'
+  return 'overview'
+}
+
+function buildWalletInterventionReason({
+  unreadNotificationCount,
+  frozenBalance,
+  notifications,
+  transactions,
+}: {
+  unreadNotificationCount: number
+  frozenBalance: number
+  notifications: Notification[]
+  transactions: CreditTransaction[]
+}) {
+  if (frozenBalance > 0) {
+    return `当前有 ${frozenBalance} 灵石仍在冻结，建议优先核对托管任务与结算状态。`
+  }
+
+  if (unreadNotificationCount > 0) {
+    return `当前有 ${unreadNotificationCount} 封未读飞剑，建议先确认托管、审核或账号状态变化。`
+  }
+
+  if (transactions[0]) {
+    return `账房最近仍有 ${formatTransactionType(transactions[0].type)} 流水，系统正在继续黑箱推进，不需要你逐笔盯盘。`
+  }
+
+  if (notifications[0]?.title) {
+    return `${notifications[0].title} 已进入账房视野，如无冻结或阻塞，可继续观察即可。`
+  }
+
+  return null
+}
+
+function buildWalletObserverSignals({
+  unreadNotificationCount,
+  frozenBalance,
+  notifications,
+  transactions,
+}: {
+  unreadNotificationCount: number
+  frozenBalance: number
+  notifications: Notification[]
+  transactions: CreditTransaction[]
+}): Array<{
+  label: string
+  value: string
+  tone: 'primary' | 'amber' | 'green' | 'slate'
+}> {
+  return [
+    {
+      label: '冻结灵石',
+      value: frozenBalance > 0 ? `${frozenBalance} 灵石待核对` : '暂无冻结',
+      tone: frozenBalance > 0 ? 'amber' : 'green',
+    },
+    {
+      label: '未读飞剑',
+      value: unreadNotificationCount > 0 ? `${unreadNotificationCount} 封待处理` : '已读完毕',
+      tone: unreadNotificationCount > 0 ? 'primary' : 'green',
+    },
+    {
+      label: '最近流转',
+      value: transactions[0]
+        ? formatTransactionType(transactions[0].type)
+        : notifications[0]?.title
+          ? `飞剑：${notifications[0].title}`
+          : '尚未形成首轮闭环',
+      tone: transactions[0] ? 'slate' : notifications[0] ? 'primary' : 'slate',
+    },
+  ]
 }
 
 function findRecentTaskHref(notifications: Notification[], transactions: CreditTransaction[]) {

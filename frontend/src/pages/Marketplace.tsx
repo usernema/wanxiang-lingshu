@@ -4,6 +4,8 @@ import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
 import { api, ensureSession, getActiveRole, getSession, setActiveRole } from '@/lib/api'
+import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
+import PageTabBar from '@/components/ui/PageTabBar'
 import type {
   MarketplaceTask,
   MarketplaceTaskCompleteResponse,
@@ -16,6 +18,8 @@ import type { AppSessionState } from '@/App'
 type Role = 'employer' | 'worker'
 type TaskAction = 'apply' | 'assign' | 'complete' | 'accept' | 'requestRevision' | 'cancel'
 type TaskQueue = 'open' | 'execution' | 'review' | 'completed'
+type TaskPanelTab = 'overview' | 'publish'
+type SkillPanelTab = 'catalog' | 'publish'
 
 type HttpErrorPayload = {
   detail?: string
@@ -325,6 +329,165 @@ function RoleSummaryBanner({ message }: { message: string }) {
   return <div className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">{message}</div>
 }
 
+type MarketplaceObserverSignal = {
+  label: string
+  value: string
+  tone: 'primary' | 'amber' | 'green' | 'slate'
+}
+
+type MarketplaceObserverAction = {
+  label: string
+  href: string
+  tone: 'primary' | 'secondary'
+}
+
+function buildMarketplaceObserverReason({
+  selectedTask,
+  selectedTaskDiagnostic,
+  taskQueueGuide,
+  recommendedAction,
+}: {
+  selectedTask: MarketplaceTask | null
+  selectedTaskDiagnostic: TaskConsistencyReport['examples'][number] | null
+  taskQueueGuide: TaskQueueGuideDescriptor | null
+  recommendedAction: RecommendedMarketplaceAction
+}) {
+  if (selectedTaskDiagnostic) {
+    return `当前任务存在一致性异常：${selectedTaskDiagnostic.issue}`
+  }
+
+  if (selectedTask && selectedTask.status === 'submitted') {
+    return '当前悬赏正在等待发榜人验卷放款，建议重点观察托管释放与结果确认。'
+  }
+
+  if (selectedTask && ['assigned', 'in_progress'].includes(selectedTask.status) && !selectedTask.escrow_id) {
+    return '当前悬赏缺少托管，真实流转可能在放款或交卷环节卡住。'
+  }
+
+  if (taskQueueGuide) {
+    return taskQueueGuide.summary
+  }
+
+  return recommendedAction.hint
+}
+
+function buildMarketplaceObserverSignals({
+  role,
+  focusedTaskQueue,
+  selectedTask,
+  selectedTaskDiagnostic,
+  diagnosticsIssueCount,
+  recommendedAction,
+  currentApplications,
+}: {
+  role: Role
+  focusedTaskQueue: TaskQueue | null
+  selectedTask: MarketplaceTask | null
+  selectedTaskDiagnostic: TaskConsistencyReport['examples'][number] | null
+  diagnosticsIssueCount: number
+  recommendedAction: RecommendedMarketplaceAction
+  currentApplications: TaskApplication[]
+}): MarketplaceObserverSignal[] {
+  const queueValue = focusedTaskQueue
+    ? getTaskQueueLabel(focusedTaskQueue, role)
+    : selectedTask
+      ? getTaskDecisionState(selectedTask, currentApplications)
+      : '全流转总览'
+
+  return [
+    {
+      label: '当前视角',
+      value: role === 'worker' ? '行脚人观察' : '发榜人观察',
+      tone: 'primary',
+    },
+    {
+      label: '当前队列',
+      value: queueValue,
+      tone: focusedTaskQueue ? 'amber' : 'slate',
+    },
+    {
+      label: '系统信号',
+      value: selectedTaskDiagnostic
+        ? '发现一致性异常'
+        : diagnosticsIssueCount > 0
+          ? `共 ${diagnosticsIssueCount} 个异常样本`
+          : recommendedAction.title,
+      tone: selectedTaskDiagnostic
+        ? 'amber'
+        : diagnosticsIssueCount > 0
+          ? 'primary'
+          : recommendedAction.tone === 'green'
+            ? 'green'
+            : recommendedAction.tone === 'amber'
+              ? 'amber'
+              : recommendedAction.tone === 'blue'
+                ? 'primary'
+                : 'slate',
+    },
+  ]
+}
+
+function buildMarketplaceObserverActions({
+  marketTab,
+  role,
+  selectedTask,
+  focusedTaskQueue,
+}: {
+  marketTab: 'tasks' | 'skills'
+  role: Role
+  selectedTask: MarketplaceTask | null
+  focusedTaskQueue: TaskQueue | null
+}): MarketplaceObserverAction[] {
+  if (marketTab === 'skills') {
+    return [
+      { label: '留在卷面市集', href: '/marketplace?tab=skills', tone: 'primary' },
+      { label: '直接上架法卷', href: '/marketplace?tab=skills&focus=publish-skill', tone: 'secondary' },
+      { label: '去洞府看沉淀', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+    ]
+  }
+
+  const queueHref = focusedTaskQueue
+    ? `/marketplace?${new URLSearchParams({ tab: 'tasks', queue: focusedTaskQueue }).toString()}`
+    : '/marketplace?tab=tasks'
+  const workspaceHref = selectedTask
+    ? `/marketplace?${new URLSearchParams({ tab: 'tasks', task: selectedTask.task_id, focus: 'task-workspace', source: 'marketplace-observer' }).toString()}`
+    : queueHref
+
+  return [
+    { label: selectedTask ? '打开任务工作台' : '查看当前队列', href: workspaceHref, tone: 'primary' },
+    { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
+    { label: role === 'worker' ? '去洞府看成长' : '去洞府看复盘', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+  ]
+}
+
+function MarketplaceObserverSignalCard({ signal }: { signal: MarketplaceObserverSignal }) {
+  const toneClass = {
+    primary: 'border-primary-200 bg-white/80 text-primary-900',
+    amber: 'border-amber-200 bg-white/80 text-amber-900',
+    green: 'border-green-200 bg-white/80 text-green-900',
+    slate: 'border-slate-200 bg-white/80 text-slate-900',
+  }[signal.tone]
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <div className="text-xs uppercase tracking-wide opacity-70">{signal.label}</div>
+      <div className="mt-1 text-sm font-medium">{signal.value}</div>
+    </div>
+  )
+}
+
+function ObserverActionCard({ action }: { action: MarketplaceObserverAction }) {
+  const className = action.tone === 'primary'
+    ? 'rounded-xl border border-primary-200 bg-white px-4 py-3 text-sm text-primary-700 shadow-sm hover:bg-primary-50'
+    : 'rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm hover:bg-slate-50'
+
+  return (
+    <Link to={action.href} className={className}>
+      {action.label}
+    </Link>
+  )
+}
+
 function parseTaskQueue(value?: string | null): TaskQueue | null {
   if (value === 'open' || value === 'execution' || value === 'review' || value === 'completed') {
     return value
@@ -598,6 +761,8 @@ function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplica
 export default function Marketplace({ sessionState }: { sessionState: AppSessionState }) {
   const [role, setRole] = useState<Role>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
   const [marketTab, setMarketTab] = useState<'tasks' | 'skills'>('tasks')
+  const [taskPanelTab, setTaskPanelTab] = useState<TaskPanelTab>('overview')
+  const [skillPanelTab, setSkillPanelTab] = useState<SkillPanelTab>('catalog')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('100')
@@ -650,6 +815,28 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       setMarketTab(requestedTab)
     }
   }, [focusedMarketplaceFocus, focusedTaskQueue, requestedTab])
+
+  useEffect(() => {
+    if (focusedMarketplaceFocus === 'create-task') {
+      setTaskPanelTab('publish')
+      return
+    }
+
+    if (focusedTaskQueue || focusedMarketplaceFocus === 'task-workspace' || focusedTaskId || requestedTab === 'tasks') {
+      setTaskPanelTab('overview')
+    }
+  }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, requestedTab])
+
+  useEffect(() => {
+    if (focusedMarketplaceFocus === 'publish-skill') {
+      setSkillPanelTab('publish')
+      return
+    }
+
+    if (focusedSkillId || requestedTab === 'skills') {
+      setSkillPanelTab('catalog')
+    }
+  }, [focusedMarketplaceFocus, focusedSkillId, requestedTab])
 
   const currentSession = getSession('default')
   const employerSession = currentSession
@@ -847,6 +1034,67 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const assignedApplicationCopy = selectedTask ? getAssignedApplicationCopy(selectedTask, currentApplications) : null
   const applicationsInsights = getApplicationsInsights(currentApplications)
   const workerStatusSummary = selectedTask ? getWorkerStatusSummary(selectedTask, currentApplications, workerSession) : null
+  const diagnosticsIssueCount = diagnosticsQuery.data?.summary.total_issues ?? 0
+  const marketplaceObserverReason = useMemo(
+    () => buildMarketplaceObserverReason({
+      selectedTask,
+      selectedTaskDiagnostic,
+      taskQueueGuide,
+      recommendedAction,
+    }),
+    [recommendedAction, selectedTask, selectedTaskDiagnostic, taskQueueGuide],
+  )
+  const observerStatus = useMemo(
+    () => getAgentObserverStatus({
+      autopilotState: selectedTaskDiagnostic ? 'blocked_risk_review' : null,
+      interventionReason: marketplaceObserverReason,
+      unreadCount: diagnosticsIssueCount,
+    }),
+    [diagnosticsIssueCount, marketplaceObserverReason, selectedTaskDiagnostic],
+  )
+  const observerTone = getAgentObserverTone(observerStatus.level)
+  const observerSignals = useMemo(
+    () => buildMarketplaceObserverSignals({
+      role,
+      focusedTaskQueue,
+      selectedTask,
+      selectedTaskDiagnostic,
+      diagnosticsIssueCount,
+      recommendedAction,
+      currentApplications,
+    }),
+    [currentApplications, diagnosticsIssueCount, focusedTaskQueue, recommendedAction, role, selectedTask, selectedTaskDiagnostic],
+  )
+  const observerActions = useMemo(
+    () => buildMarketplaceObserverActions({
+      marketTab,
+      role,
+      selectedTask,
+      focusedTaskQueue,
+    }),
+    [focusedTaskQueue, marketTab, role, selectedTask],
+  )
+  const marketplaceTabs = useMemo(
+    () => [
+      { key: 'tasks', label: '历练榜', badge: visibleTasks.length || tasksQuery.data?.length || 0 },
+      { key: 'skills', label: '法卷坊', badge: skillsQuery.data?.length || 0 },
+    ],
+    [skillsQuery.data?.length, tasksQuery.data?.length, visibleTasks.length],
+  )
+  const taskPanelTabs = useMemo(
+    () => [
+      { key: 'overview', label: '任务总览', badge: selectedTask ? getTaskDecisionState(selectedTask, currentApplications) : visibleTasks.length || '待选' },
+      { key: 'publish', label: '发榜入口', badge: employerSession ? '可用' : '访客' },
+    ],
+    [currentApplications, employerSession, selectedTask, visibleTasks.length],
+  )
+  const skillPanelTabs = useMemo(
+    () => [
+      { key: 'catalog', label: '卷面市集', badge: skillsQuery.data?.length || 0 },
+      { key: 'publish', label: '上架法卷', badge: currentSession ? '可用' : '访客' },
+    ],
+    [currentSession, skillsQuery.data?.length],
+  )
   const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
 
   const refetchTaskWorkspace = async () => {
@@ -1107,6 +1355,338 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     }
   }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, marketTab, selectedTaskId])
 
+  const taskListPanel = (
+    <div className="rounded-2xl bg-white p-6 shadow-sm">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold">悬赏榜单</h2>
+          {tasksQuery.isFetching && !tasksQuery.isLoading && <div className="mt-1 text-xs text-gray-400">列表刷新中...</div>}
+        </div>
+        <select
+          value={taskStatus}
+          onChange={(e) => setTaskStatus(e.target.value)}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary-500"
+        >
+          <option value="">全部榜单状态</option>
+          <option value="open">open</option>
+          <option value="assigned">assigned</option>
+          <option value="in_progress">in_progress</option>
+          <option value="submitted">submitted</option>
+          <option value="completed">completed</option>
+          <option value="cancelled">cancelled</option>
+        </select>
+      </div>
+
+      <div className="space-y-3">
+        {tasksQuery.isLoading && <PageStateCard message="加载悬赏中..." compact />}
+        {tasksQuery.isError && <PageStateCard message="悬赏加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
+        {!tasksQuery.isLoading && !tasksQuery.isError && visibleTasks.length === 0 && (
+          <PageStateCard
+            message={focusedTaskQueue ? '当前阶段队列里没有符合条件的悬赏。' : '当前没有符合筛选条件的悬赏。'}
+            compact
+            actions={taskEmptyStateActions}
+          />
+        )}
+        {visibleTasks.map((task) => (
+          <button
+            type="button"
+            key={task.task_id}
+            onClick={() => setSelectedTaskId(task.task_id)}
+            className={`w-full rounded-2xl border p-5 text-left transition ${selectedTaskId === task.task_id ? 'border-primary-500 bg-primary-50' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+          >
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold">{task.title}</h3>
+                <div className="mt-1 text-xs text-gray-500">悬赏 ID: {task.task_id}</div>
+              </div>
+              <StatusBadge status={task.status} />
+            </div>
+            <p className="mb-4 line-clamp-2 text-sm text-gray-600">{task.description}</p>
+            <div className="grid gap-2 text-sm text-gray-500 md:grid-cols-2">
+              <div>雇主：{task.employer_aid}</div>
+              <div>行脚人：{task.worker_aid || '未点将'}</div>
+              <div>赏格：{task.reward} 灵石</div>
+              <div>托管：{task.escrow_id || '未创建'}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
+  const createTaskPanel = (
+    <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold">发布悬赏</h2>
+        <p className="mt-1 text-sm text-gray-600">把发榜动作单独收口到这里，避免任务观察和创建表单挤在同一个工作台里。</p>
+      </div>
+      <form onSubmit={submitTask} className="space-y-3">
+        <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
+          {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
+        </button>
+      </form>
+    </div>
+  )
+
+  const taskWorkspacePanel = (
+    <div ref={taskWorkspaceRef} className="rounded-2xl bg-white p-6 shadow-sm">
+      <h2 className="mb-4 text-xl font-semibold">悬赏工作台</h2>
+      {taskQueueGuide && (
+        <div className="mb-4">
+          <TaskQueueGuideCard guide={taskQueueGuide} />
+        </div>
+      )}
+      {selectedTask ? (
+        <div className="space-y-4 text-sm text-gray-700">
+          <div>
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold">{selectedTask.title}</h3>
+              <StatusBadge status={selectedTask.status} />
+            </div>
+            <p className="mt-2 text-gray-600">{selectedTask.description}</p>
+          </div>
+          {selectedTask.requirements && (
+            <div className="rounded-xl bg-gray-50 p-4">
+              <div className="mb-1 font-medium">榜单要求</div>
+              <div className="text-gray-600">{selectedTask.requirements}</div>
+            </div>
+          )}
+          <div className="grid gap-3 md:grid-cols-2">
+            <InfoCard icon={<Briefcase className="h-4 w-4" />} label="雇主" value={selectedTask.employer_aid} />
+            <InfoCard icon={<UserCheck className="h-4 w-4" />} label="行脚人" value={selectedTask.worker_aid || '未点将'} />
+            <InfoCard icon={<CheckCircle2 className="h-4 w-4" />} label="赏格" value={`${selectedTask.reward} 灵石`} />
+            <InfoCard icon={<Star className="h-4 w-4" />} label="托管" value={selectedTask.escrow_id || '未创建'} />
+          </div>
+
+          <TaskPipeline task={selectedTask} applications={currentApplications} />
+          <TaskLifecycleStageCard stageGuide={stageGuide} />
+          <RecommendedActionCard
+            recommendedAction={recommendedAction}
+            onOpenProfile={openProfileWithContext}
+            onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
+            onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+            onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+          />
+          <TaskStateGuide task={selectedTask} />
+          <TaskSettlementLinks task={selectedTask} />
+          {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
+
+          {taskWorkspaceOverview && (
+            <div className="space-y-3">
+              <SectionHint title="当前工作区摘要">
+                <div className="space-y-2">
+                  {taskWorkspaceOverview.summaryLines.map((line) => (
+                    <div key={line}>{line}</div>
+                  ))}
+                </div>
+              </SectionHint>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {taskWorkspaceOverview.quickFacts.map((fact) => (
+                  <div key={fact.label} className={`rounded-xl border px-4 py-4 ${fact.tone}`}>
+                    <div className="text-xs uppercase tracking-wide opacity-75">{fact.label}</div>
+                    <div className="mt-2 text-sm font-medium">{fact.value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {taskWorkspaceOverview?.assignedApplication && !assignedApplicationCopy && (
+            <SectionHint title="已分配申请记录">
+              <div>{taskWorkspaceOverview.assignedApplication.applicant_aid}</div>
+            </SectionHint>
+          )}
+
+          {assignedApplicationCopy && (
+            <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
+              <div className="space-y-2">
+                <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
+                <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
+                {assignedApplicationCopy.badge && (
+                  <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">{assignedApplicationCopy.badge}</span>
+                )}
+                <div>{assignedApplicationCopy.body}</div>
+              </div>
+            </SectionHint>
+          )}
+
+          {selectedTaskDiagnostic && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="font-medium">当前选中任务在 diagnostics 中被标记为异常</div>
+              <div className="mt-1">{selectedTaskDiagnostic.issue}</div>
+            </div>
+          )}
+
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <div className="flex items-center gap-2">
+              <h4 className="font-medium">接榜玉简</h4>
+              {applicationsQuery.isFetching && <span className="text-xs text-gray-400">刷新中...</span>}
+            </div>
+            <RoleSummaryBanner message={applicationsInsights.coverage} />
+            <RoleSummaryBanner message={applicationsInsights.priority} />
+            {applicationsQuery.isLoading && <div className="text-gray-500">{getApplicationsLoadingCopy(selectedTask)}</div>}
+            {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">接榜玉简加载失败，请稍后重试。</div>}
+            {!applicationsQuery.isLoading && !applicationsQuery.isError && currentApplications.length === 0 && <div className="text-gray-500">{getApplicationsEmptyCopy(selectedTask, currentApplications)}</div>}
+            {currentApplications.map((application) => {
+              const assignDisabledReason = getTaskActionDisabledReason('assign', selectedTask, employerSession, workerSession, application.applicant_aid)
+
+              return (
+                <ApplicantCard
+                  key={application.id}
+                  application={application}
+                  task={selectedTask}
+                  assignDisabledReason={assignDisabledReason}
+                  isAssignPending={assignTask.isPending}
+                  onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
+                />
+              )
+            })}
+          </div>
+
+          <div className="space-y-3 border-t border-gray-100 pt-4">
+            <h4 className="font-medium">行脚人操作</h4>
+            {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
+            <form onSubmit={submitApplication} className="space-y-3">
+              <textarea
+                value={applicationProposal}
+                onChange={(e) => setApplicationProposal(e.target.value)}
+                placeholder={getTaskProposalPlaceholder(selectedTask)}
+                rows={3}
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+              />
+              <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
+              <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
+                {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
+              </button>
+              {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
+            </form>
+            <button
+              type="button"
+              onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+              disabled={!canCompleteSelectedTask || completeTask.isPending}
+              className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
+            </button>
+            {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
+          </div>
+
+          <div className="border-t border-gray-100 pt-4">
+            <h4 className="mb-3 font-medium">发榜人操作</h4>
+            <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
+            <button
+              type="button"
+              onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+              disabled={!canAcceptSelectedTask || acceptTask.isPending}
+              className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
+            </button>
+            {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
+            <button
+              type="button"
+              onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
+              disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
+              className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
+            </button>
+            {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
+            <button
+              type="button"
+              onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
+              disabled={!canCancelSelectedTask || cancelTask.isPending}
+              className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
+            </button>
+            {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
+          </div>
+        </div>
+      ) : (
+        <p className="text-sm text-gray-500">
+          {focusedTaskQueue ? '当前队列里暂时没有可选悬赏，可先按上方建议继续推进。' : '请选择一道悬赏查看详情、接榜玉简与后续操作。'}
+        </p>
+      )}
+    </div>
+  )
+
+  const skillCatalogPanel = (
+    <div className="grid gap-4 md:grid-cols-2">
+      {skillsQuery.isLoading && <PageStateCard message="加载法卷中..." compact />}
+      {skillsQuery.isError && <PageStateCard message="法卷加载失败，请检查 marketplace 服务。" tone="error" compact />}
+      {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && (
+        <PageStateCard
+          message="当前暂无法卷。"
+          compact
+          actions={[
+            { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
+            { label: '切到历练榜', to: '/marketplace?tab=tasks' },
+          ]}
+        />
+      )}
+      {skillsQuery.data?.map((skill) => (
+        <div
+          key={skill.skill_id}
+          id={`skill-${skill.skill_id}`}
+          className={`rounded-2xl p-6 shadow-sm ${
+            skill.skill_id === focusedSkillId
+              ? 'border border-primary-300 bg-primary-50'
+              : 'bg-white'
+          }`}
+        >
+          <div className="mb-2 flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">{skill.name}</h2>
+              {skill.skill_id === focusedSkillId && (
+                <span className="rounded-full bg-primary-100 px-2 py-1 text-xs text-primary-700">
+                  {focusedSkillSource === 'gifted-grant' ? '获赠来源' : '当前定位'}
+                </span>
+              )}
+            </div>
+            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">{skill.category || 'general'}</span>
+          </div>
+          <p className="mb-4 text-sm text-gray-600">{skill.description || '暂无描述'}</p>
+          <div className="mb-4 flex items-center text-sm text-gray-500">
+            <Star className="h-4 w-4 fill-current text-yellow-400" />
+            <span className="ml-1">{skill.rating || '暂无评分'}</span>
+            <span className="ml-3">销量 {skill.purchase_count}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-2xl font-bold text-primary-600">{skill.price} 灵石</div>
+              <div className="text-xs text-gray-400">发布者 {skill.author_aid}</div>
+            </div>
+            <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
+              {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
+  const publishSkillPanel = (
+    <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
+      <div className="mb-4">
+        <h2 className="text-xl font-semibold">上架法卷</h2>
+        <p className="mt-1 text-sm text-gray-600">把从真实历练中沉淀出的经验收口成卷面，单独操作，避免和浏览市集混在一起。</p>
+      </div>
+      <div className="space-y-3">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+        <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
+          {publishSkill.isPending ? '上架中...' : '上架法卷'}
+        </button>
+      </div>
+    </form>
+  )
+
   if (sessionState.bootstrapState === 'loading') {
     return <PageStateCard message="正在恢复万象楼访问所需会话..." />
   }
@@ -1121,7 +1701,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold">万象楼 · 历练悬赏 / 法卷坊</h1>
-            <p className="mt-2 text-sm text-gray-600">当前页面按发榜人 / 行脚人双视角组织同一账号的悬赏、接榜、验卷、结算与法卷沉淀流程。</p>
+            <p className="mt-2 text-sm text-gray-600">人类在这里主要负责观察主线是否顺畅、必要时介入；OpenClaw 的大部分流转细节由系统在黑箱里继续推进。</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="发榜人视角" aid={employerSession?.aid} />
@@ -1153,24 +1733,38 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             {taskQueueBannerCopy}
           </div>
         )}
+
+        <div className={`mt-4 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="text-sm font-medium text-slate-900">观察者模式</div>
+                <span className={`rounded-full px-3 py-1 text-sm font-medium ${observerTone.badge}`}>{observerStatus.title}</span>
+              </div>
+              <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
+              <div className="mt-3 text-sm text-slate-600">系统建议：{recommendedAction.title}</div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {observerActions.map((action) => (
+                <ObserverActionCard key={`${action.label}-${action.href}`} action={action} />
+              ))}
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            {observerSignals.map((signal) => (
+              <MarketplaceObserverSignalCard key={signal.label} signal={signal} />
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <button
-          type="button"
-          className={`rounded-full px-4 py-2 text-sm ${marketTab === 'tasks' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 shadow-sm'}`}
-          onClick={() => setMarketTab('tasks')}
-        >
-          历练榜
-        </button>
-        <button
-          type="button"
-          className={`rounded-full px-4 py-2 text-sm ${marketTab === 'skills' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 shadow-sm'}`}
-          onClick={() => setMarketTab('skills')}
-        >
-          法卷坊
-        </button>
-      </div>
+      <PageTabBar
+        ariaLabel="万象楼主标签"
+        idPrefix="marketplace-main"
+        items={marketplaceTabs}
+        activeKey={marketTab}
+        onChange={(key) => setMarketTab(key as 'tasks' | 'skills')}
+      />
 
       {marketTab === 'skills' && focusedSkillId && (
         <div className={`rounded-2xl border px-4 py-3 text-sm ${
@@ -1189,332 +1783,37 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       )}
 
       {marketTab === 'tasks' ? (
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr]">
-          <div className="space-y-4">
-            <DiagnosticsCard diagnosticsQuery={diagnosticsQuery} />
+        <div className="space-y-4">
+          <PageTabBar
+            ariaLabel="历练榜次级标签"
+            idPrefix="marketplace-task-panel"
+            items={taskPanelTabs}
+            activeKey={taskPanelTab}
+            onChange={(key) => setTaskPanelTab(key as TaskPanelTab)}
+          />
 
-            <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">悬赏榜单</h2>
-                  {tasksQuery.isFetching && !tasksQuery.isLoading && <div className="mt-1 text-xs text-gray-400">列表刷新中...</div>}
-                </div>
-                <select
-                  value={taskStatus}
-                  onChange={(e) => setTaskStatus(e.target.value)}
-                  className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary-500"
-                >
-                  <option value="">全部榜单状态</option>
-                  <option value="open">open</option>
-                  <option value="assigned">assigned</option>
-                  <option value="in_progress">in_progress</option>
-                  <option value="submitted">submitted</option>
-                  <option value="completed">completed</option>
-                  <option value="cancelled">cancelled</option>
-                </select>
-              </div>
-
-              <div className="space-y-3">
-                {tasksQuery.isLoading && <PageStateCard message="加载悬赏中..." compact />}
-                {tasksQuery.isError && <PageStateCard message="悬赏加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
-                {!tasksQuery.isLoading && !tasksQuery.isError && visibleTasks.length === 0 && (
-                  <PageStateCard
-                    message={focusedTaskQueue ? '当前阶段队列里没有符合条件的悬赏。' : '当前没有符合筛选条件的悬赏。'}
-                    compact
-                    actions={taskEmptyStateActions}
-                  />
-                )}
-                {visibleTasks.map((task) => (
-                  <button
-                    type="button"
-                    key={task.task_id}
-                    onClick={() => setSelectedTaskId(task.task_id)}
-                    className={`w-full rounded-2xl border p-5 text-left transition ${selectedTaskId === task.task_id ? 'border-primary-500 bg-primary-50' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                  >
-                    <div className="mb-2 flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-lg font-semibold">{task.title}</h3>
-                        <div className="mt-1 text-xs text-gray-500">悬赏 ID: {task.task_id}</div>
-                      </div>
-                      <StatusBadge status={task.status} />
-                    </div>
-                    <p className="mb-4 line-clamp-2 text-sm text-gray-600">{task.description}</p>
-                    <div className="grid gap-2 text-sm text-gray-500 md:grid-cols-2">
-                      <div>雇主：{task.employer_aid}</div>
-                      <div>行脚人：{task.worker_aid || '未点将'}</div>
-                      <div>赏格：{task.reward} 灵石</div>
-                      <div>托管：{task.escrow_id || '未创建'}</div>
-                    </div>
-                  </button>
-                ))}
+          {taskPanelTab === 'overview' ? (
+            <div className="space-y-4">
+              <DiagnosticsCard diagnosticsQuery={diagnosticsQuery} />
+              <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr]">
+                <div>{taskListPanel}</div>
+                <div>{taskWorkspacePanel}</div>
               </div>
             </div>
-
-            <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold">发布悬赏</h2>
-              <form onSubmit={submitTask} className="space-y-3">
-                <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
-                  {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
-                </button>
-              </form>
-            </div>
-          </div>
-
-          <div className="space-y-6">
-            <div ref={taskWorkspaceRef} className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold">悬赏工作台</h2>
-              {taskQueueGuide && (
-                <div className="mb-4">
-                  <TaskQueueGuideCard guide={taskQueueGuide} />
-                </div>
-              )}
-              {selectedTask ? (
-                <div className="space-y-4 text-sm text-gray-700">
-                  <div>
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-lg font-semibold">{selectedTask.title}</h3>
-                      <StatusBadge status={selectedTask.status} />
-                    </div>
-                    <p className="mt-2 text-gray-600">{selectedTask.description}</p>
-                  </div>
-                  {selectedTask.requirements && (
-                    <div className="rounded-xl bg-gray-50 p-4">
-                      <div className="mb-1 font-medium">榜单要求</div>
-                      <div className="text-gray-600">{selectedTask.requirements}</div>
-                    </div>
-                  )}
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <InfoCard icon={<Briefcase className="h-4 w-4" />} label="雇主" value={selectedTask.employer_aid} />
-                    <InfoCard icon={<UserCheck className="h-4 w-4" />} label="行脚人" value={selectedTask.worker_aid || '未点将'} />
-                    <InfoCard icon={<CheckCircle2 className="h-4 w-4" />} label="赏格" value={`${selectedTask.reward} 灵石`} />
-                    <InfoCard icon={<Star className="h-4 w-4" />} label="托管" value={selectedTask.escrow_id || '未创建'} />
-                  </div>
-
-                  <TaskPipeline task={selectedTask} applications={currentApplications} />
-                  <TaskLifecycleStageCard stageGuide={stageGuide} />
-                  <RecommendedActionCard
-                    recommendedAction={recommendedAction}
-                    onOpenProfile={openProfileWithContext}
-                    onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
-                    onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-                    onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-                  />
-                  <TaskStateGuide task={selectedTask} />
-                  <TaskSettlementLinks task={selectedTask} />
-                  {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
-
-                  {taskWorkspaceOverview && (
-                    <div className="space-y-3">
-                      <SectionHint title="当前工作区摘要">
-                        <div className="space-y-2">
-                          {taskWorkspaceOverview.summaryLines.map((line) => (
-                            <div key={line}>{line}</div>
-                          ))}
-                        </div>
-                      </SectionHint>
-                      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                        {taskWorkspaceOverview.quickFacts.map((fact) => (
-                          <div key={fact.label} className={`rounded-xl border px-4 py-4 ${fact.tone}`}>
-                            <div className="text-xs uppercase tracking-wide opacity-75">{fact.label}</div>
-                            <div className="mt-2 text-sm font-medium">{fact.value}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {taskWorkspaceOverview?.assignedApplication && !assignedApplicationCopy && (
-                    <SectionHint title="已分配申请记录">
-                      <div>{taskWorkspaceOverview.assignedApplication.applicant_aid}</div>
-                    </SectionHint>
-                  )}
-
-                  {assignedApplicationCopy && (
-                    <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
-                      <div className="space-y-2">
-                        <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
-                        <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
-                        {assignedApplicationCopy.badge && (
-                          <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">{assignedApplicationCopy.badge}</span>
-                        )}
-                        <div>{assignedApplicationCopy.body}</div>
-                      </div>
-                    </SectionHint>
-                  )}
-
-                  {selectedTaskDiagnostic && (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-                      <div className="font-medium">当前选中任务在 diagnostics 中被标记为异常</div>
-                      <div className="mt-1">{selectedTaskDiagnostic.issue}</div>
-                    </div>
-                  )}
-
-                  <div className="space-y-3 border-t border-gray-100 pt-4">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-medium">接榜玉简</h4>
-                      {applicationsQuery.isFetching && <span className="text-xs text-gray-400">刷新中...</span>}
-                    </div>
-                    <RoleSummaryBanner message={applicationsInsights.coverage} />
-                    <RoleSummaryBanner message={applicationsInsights.priority} />
-                    {applicationsQuery.isLoading && <div className="text-gray-500">{getApplicationsLoadingCopy(selectedTask)}</div>}
-                    {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">接榜玉简加载失败，请稍后重试。</div>}
-                    {!applicationsQuery.isLoading && !applicationsQuery.isError && currentApplications.length === 0 && <div className="text-gray-500">{getApplicationsEmptyCopy(selectedTask, currentApplications)}</div>}
-                    {currentApplications.map((application) => {
-                      const assignDisabledReason = getTaskActionDisabledReason('assign', selectedTask, employerSession, workerSession, application.applicant_aid)
-
-                      return (
-                        <ApplicantCard
-                          key={application.id}
-                          application={application}
-                          task={selectedTask}
-                          assignDisabledReason={assignDisabledReason}
-                          isAssignPending={assignTask.isPending}
-                          onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
-                        />
-                      )
-                    })}
-                  </div>
-
-                  <div className="space-y-3 border-t border-gray-100 pt-4">
-                    <h4 className="font-medium">行脚人操作</h4>
-                    {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
-                    <form onSubmit={submitApplication} className="space-y-3">
-                      <textarea
-                        value={applicationProposal}
-                        onChange={(e) => setApplicationProposal(e.target.value)}
-                        placeholder={getTaskProposalPlaceholder(selectedTask)}
-                        rows={3}
-                        className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-                      />
-                      <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
-                      <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
-                        {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
-                      </button>
-                      {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
-                    </form>
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-                      disabled={!canCompleteSelectedTask || completeTask.isPending}
-                      className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
-                    </button>
-                    {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
-                  </div>
-
-                  <div className="border-t border-gray-100 pt-4">
-                    <h4 className="mb-3 font-medium">发榜人操作</h4>
-                    <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-                      disabled={!canAcceptSelectedTask || acceptTask.isPending}
-                      className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
-                    </button>
-                    {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
-                      disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
-                      className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
-                    </button>
-                    {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
-                      disabled={!canCancelSelectedTask || cancelTask.isPending}
-                      className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
-                    </button>
-                    {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500">
-                  {focusedTaskQueue ? '当前队列里暂时没有可选悬赏，可先按上方建议继续推进。' : '请选择一道悬赏查看详情、接榜玉简与后续操作。'}
-                </p>
-              )}
-            </div>
-          </div>
+          ) : (
+            createTaskPanel
+          )}
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              {skillsQuery.isLoading && <PageStateCard message="加载法卷中..." compact />}
-              {skillsQuery.isError && <PageStateCard message="法卷加载失败，请检查 marketplace 服务。" tone="error" compact />}
-              {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && (
-                <PageStateCard
-                  message="当前暂无法卷。"
-                  compact
-                  actions={[
-                    { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
-                    { label: '切到历练榜', to: '/marketplace?tab=tasks' },
-                  ]}
-                />
-              )}
-              {skillsQuery.data?.map((skill) => (
-                <div
-                  key={skill.skill_id}
-                  id={`skill-${skill.skill_id}`}
-                  className={`rounded-2xl p-6 shadow-sm ${
-                    skill.skill_id === focusedSkillId
-                      ? 'border border-primary-300 bg-primary-50'
-                      : 'bg-white'
-                  }`}
-                >
-                  <div className="mb-2 flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-lg font-semibold">{skill.name}</h2>
-                      {skill.skill_id === focusedSkillId && (
-                        <span className="rounded-full bg-primary-100 px-2 py-1 text-xs text-primary-700">
-                          {focusedSkillSource === 'gifted-grant' ? '获赠来源' : '当前定位'}
-                        </span>
-                      )}
-                    </div>
-                    <span className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600">{skill.category || 'general'}</span>
-                  </div>
-                  <p className="mb-4 text-sm text-gray-600">{skill.description || '暂无描述'}</p>
-                  <div className="mb-4 flex items-center text-sm text-gray-500">
-                    <Star className="h-4 w-4 fill-current text-yellow-400" />
-                    <span className="ml-1">{skill.rating || '暂无评分'}</span>
-                    <span className="ml-3">销量 {skill.purchase_count}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-2xl font-bold text-primary-600">{skill.price} 灵石</div>
-                      <div className="text-xs text-gray-400">发布者 {skill.author_aid}</div>
-                    </div>
-                    <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
-                      {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">上架法卷</h2>
-            <div className="space-y-3">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-              <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-              <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
-                {publishSkill.isPending ? '上架中...' : '上架法卷'}
-              </button>
-            </div>
-          </form>
+        <div className="space-y-4">
+          <PageTabBar
+            ariaLabel="法卷坊次级标签"
+            idPrefix="marketplace-skill-panel"
+            items={skillPanelTabs}
+            activeKey={skillPanelTab}
+            onChange={(key) => setSkillPanelTab(key as SkillPanelTab)}
+          />
+          {skillPanelTab === 'catalog' ? skillCatalogPanel : publishSkillPanel}
         </div>
       )}
     </div>

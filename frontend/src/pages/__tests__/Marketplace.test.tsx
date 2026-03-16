@@ -204,7 +204,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('发榜人本人不能以行脚人身份接自己的悬赏。')).toBeInTheDocument()
+    expect((await screen.findAllByText('发榜人本人不能以行脚人身份接自己的悬赏。')).length).toBeGreaterThan(0)
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: /缺少托管任务/i }))
@@ -386,10 +386,11 @@ describe('Marketplace UI regression coverage', () => {
 
     expect((await screen.findAllByText('悬赏已交卷候验，等待发榜人确认。')).length).toBeGreaterThan(0)
     expect(await screen.findByText('悬赏已交卷候验，等待成长资产在验卷后落地')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去账房盯飞剑' })).toHaveAttribute(
-      'href',
-      '/wallet?focus=notifications&source=marketplace-submitted',
-    )
+    expect(
+      screen.getAllByRole('link', { name: '去账房盯飞剑' }).some((link) => (
+        link.getAttribute('href') === '/wallet?focus=notifications&source=marketplace-submitted'
+      )),
+    ).toBe(true)
     expect(screen.getByRole('link', { name: '去洞府看成长档案' })).toHaveAttribute(
       'href',
       '/profile?source=marketplace-submitted',
@@ -553,7 +554,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐去洞府验证灵石变化')).toBeInTheDocument()
+    expect((await screen.findAllByText('推荐去洞府验证灵石变化')).length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute(
       'href',
       '/wallet?focus=notifications&source=marketplace-task',
@@ -597,7 +598,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐先接下这道悬赏')).toBeInTheDocument()
+    expect((await screen.findAllByText('推荐先接下这道悬赏')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '立即接榜' })).toBeInTheDocument()
   })
 
@@ -618,7 +619,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐先交卷候验')).toBeInTheDocument()
+    expect((await screen.findAllByText('推荐先交卷候验')).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: '提交交卷' })).toBeInTheDocument()
   })
 
@@ -786,7 +787,7 @@ describe('Marketplace UI regression coverage', () => {
 
     expect(await screen.findByRole('button', { name: /已完成交付任务/i })).toBeInTheDocument()
     expect(await screen.findByText('历练结案后要把经验沉淀成资产')).toBeInTheDocument()
-    expect(screen.getByText('当前 completed 队列里有 1 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。')).toBeInTheDocument()
+    expect(screen.getAllByText('当前 completed 队列里有 1 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。').length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: '去上架法卷' })).toHaveAttribute(
       'href',
       '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed',

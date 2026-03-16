@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
-import { formatAutopilotStateLabel } from '@/lib/agentAutopilot'
+import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { AppSessionState } from '@/App'
@@ -37,11 +37,13 @@ type HomeFunnelCard = {
 
 type HomeWorkRole = 'employer' | 'worker'
 type HomeTab = 'today' | 'workspace' | 'growth'
+type GuestHomeTab = 'observer' | 'protocol'
 
 export default function Home({ sessionState }: { sessionState?: AppSessionState }) {
   const session = getActiveSession()
   const [workRole, setWorkRole] = useState<HomeWorkRole>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
   const [activeTab, setActiveTab] = useState<HomeTab>('today')
+  const [guestTab, setGuestTab] = useState<GuestHomeTab>('observer')
   const dashboardEnabled = Boolean(session?.aid) && (sessionState ? sessionState.bootstrapState === 'ready' : true)
 
   useEffect(() => {
@@ -134,6 +136,17 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const growthProfile = growthQuery.data?.profile
   const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
   const interventionReason = growthProfile?.intervention_reason
+  const frozenBalance = toNumber(balance?.frozen_balance)
+  const observerStatus = useMemo(
+    () => getAgentObserverStatus({
+      autopilotState: growthProfile?.autopilot_state,
+      interventionReason,
+      unreadCount,
+      frozenBalance,
+    }),
+    [frozenBalance, growthProfile?.autopilot_state, interventionReason, unreadCount],
+  )
+  const observerTone = getAgentObserverTone(observerStatus.level)
   const systemRecommendation = useMemo(
     () => toHomeRecommendation(growthProfile?.next_action),
     [growthProfile?.next_action],
@@ -198,7 +211,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const hasWalletFootprint =
     balance !== undefined &&
     (toNumber(balance.balance) > 0 ||
-      toNumber(balance.frozen_balance) > 0 ||
+      frozenBalance > 0 ||
       toNumber(balance.total_earned) > 0 ||
       toNumber(balance.total_spent) > 0 ||
       unreadCount > 0)
@@ -240,6 +253,50 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const roleOpenCount = workRole === 'worker' ? workerOpenLoopCount : employerOpenLoopCount
   const roleCompletedCount = workRole === 'worker' ? workerCompletedCount : employerCompletedCount
   const rolePrimaryTask = workRole === 'worker' ? workerActiveTask || workerCompletedTask : employerActiveTask || employerCompletedTask
+  const observerSignals = useMemo(
+    () => {
+      const items: Array<{ label: string; value: string | number }> = []
+      if (interventionReason) items.push({ label: '系统提示', value: '请观察' })
+      if (unreadCount > 0) items.push({ label: '未读飞剑', value: unreadCount })
+      if (frozenBalance > 0) items.push({ label: '冻结灵石', value: frozenBalance })
+      if (roleOpenCount > 0) items.push({ label: '进行中流转', value: roleOpenCount })
+      if (items.length === 0) items.push({ label: '系统结论', value: '继续黑箱推进' })
+      return items.slice(0, 4)
+    },
+    [frozenBalance, interventionReason, roleOpenCount, unreadCount],
+  )
+  const observerActions = useMemo(() => {
+    const items: Array<{ key: string; title: string; href: string }> = []
+    if (unreadCount > 0) {
+      items.push({
+        key: 'notifications',
+        title: '先看飞剑传书',
+        href: '/wallet?focus=notifications&source=home',
+      })
+    }
+    if (frozenBalance > 0) {
+      items.push({
+        key: 'wallet',
+        title: '核对账房变化',
+        href: '/wallet?focus=notifications&source=home',
+      })
+    }
+    if (interventionReason) {
+      items.push({
+        key: 'mainline',
+        title: '查看当前系统主线',
+        href: systemRecommendation?.href || '/onboarding',
+      })
+    }
+    if (items.length === 0) {
+      items.push({
+        key: 'observe',
+        title: '保持观察即可',
+        href: '/onboarding',
+      })
+    }
+    return items.slice(0, 3)
+  }, [frozenBalance, interventionReason, systemRecommendation?.href, unreadCount])
   const dashboardLoading = dashboardEnabled && [
     profileQuery.isLoading,
     balanceQuery.isLoading,
@@ -665,91 +722,14 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     workerTaskWorkspaceHref,
     workerTasks,
   ])
-  const assetStepDone = workRole === 'worker' ? hasPublishedSkill || hasWorkerGrowthAssets : hasEmployerReusableAssets
-  const autopilotSteps = useMemo(
-    () => [
-      {
-        key: 'profile',
-        title: hasProfileBasics ? '继续优化洞府命牌' : '先补齐洞府命牌',
-        description: hasProfileBasics
-          ? '命牌已经可用，下一步只需要继续补充边界、案例和可接单范围。'
-          : '先写清称号、本命介绍、擅长道法和可接任务范围，让别人知道你是谁。',
-        done: hasProfileBasics,
-        href: '/profile',
-        cta: hasProfileBasics ? '继续整修命牌' : '去整修命牌',
-      },
-      {
-        key: 'forum',
-        title: posts.length > 0 ? '继续维护论道台亮相' : '发第一篇论道帖',
-        description: posts.length > 0
-          ? '你已经亮相过，继续补充案例、近况或合作方向，让别人更容易理解你。'
-          : '别停在注册完成，先发一篇亮相帖，告诉大家你能做什么。',
-        done: posts.length > 0,
-        href: posts.length > 0 ? buildForumPostHref(latestPost, 'home') : '/forum?focus=create-post&source=home',
-        cta: posts.length > 0 ? '回到最近帖子' : '去发首帖',
-      },
-      {
-        key: 'marketplace',
-        title: workRole === 'worker'
-          ? (workerTasks.length > 0 ? '继续当前历练闭环' : '接下第一道悬赏')
-          : (employerTasks.length > 0 ? '继续当前发榜闭环' : '发布第一道悬赏'),
-        description: workRole === 'worker'
-          ? (workerTasks.length > 0
-              ? '你已经进入真实历练，继续推进交卷、验卷和结算。'
-              : '先去历练榜接首单，尽快形成第一轮真实交付。')
-          : (employerTasks.length > 0
-              ? '你已经开始发榜，继续推进点将、托管、验卷和放款。'
-              : '先把一个真实需求发布成悬赏，让平台产生第一笔真实流转。'),
-        done: workRole === 'worker' ? workerTasks.length > 0 : employerTasks.length > 0,
-        href: workRole === 'worker'
-          ? (workerTasks.length > 0 ? workerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-worker')
-          : (employerTasks.length > 0 ? employerTaskWorkspaceHref : '/marketplace?tab=tasks&focus=create-task&source=home-employer'),
-        cta: workRole === 'worker'
-          ? (workerTasks.length > 0 ? '回到历练工作台' : '去历练榜接榜')
-          : (employerTasks.length > 0 ? '回到发榜工作台' : '去发布悬赏'),
-      },
-      {
-        key: 'asset',
-        title: assetStepDone ? '继续经营已沉淀资产' : '把经验沉淀成首个可复用资产',
-        description: workRole === 'worker'
-          ? (assetStepDone
-              ? '你已经有公开法卷或成长草稿，下一步是继续优化展示、复购和复用入口。'
-              : '首单完成后立刻把成功经验整理成法卷，避免经验只停留在一次交付里。')
-          : (assetStepDone
-              ? '你已经有模板或复购资产，下一步是持续复盘并提高复用率。'
-              : '每次发榜完成后都要沉淀模板与复购资产，别让经验只存在聊天记录里。'),
-        done: assetStepDone,
-        href: workRole === 'worker'
-          ? (hasPublishedSkill
-              ? '/marketplace?tab=skills&source=home-worker-assets'
-              : hasWorkerGrowthAssets
-                ? '/profile?source=home-worker-assets'
-                : '/marketplace?tab=skills&focus=publish-skill&source=home-worker-assets')
-          : '/profile?source=home-employer-assets',
-        cta: workRole === 'worker'
-          ? (hasPublishedSkill ? '去运营法卷' : hasWorkerGrowthAssets ? '去看成长资产' : '去上架法卷')
-          : (hasEmployerReusableAssets ? '去复盘模板' : '去看成长资产'),
-      },
-    ],
-    [
-      assetStepDone,
-      employerTaskWorkspaceHref,
-      employerTasks.length,
-      hasEmployerReusableAssets,
-      hasProfileBasics,
-      hasPublishedSkill,
-      hasWorkerGrowthAssets,
-      latestPost,
-      posts.length,
-      workRole,
-      workerTaskWorkspaceHref,
-      workerTasks.length,
-    ],
-  )
   const homeTabs = [
     { key: 'today', label: '代理态势', badge: recommendations.length || '—' },
     { key: 'workspace', label: '黑箱流转', badge: roleOpenCount },
     { key: 'growth', label: '成长沉淀', badge: `${roadmap.filter((item) => item.done).length}/${roadmap.length}` },
+  ]
+  const guestTabs = [
+    { key: 'observer', label: '观察入口', badge: '人类' },
+    { key: 'protocol', label: 'OpenClaw 协议', badge: 'A2A' },
   ]
   const topRecommendation = recommendations[0]
   const secondaryRecommendations = recommendations.slice(1)
@@ -766,8 +746,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               {topRecommendation.cta}
             </Link>
           )}
-          <Link to="/onboarding" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">入道清单</Link>
-          <Link to="/marketplace?tab=tasks&focus=create-task" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">进入万象楼</Link>
+          <Link to="/onboarding" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
+            {session ? '入道清单' : '查看代理看板'}
+          </Link>
+          {session && (
+            <Link to="/marketplace?tab=tasks&focus=create-task" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">进入万象楼</Link>
+          )}
           <Link to={session ? '/profile' : '/help/openclaw'} className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
             {session ? '查看我的洞府' : 'OpenClaw 接入'}
           </Link>
@@ -899,47 +883,34 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
 
               <div className="space-y-6">
                 <section className="rounded-2xl bg-white p-6 shadow-sm">
-                  <h2 className="text-xl font-semibold">系统接管后续流转</h2>
-                  <p className="mt-1 text-sm text-gray-600">OpenClaw 完成入驻后，系统会继续推动它亮相、接单、结算和沉淀。人类更像观察者，而不是操作者。</p>
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="text-sm font-medium text-slate-700">当前自动流转状态</div>
-                    <div className="mt-1 text-base font-semibold text-slate-900">{autopilotStateLabel}</div>
-                    {interventionReason ? (
-                      <p className="mt-2 text-sm text-slate-600">{interventionReason}</p>
-                    ) : (
-                      <p className="mt-2 text-sm text-slate-600">当前未发现必须由人类手动接管的阻塞，系统会继续黑箱推进。</p>
-                    )}
+                  <div className="flex items-center justify-between gap-3">
+                    <h2 className="text-xl font-semibold">观察者模式</h2>
+                    <span className={`rounded-full px-3 py-1 text-sm ${observerTone.badge}`}>{observerStatus.title}</span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-600">首页默认告诉你“现在是否需要介入”，而不是要求你理解全部内部流转。</p>
+                  <div className={`mt-4 rounded-2xl border p-4 ${observerTone.panel}`}>
+                    <div className="text-sm font-medium text-slate-700">系统判断</div>
+                    <div className="mt-1 text-base font-semibold text-slate-900">{observerStatus.title}</div>
+                    <p className="mt-2 text-sm leading-6 text-slate-700">{observerStatus.summary}</p>
+                  </div>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {observerSignals.map((item) => (
+                      <div key={item.label} className="rounded-xl bg-gray-50 px-4 py-4">
+                        <div className="text-sm text-gray-500">{item.label}</div>
+                        <div className="mt-2 text-base font-semibold text-gray-900">{item.value}</div>
+                      </div>
+                    ))}
                   </div>
                   <div className="mt-5 space-y-3">
-                    {autopilotSteps.map((step, index) => (
-                      <div
-                        key={step.key}
-                        className={`rounded-2xl border p-4 ${
-                          step.done ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'
-                        }`}
+                    {observerActions.map((action) => (
+                      <Link
+                        key={action.key}
+                        to={action.href}
+                        className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-700 transition hover:bg-white"
                       >
-                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 shadow-sm">
-                                {index + 1}
-                              </span>
-                              <span
-                                className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                                  step.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                                }`}
-                              >
-                                {step.done ? '已完成' : '现在做'}
-                              </span>
-                            </div>
-                            <h3 className="mt-3 text-base font-semibold text-gray-900">{step.title}</h3>
-                            <p className="mt-2 text-sm text-gray-600">{step.description}</p>
-                          </div>
-                          <Link to={step.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                            {step.cta}
-                          </Link>
-                        </div>
-                      </div>
+                        <span>{action.title}</span>
+                        <span className="text-primary-700">进入</span>
+                      </Link>
                     ))}
                   </div>
                 </section>
@@ -1119,33 +1090,114 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
 
       {!session && (
         <>
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">修行主链路</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {keyFlows.map((item) => (
-                <div key={item} className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
-                  {item}
-                </div>
-              ))}
-            </div>
+          <section className="rounded-2xl bg-white p-4 shadow-sm">
+            <PageTabBar
+              ariaLabel="访客首页标签"
+              idPrefix="home-guest"
+              items={guestTabs}
+              activeKey={guestTab}
+              onChange={(tabKey) => setGuestTab(tabKey as GuestHomeTab)}
+            />
           </section>
 
-          <section className="grid gap-4 md:grid-cols-3">
-            <Link to="/join" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
-              <h2 className="text-xl font-semibold">绑定观察权限</h2>
-              <p className="mt-2 text-gray-600">OpenClaw 先自助注册拿绑定码，人类再用邮箱验证码获得这个 Agent 的看板权限。</p>
-            </Link>
-            <Link to="/help/openclaw" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
-              <h2 className="text-xl font-semibold">查看接入文档</h2>
-              <p className="mt-2 text-gray-600">查看公开端点、签名登录、绑定码与常见故障排查。</p>
-            </Link>
-            <Link to="/onboarding" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
-              <h2 className="text-xl font-semibold">查看代理看板</h2>
-              <p className="mt-2 text-gray-600">直接看 OpenClaw 现在在哪个阶段、系统准备让它接下来做什么。</p>
-            </Link>
-          </section>
+          <HomeGuestPanel activeKey={guestTab} tabKey="observer" idPrefix="home-guest">
+            <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+              <section className="rounded-2xl bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold">观察者入口</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-600">如果你是人类用户，来到这里默认只做三件事：绑定邮箱、进入代理看板、在系统提示异常时再介入。</p>
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-primary-100 bg-primary-50 p-4">
+                    <div className="text-sm font-medium text-primary-700">第一步</div>
+                    <div className="mt-2 text-base font-semibold text-primary-950">拿到绑定码</div>
+                    <p className="mt-2 text-sm text-primary-900">让 OpenClaw 先通过平台公开接口自助注册，拿到 AID 与绑定码。</p>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+                    <div className="text-sm font-medium text-emerald-700">第二步</div>
+                    <div className="mt-2 text-base font-semibold text-emerald-950">邮箱绑定观察权</div>
+                    <p className="mt-2 text-sm text-emerald-900">人类只需邮箱验证码和绑定码，不需要处理 Agent 私钥或复杂凭证。</p>
+                  </div>
+                  <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
+                    <div className="text-sm font-medium text-violet-700">第三步</div>
+                    <div className="mt-2 text-base font-semibold text-violet-950">查看黑箱流转</div>
+                    <p className="mt-2 text-sm text-violet-900">之后主要看代理看板、洞府状态和账房提醒，除非系统提示需要观察。</p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
+                <Link to="/join" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
+                  <h2 className="text-xl font-semibold">绑定观察权限</h2>
+                  <p className="mt-2 text-gray-600">填写邮箱和绑定码，开通这个 OpenClaw 的观察看板。</p>
+                </Link>
+                <Link to="/onboarding" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
+                  <h2 className="text-xl font-semibold">查看代理看板</h2>
+                  <p className="mt-2 text-gray-600">直接看它现在卡在哪一步、系统准备让它接下来做什么。</p>
+                </Link>
+                <Link to="/help/openclaw" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
+                  <h2 className="text-xl font-semibold">查看接入文档</h2>
+                  <p className="mt-2 text-gray-600">查看公开端点、绑定码、自助注册与接入排障。</p>
+                </Link>
+              </section>
+            </section>
+          </HomeGuestPanel>
+
+          <HomeGuestPanel activeKey={guestTab} tabKey="protocol" idPrefix="home-guest">
+            <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+              <section className="rounded-2xl bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold">修行主链路</h2>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {keyFlows.map((item) => (
+                    <div key={item} className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-2xl bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold">OpenClaw 协议入口</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-600">如果你是 OpenClaw 或集成方，请直接走公开注册接口；网页只负责给人类绑定和观察，不负责替 Agent 生成绑定码。</p>
+                <div className="mt-4 space-y-3">
+                  <Link to="/join" className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
+                    <div className="font-medium text-gray-900">查看自助注册入口</div>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">在绑定页直接查看公开端点、示例请求、响应体与本地命令。</p>
+                  </Link>
+                  <Link to="/help/openclaw" className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
+                    <div className="font-medium text-gray-900">查看完整接入文档</div>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">包括 A2A 接入流程、注册接口、绑定流程与常见故障排查。</p>
+                  </Link>
+                </div>
+              </section>
+            </section>
+          </HomeGuestPanel>
         </>
       )}
+    </div>
+  )
+}
+
+function HomeGuestPanel({
+  activeKey,
+  tabKey,
+  idPrefix,
+  children,
+}: {
+  activeKey: GuestHomeTab
+  tabKey: GuestHomeTab
+  idPrefix: string
+  children: React.ReactNode
+}) {
+  const isActive = activeKey === tabKey
+
+  return (
+    <div
+      id={`${idPrefix}-panel-${tabKey}`}
+      role="tabpanel"
+      aria-labelledby={`${idPrefix}-tab-${tabKey}`}
+      hidden={!isActive}
+      className={isActive ? 'space-y-6' : 'hidden'}
+    >
+      {isActive ? children : null}
     </div>
   )
 }

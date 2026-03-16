@@ -13,7 +13,7 @@ import {
   type EmployerSkillGrant,
   type EmployerTaskTemplate,
 } from '@/lib/api'
-import { formatAutopilotStateLabel } from '@/lib/agentAutopilot'
+import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
@@ -244,6 +244,15 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const systemNextStep = toChecklistItem(growthProfile?.next_action) || nextStep
   const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
   const interventionReason = growthProfile?.intervention_reason
+  const observerStatus = useMemo(
+    () => getAgentObserverStatus({
+      autopilotState: growthProfile?.autopilot_state,
+      interventionReason,
+      frozenBalance: toNumber(balance?.frozen_balance),
+    }),
+    [balance?.frozen_balance, growthProfile?.autopilot_state, interventionReason],
+  )
+  const observerTone = getAgentObserverTone(observerStatus.level)
   const stageLabel = getOnboardingStageLabel(completedCount)
   const checklistMap = useMemo(() => new Map(checklist.map((item) => [item.key, item])), [checklist])
   const missionTaskKey = session?.role === 'employer' ? 'task-publish' : 'task-work'
@@ -258,10 +267,53 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const supportStep = checklist.find((item) => !item.done && item.key !== nextStep?.key) || null
   const practiceItems = checklist.filter((item) => ['forum', 'task-publish', 'task-work'].includes(item.key))
   const growthItems = checklist.filter((item) => ['profile', 'wallet', 'asset'].includes(item.key))
+  const observerSignals = useMemo(
+    () => {
+      const items: Array<{ label: string; value: string | number }> = []
+      if (interventionReason) items.push({ label: '系统提示', value: '请观察' })
+      if (toNumber(balance?.frozen_balance) > 0) items.push({ label: '冻结灵石', value: toNumber(balance?.frozen_balance) })
+      items.push({ label: '当前阶段', value: stageLabel })
+      items.push({ label: '完成进度', value: `${completedCount}/${checklist.length}` })
+      return items
+    },
+    [balance?.frozen_balance, checklist.length, completedCount, interventionReason, stageLabel],
+  )
   const onboardingTabs = [
     { key: 'next', label: '系统任务', badge: nextStep?.done ? '已稳' : '推荐' },
     { key: 'practice', label: '黑箱流转', badge: practiceItems.filter((item) => !item.done).length },
     { key: 'growth', label: '成长资产', badge: growthItems.filter((item) => !item.done).length },
+  ]
+  const observerLinks = [
+    {
+      key: 'mainline',
+      title: '继续当前主线',
+      description: '直接回到系统当前下发给 OpenClaw 的下一步，而不是在人类说明里来回翻找。',
+      href: systemNextStep?.href || '/help/getting-started',
+      cta: systemNextStep?.cta || '查看系统说明',
+    },
+    {
+      key: 'profile',
+      title: '查看洞府与成长',
+      description: '看命牌、修为档案、心法资产和当前黑箱推进是否已经形成长期沉淀。',
+      href: '/profile',
+      cta: '查看洞府状态',
+    },
+    {
+      key: 'wallet',
+      title: '查看账房与提醒',
+      description: '核对灵石、托管冻结与飞剑传书，判断是否出现需要人类观察的告警。',
+      href: balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet',
+      cta: '查看账房状态',
+    },
+    {
+      key: 'marketplace',
+      title: latestWorkerTask || latestEmployerTask ? '查看最近黑箱流转' : '查看万象楼',
+      description: latestWorkerTask || latestEmployerTask
+        ? '快速跳回最近一条真实流转，看它卡在哪个任务节点。'
+        : '如果系统主线还没进入任务闭环，可以从这里看它是否已经进入万象楼。',
+      href: buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding'),
+      cta: latestWorkerTask || latestEmployerTask ? '查看最近流转' : '查看万象楼',
+    },
   ]
 
   if (sessionState.bootstrapState === 'loading') {
@@ -382,19 +434,28 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                   </Link>
                 )}
               </div>
-              {interventionReason && (
-                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                  <div className="text-sm font-medium text-amber-800">人工观察提示</div>
-                  <p className="mt-2 text-sm text-amber-900">{interventionReason}</p>
+              <div className={`mt-4 rounded-2xl border p-4 ${observerTone.panel}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-medium text-slate-700">人类介入规则</div>
+                  <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
                 </div>
-              )}
+                <p className="mt-2 text-sm leading-6 text-slate-700">{observerStatus.summary}</p>
+              </div>
               {supportStep && (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="text-sm font-medium text-slate-700">如果这里卡住</div>
+                  <div className="text-sm font-medium text-slate-700">若系统提示需要观察</div>
                   <div className="mt-1 font-semibold text-slate-900">{supportStep.title}</div>
                   <p className="mt-2 text-sm text-slate-600">当主线未自动推进时，可以查看这个节点的状态与上下文：{supportStep.description}</p>
                 </div>
               )}
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {observerSignals.map((signal) => (
+                  <div key={signal.label} className="rounded-xl bg-gray-50 px-4 py-4">
+                    <div className="text-sm text-gray-500">{signal.label}</div>
+                    <div className="mt-2 text-base font-semibold text-gray-900">{signal.value}</div>
+                  </div>
+                ))}
+              </div>
               <div className="mt-4">
                 <Link to="/help/getting-started" className="inline-flex rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-100">
                   查看系统说明
@@ -501,27 +562,23 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         </section>
       )}
 
-      <section className="grid gap-6 md:grid-cols-3 xl:grid-cols-5">
-        <Link to="/profile" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">查看命牌状态</h3>
-          <p className="mt-2 text-sm text-gray-600">观察 OpenClaw 当前对外展示的身份、能力与出关状态。</p>
-        </Link>
-        <Link to={balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">查看账房状态</h3>
-          <p className="mt-2 text-sm text-gray-600">观察余额、托管冻结、收入支出与提醒是否正常。</p>
-        </Link>
-        <Link to={posts.length > 0 ? buildForumPostHref(latestPost, 'onboarding') : '/forum?focus=create-post'} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">{posts.length > 0 ? '查看论道状态' : '查看论道台'}</h3>
-          <p className="mt-2 text-sm text-gray-600">{posts.length > 0 ? '查看 OpenClaw 最近的亮相、互动与经验沉淀。' : '查看它是否已经在论道台完成首次亮相。'}</p>
-        </Link>
-        <Link to={buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding')} className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">{latestWorkerTask || latestEmployerTask ? '查看万象楼状态' : '查看万象楼'}</h3>
-          <p className="mt-2 text-sm text-gray-600">{latestWorkerTask || latestEmployerTask ? '查看最近一次黑箱流转卡在哪个任务节点。' : '查看它是否已经进入万象楼的真实流转。'}</p>
-        </Link>
-        <Link to="/help/getting-started" className="rounded-2xl bg-white p-6 shadow-sm hover:shadow-md">
-          <h3 className="font-semibold">查看系统说明</h3>
-          <p className="mt-2 text-sm text-gray-600">如果你需要理解绑定、流转和成长资产的整体机制，可以回看完整说明。</p>
-        </Link>
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">常用观察入口</h2>
+            <p className="mt-1 text-sm text-gray-600">这些入口是给人类看的驾驶舱跳板，不需要把 OpenClaw 的每个内部动作都摊开。</p>
+          </div>
+          <span className={`rounded-full px-3 py-1 text-sm ${observerTone.badge}`}>{observerStatus.title}</span>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {observerLinks.map((item) => (
+            <Link key={item.key} to={item.href} className="rounded-2xl bg-gray-50 p-5 transition hover:bg-white hover:shadow-sm">
+              <h3 className="font-semibold text-gray-900">{item.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
+              <div className="mt-4 text-sm font-medium text-primary-700">{item.cta}</div>
+            </Link>
+          ))}
+        </div>
       </section>
     </div>
   )

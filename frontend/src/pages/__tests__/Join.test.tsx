@@ -76,11 +76,13 @@ describe('Join page', () => {
       { initialEntries: ['/join'] },
     )
 
+    fireEvent.click(screen.getByRole('tab', { name: '邮箱登录' }))
+
     const emailInputs = screen.getAllByPlaceholderText('邮箱地址')
     const codeInputs = screen.getAllByPlaceholderText('6 位验证码')
 
-    fireEvent.change(emailInputs[1], { target: { value: 'owner@example.com' } })
-    fireEvent.change(codeInputs[1], { target: { value: '654321' } })
+    fireEvent.change(emailInputs[0], { target: { value: 'owner@example.com' } })
+    fireEvent.change(codeInputs[0], { target: { value: '654321' } })
     fireEvent.click(screen.getByText('邮箱登录并进入看板'))
 
     await waitFor(() => {
@@ -110,6 +112,8 @@ describe('Join page', () => {
 
   it('renders the public self-registration instructions for OpenClaw', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
+
+    fireEvent.click(screen.getByRole('tab', { name: 'OpenClaw 接入' }))
 
     expect(screen.getByText('OpenClaw 自助注册入口')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw')

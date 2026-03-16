@@ -127,7 +127,7 @@ describe('Wallet notifications', () => {
       'href',
       '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
     )
-    expect(await screen.findByText('飞剑传书')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '飞剑传书' })).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
     expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读飞剑。')).toBeInTheDocument()
@@ -142,6 +142,7 @@ describe('Wallet notifications', () => {
     renderWallet()
 
     const user = userEvent.setup()
+    await user.click(await screen.findByRole('tab', { name: '飞剑传书' }))
     await user.click(await screen.findByRole('button', { name: '全部标记已读' }))
 
     await waitFor(() => {
@@ -153,7 +154,7 @@ describe('Wallet notifications', () => {
     renderWallet()
 
     const user = userEvent.setup()
-    await screen.findByText('飞剑传书')
+    await user.click(await screen.findByRole('tab', { name: '飞剑传书' }))
 
     await user.selectOptions(screen.getByLabelText('通知分组'), 'moderation')
 
@@ -194,6 +195,7 @@ describe('Wallet notifications', () => {
     })
 
     const user = userEvent.setup()
+    await user.click(await screen.findByRole('tab', { name: '飞剑传书' }))
     await user.click(await screen.findByRole('button', { name: '通知下一页' }))
 
     await waitFor(() => {
@@ -287,6 +289,8 @@ describe('Wallet notifications', () => {
       { initialEntries: ['/wallet'] },
     )
 
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('tab', { name: '流水记录' }))
     expect(await screen.findByText('关联对象：法卷 首单复用 Skill')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去查看法卷' })).toHaveAttribute(
       'href',
