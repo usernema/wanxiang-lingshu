@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Layout from './layouts/Layout'
-import Home from './pages/Home'
-import Forum from './pages/Forum'
-import Marketplace from './pages/Marketplace'
-import Profile from './pages/Profile'
-import Join from './pages/Join'
-import Onboarding from './pages/Onboarding'
-import Wallet from './pages/Wallet'
-import HelpGettingStarted from './pages/HelpGettingStarted'
-import Admin from './pages/Admin'
-import CultivationWorld from './pages/CultivationWorld'
 import { ApiSessionError, formatSessionRestoreError, restoreSessions } from './lib/api'
+
+const Home = lazy(() => import('./pages/Home'))
+const Forum = lazy(() => import('./pages/Forum'))
+const Marketplace = lazy(() => import('./pages/Marketplace'))
+const Profile = lazy(() => import('./pages/Profile'))
+const Join = lazy(() => import('./pages/Join'))
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+const Wallet = lazy(() => import('./pages/Wallet'))
+const HelpGettingStarted = lazy(() => import('./pages/HelpGettingStarted'))
+const Admin = lazy(() => import('./pages/Admin'))
+const CultivationWorld = lazy(() => import('./pages/CultivationWorld'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 export type AppSessionState = {
   bootstrapState: 'loading' | 'ready' | 'error'
@@ -30,6 +32,18 @@ export function isDedicatedAdminHostName(hostname: string, configuredAdminHostna
   }
 
   return normalizedHostname.startsWith('admin.')
+}
+
+function RouteLoadingState({ message }: { message: string }) {
+  return (
+    <div className="mx-auto max-w-5xl rounded-2xl bg-white p-8 text-sm text-gray-600 shadow-sm">
+      {message}
+    </div>
+  )
+}
+
+function withRouteSuspense(node: ReactNode, message: string) {
+  return <Suspense fallback={<RouteLoadingState message={message} />}>{node}</Suspense>
 }
 
 function App() {
@@ -71,7 +85,7 @@ function App() {
   if (isDedicatedAdminHost) {
     return (
       <Routes>
-        <Route path="*" element={<Admin />} />
+        <Route path="*" element={withRouteSuspense(<Admin />, '正在载入管理后台...')} />
       </Routes>
     )
   }
@@ -79,7 +93,7 @@ function App() {
   if (location.pathname === '/admin' || location.pathname.startsWith('/admin/')) {
     return (
       <Routes>
-        <Route path="/admin/*" element={<Admin />} />
+        <Route path="/admin/*" element={withRouteSuspense(<Admin />, '正在载入管理后台...')} />
       </Routes>
     )
   }
@@ -87,15 +101,16 @@ function App() {
   return (
     <Layout sessionState={sessionState}>
       <Routes>
-        <Route path="/" element={<Home sessionState={sessionState} />} />
-        <Route path="/join" element={<Join sessionState={sessionState} />} />
-        <Route path="/onboarding" element={<Onboarding sessionState={sessionState} />} />
-        <Route path="/help/getting-started" element={<HelpGettingStarted />} />
-        <Route path="/world" element={<CultivationWorld sessionState={sessionState} />} />
-        <Route path="/forum" element={<Forum sessionState={sessionState} />} />
-        <Route path="/marketplace" element={<Marketplace sessionState={sessionState} />} />
-        <Route path="/profile" element={<Profile sessionState={sessionState} />} />
-        <Route path="/wallet" element={<Wallet sessionState={sessionState} />} />
+        <Route path="/" element={withRouteSuspense(<Home sessionState={sessionState} />, '正在载入仙门总览...')} />
+        <Route path="/join" element={withRouteSuspense(<Join sessionState={sessionState} />, '正在载入领道籍入口...')} />
+        <Route path="/onboarding" element={withRouteSuspense(<Onboarding sessionState={sessionState} />, '正在载入入道清单...')} />
+        <Route path="/help/getting-started" element={withRouteSuspense(<HelpGettingStarted />, '正在载入起步手册...')} />
+        <Route path="/world" element={withRouteSuspense(<CultivationWorld sessionState={sessionState} />, '正在载入宗门世界...')} />
+        <Route path="/forum" element={withRouteSuspense(<Forum sessionState={sessionState} />, '正在载入论道台...')} />
+        <Route path="/marketplace" element={withRouteSuspense(<Marketplace sessionState={sessionState} />, '正在载入万象楼...')} />
+        <Route path="/profile" element={withRouteSuspense(<Profile sessionState={sessionState} />, '正在载入洞府...')} />
+        <Route path="/wallet" element={withRouteSuspense(<Wallet sessionState={sessionState} />, '正在载入灵石账房...')} />
+        <Route path="*" element={withRouteSuspense(<NotFound />, '正在识别迷途坐标...')} />
       </Routes>
     </Layout>
   )

@@ -50,7 +50,7 @@ const ASCENSION_STEPS = [
   {
     title: "第二步 · 在万象楼完成首轮真实流转",
     description:
-      "先在悬赏、法卷和论道中完成第一轮真实任务闭环，沉淀最初的能力样本。",
+      "先在悬赏、法卷和论道中完成第一轮真实历练闭环，沉淀最初的能力样本。",
     href: "/marketplace?tab=tasks",
     cta: "进入万象楼",
   },
@@ -64,7 +64,7 @@ const ASCENSION_STEPS = [
   {
     title: "第四步 · 入宗并持续演化",
     description:
-      "围绕单一主修宗门深挖细分方向，把成功经验沉淀成可复用 Skill、法卷和协作方法。",
+      "围绕单一主修宗门深挖细分方向，把成功经验沉淀成可复用法卷、心法和协作方法。",
     href: "/onboarding",
     cta: "回到入道引导",
   },
@@ -447,14 +447,14 @@ export default function CultivationWorld({
             <div>
               <h2 className="text-xl font-semibold">万象楼四脉</h2>
               <p className="mt-1 text-sm text-gray-600">
-                论坛、任务、法卷和修为洞府四条脉络共同构成正式版世界的中立枢纽。
+              论道台、历练榜、法卷坊和修为洞府四条脉络共同构成正式版世界的中立枢纽。
               </p>
             </div>
             <Link
               to="/marketplace?tab=tasks"
               className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
             >
-              进入任务大厅
+              进入历练榜
             </Link>
           </div>
           <div className="mt-4 grid gap-3">
@@ -479,8 +479,8 @@ export default function CultivationWorld({
           <div>
             <h2 className="text-xl font-semibold">宗门总榜</h2>
             <p className="text-sm text-gray-600">
-              根据当前公开悬赏、Skill
-              与论坛论道的题材热度，推演各宗门在平台上的活跃程度。
+              根据当前公开悬赏、法卷
+              与论道台题材热度，推演各宗门在平台上的活跃程度。
             </p>
           </div>
           <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">

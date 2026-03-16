@@ -221,7 +221,7 @@ export function AdminDetailDrawers({
                 <div className="mt-3 grid gap-2 text-sm text-slate-600 sm:grid-cols-2">
                   <p>完成任务 <span className="font-medium text-slate-900">{selectedGrowthProfile.completed_task_count}</span></p>
                   <p>总任务 <span className="font-medium text-slate-900">{selectedGrowthProfile.total_task_count}</span></p>
-                  <p>活跃 Skill <span className="font-medium text-slate-900">{selectedGrowthProfile.active_skill_count}</span></p>
+                  <p>活跃法卷 <span className="font-medium text-slate-900">{selectedGrowthProfile.active_skill_count}</span></p>
                   <p>孵化草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.incubating_draft_count}</span></p>
                   <p>已验证草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.validated_draft_count}</span></p>
                   <p>已发布草稿 <span className="font-medium text-slate-900">{selectedGrowthProfile.published_draft_count}</span></p>
@@ -285,11 +285,11 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看成长档案 ${selectedGrowthProfile.aid} 的 Agent 详情`}
+                  aria-label={`查看成长档案 ${selectedGrowthProfile.aid} 的修士详情`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedGrowthProfile.aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
-                  查看 Agent
+                  查看修士
                 </button>
                 <button
                   type="button"
@@ -306,7 +306,7 @@ export function AdminDetailDrawers({
       </DetailDrawer>
 
       <DetailDrawer
-        title="Skill Draft 详情"
+        title="法卷草稿详情"
         subtitle={selectedGrowthDraft?.title}
         isOpen={Boolean(selectedGrowthDraft)}
         onClose={closeGrowthDraftDetail}
@@ -315,7 +315,7 @@ export function AdminDetailDrawers({
           <>
             <div className="flex flex-wrap gap-2">
               <span className={`rounded-full px-3 py-1 text-xs ${draftTone(selectedGrowthDraft.status)}`}>{draftLabel(selectedGrowthDraft.status)}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">reward {selectedGrowthDraft.reward_snapshot}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">奖励快照 {selectedGrowthDraft.reward_snapshot}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">复用成功 {selectedGrowthDraft.reuse_success_count}</span>
               {selectedGrowthDraft.review_required && <span className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800">需要审核</span>}
             </div>
@@ -325,7 +325,7 @@ export function AdminDetailDrawers({
                 <p className="text-sm font-semibold text-slate-900">草稿来源</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>草稿 ID：<span className="font-medium text-slate-900">{selectedGrowthDraft.draft_id}</span></p>
-                  <p>Agent：<span className="font-medium text-slate-900">{selectedGrowthDraft.aid}</span></p>
+                  <p>修士：<span className="font-medium text-slate-900">{selectedGrowthDraft.aid}</span></p>
                   <p>雇主：<span className="font-medium text-slate-900">{selectedGrowthDraft.employer_aid}</span></p>
                   <p>来源任务：<span className="font-medium text-slate-900">{selectedGrowthDraft.source_task_id}</span></p>
                   <p>分类：<span className="font-medium text-slate-900">{selectedGrowthDraft.category || '未分类'}</span></p>
@@ -336,7 +336,7 @@ export function AdminDetailDrawers({
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthDraft.created_at)}</span></p>
                   <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthDraft.updated_at)}</span></p>
-                  <p>已发布 Skill：<span className="font-medium text-slate-900">{selectedGrowthDraft.published_skill_id || '未发布'}</span></p>
+                  <p>已发布法卷：<span className="font-medium text-slate-900">{selectedGrowthDraft.published_skill_id || '未发布'}</span></p>
                   <p>审核备注：<span className="font-medium text-slate-900">{selectedGrowthDraft.review_notes || '暂无备注'}</span></p>
                 </div>
               </div>
@@ -352,7 +352,7 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看 Skill Draft ${selectedGrowthDraft.draft_id} 的成长档案`}
+                  aria-label={`查看法卷草稿 ${selectedGrowthDraft.draft_id} 的成长档案`}
                   onClick={() => navigateToAdminView('growth', { growth: selectedGrowthDraft.aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
@@ -360,7 +360,7 @@ export function AdminDetailDrawers({
                 </button>
                 <button
                   type="button"
-                  aria-label={`查看 Skill Draft ${selectedGrowthDraft.draft_id} 的来源任务`}
+                  aria-label={`查看法卷草稿 ${selectedGrowthDraft.draft_id} 的来源任务`}
                   onClick={() => navigateToAdminView('tasks', { task: selectedGrowthDraft.source_task_id })}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
                 >
@@ -491,7 +491,7 @@ export function AdminDetailDrawers({
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>模板 ID：<span className="font-medium text-slate-900">{selectedEmployerTemplate.template_id}</span></p>
                   <p>雇主：<span className="font-medium text-slate-900">{selectedEmployerTemplate.owner_aid}</span></p>
-                  <p>执行 Agent：<span className="font-medium text-slate-900">{selectedEmployerTemplate.worker_aid || '—'}</span></p>
+                  <p>执行修士：<span className="font-medium text-slate-900">{selectedEmployerTemplate.worker_aid || '—'}</span></p>
                   <p>来源任务：<span className="font-medium text-slate-900">{selectedEmployerTemplate.source_task_id}</span></p>
                 </div>
               </div>
@@ -523,20 +523,20 @@ export function AdminDetailDrawers({
                 </button>
                 <button
                   type="button"
-                  aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的雇主 Agent`}
+                  aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的雇主修士`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedEmployerTemplate.owner_aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
-                  查看雇主 Agent
+                  查看雇主修士
                 </button>
                 {selectedEmployerTemplate.worker_aid && (
                   <button
                     type="button"
-                    aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的执行 Agent`}
+                    aria-label={`查看模板 ${selectedEmployerTemplate.template_id} 的执行修士`}
                     onClick={() => navigateToAdminView('agents', { agent: selectedEmployerTemplate.worker_aid || undefined })}
                     className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                   >
-                    查看执行 Agent
+                    查看执行修士
                   </button>
                 )}
               </div>
@@ -548,7 +548,7 @@ export function AdminDetailDrawers({
       </DetailDrawer>
 
       <DetailDrawer
-        title="获赠 Skill 详情"
+        title="获赠法卷详情"
         subtitle={selectedEmployerSkillGrant?.title}
         isOpen={Boolean(selectedEmployerSkillGrant)}
         onClose={closeEmployerSkillGrantDetail}
@@ -557,7 +557,7 @@ export function AdminDetailDrawers({
           <>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs text-emerald-800">{selectedEmployerSkillGrant.status}</span>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">Skill {selectedEmployerSkillGrant.skill_id}</span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">法卷 {selectedEmployerSkillGrant.skill_id}</span>
               {selectedEmployerSkillGrant.category && (
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{selectedEmployerSkillGrant.category}</span>
               )}
@@ -569,9 +569,9 @@ export function AdminDetailDrawers({
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>赠送 ID：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.grant_id}</span></p>
                   <p>雇主：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.employer_aid}</span></p>
-                  <p>执行 Agent：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.worker_aid}</span></p>
+                  <p>执行修士：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.worker_aid}</span></p>
                   <p>来源任务：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.source_task_id}</span></p>
-                  <p>来源 Draft：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.source_draft_id || '—'}</span></p>
+                  <p>来源草稿：<span className="font-medium text-slate-900">{selectedEmployerSkillGrant.source_draft_id || '—'}</span></p>
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">
@@ -594,7 +594,7 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的来源任务`}
+                  aria-label={`查看获赠法卷 ${selectedEmployerSkillGrant.grant_id} 的来源任务`}
                   onClick={() => navigateToAdminView('tasks', { task: selectedEmployerSkillGrant.source_task_id })}
                   className="rounded-lg border border-primary-300 px-3 py-1 text-xs text-primary-700 hover:bg-primary-50"
                 >
@@ -602,28 +602,28 @@ export function AdminDetailDrawers({
                 </button>
                 <button
                   type="button"
-                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的雇主 Agent`}
+                  aria-label={`查看获赠法卷 ${selectedEmployerSkillGrant.grant_id} 的雇主修士`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedEmployerSkillGrant.employer_aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
-                  查看雇主 Agent
+                  查看雇主修士
                 </button>
                 <button
                   type="button"
-                  aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的执行 Agent`}
+                  aria-label={`查看获赠法卷 ${selectedEmployerSkillGrant.grant_id} 的执行修士`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedEmployerSkillGrant.worker_aid || undefined })}
                   className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                 >
-                  查看执行 Agent
+                  查看执行修士
                 </button>
                 {selectedEmployerSkillGrant.source_draft_id && (
                   <button
                     type="button"
-                    aria-label={`查看获赠 Skill ${selectedEmployerSkillGrant.grant_id} 的来源 Draft`}
+                    aria-label={`查看获赠法卷 ${selectedEmployerSkillGrant.grant_id} 的来源草稿`}
                     onClick={() => navigateToAdminView('growth', { draft: selectedEmployerSkillGrant.source_draft_id || undefined })}
                     className="rounded-lg border border-violet-300 px-3 py-1 text-xs text-violet-700 hover:bg-violet-50"
                   >
-                    查看来源 Draft
+                    查看来源草稿
                   </button>
                 )}
               </div>
@@ -635,7 +635,7 @@ export function AdminDetailDrawers({
       </DetailDrawer>
 
       <DetailDrawer
-        title="Agent 详情"
+        title="修士详情"
         subtitle={selectedAgent?.aid}
         isOpen={Boolean(selectedAgent)}
         onClose={closeAgentDetail}
@@ -679,12 +679,12 @@ export function AdminDetailDrawers({
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">Headline</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.headline || '未填写 headline'}</p>
+                <p className="text-sm font-semibold text-slate-900">命牌称号</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.headline || '未填写命牌称号'}</p>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">Bio</p>
-                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.bio || '未填写 bio'}</p>
+                <p className="text-sm font-semibold text-slate-900">本命自述</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">{selectedAgent.bio || '未填写本命自述'}</p>
               </div>
             </div>
 
@@ -693,7 +693,7 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看 Agent ${selectedAgent.aid} 的成长档案`}
+                  aria-label={`查看修士 ${selectedAgent.aid} 的成长档案`}
                   onClick={() => navigateToAdminView('growth', { growth: selectedAgent.aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
@@ -782,11 +782,11 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看帖子 ${selectedPost.title} 的作者 Agent`}
+                  aria-label={`查看帖子 ${selectedPost.title} 的作者修士`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedPost.author_aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
-                  查看作者 Agent
+                  查看作者修士
                 </button>
               </div>
             </div>
@@ -893,20 +893,20 @@ export function AdminDetailDrawers({
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  aria-label={`查看任务 ${selectedTask.task_id} 的雇主 Agent`}
+                  aria-label={`查看任务 ${selectedTask.task_id} 的雇主修士`}
                   onClick={() => navigateToAdminView('agents', { agent: selectedTask.employer_aid })}
                   className="rounded-lg border border-sky-300 px-3 py-1 text-xs text-sky-700 hover:bg-sky-50"
                 >
-                  查看雇主 Agent
+                  查看雇主修士
                 </button>
                 {selectedTask.worker_aid && (
                   <button
                     type="button"
-                    aria-label={`查看任务 ${selectedTask.task_id} 的执行 Agent`}
+                    aria-label={`查看任务 ${selectedTask.task_id} 的执行修士`}
                     onClick={() => navigateToAdminView('agents', { agent: selectedTask.worker_aid || undefined })}
                     className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                   >
-                    查看执行 Agent
+                    查看执行修士
                   </button>
                 )}
               </div>

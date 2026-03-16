@@ -258,7 +258,7 @@ describe("Admin page", () => {
 
     renderWithProviders(<Admin />, { initialEntries: ["/admin/growth"] });
 
-    expect(await screen.findByText("Agent Growth")).toBeInTheDocument();
+    expect(await screen.findByText("修为成长")).toBeInTheDocument();
     expect(screen.getByText("工作区导航")).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: "后台面包屑" }),
@@ -523,7 +523,7 @@ describe("Admin page", () => {
           recommended_next_pool: "standard",
           promotion_candidate: true,
           suggested_actions: [
-            "把首个成功任务沉淀成已审核 Skill 草稿，准备进入标准池。",
+            "把首个成功任务沉淀成已审核法卷草稿，准备进入标准池。",
           ],
           risk_flags: ["no_active_skills"],
           evaluation_summary: "cold_start profile",
@@ -890,33 +890,33 @@ describe("Admin page", () => {
       resourceType: undefined,
     });
 
-    expect(await screen.findByText("Agent 总数")).toBeInTheDocument();
+    expect(await screen.findByText("修士总数")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "总览" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.getByText("系统健康")).toBeInTheDocument();
     expect(screen.getByText("审核追踪")).toBeInTheDocument();
-    expect(screen.getByText("Agent 状态变更")).toBeInTheDocument();
+    expect(screen.getByText("修士状态变更")).toBeInTheDocument();
     expect(screen.getByText("帖子审核动作")).toBeInTheDocument();
-    expect(screen.queryByText("Agent Growth")).not.toBeInTheDocument();
+    expect(screen.queryByText("修为成长")).not.toBeInTheDocument();
     expect(
       screen.getByText("操作者：admin console · 请求：req-1"),
     ).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "查看关联 Agent log-1" }),
+      screen.getByRole("button", { name: "查看关联修士 log-1" }),
     );
 
-    expect(await screen.findByRole("tab", { name: "Agent" })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: "修士" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(
-      await screen.findByRole("dialog", { name: "Agent 详情" }),
+      await screen.findByRole("dialog", { name: "修士详情" }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭 Agent 详情" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭 修士详情" }));
     fireEvent.click(screen.getByRole("tab", { name: "总览" }));
 
     fireEvent.click(screen.getByRole("button", { name: "查看审计详情 log-1" }));
@@ -931,14 +931,14 @@ describe("Admin page", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "成长" }));
 
-    expect(await screen.findByText("Agent Growth")).toBeInTheDocument();
+    expect(await screen.findByText("修为成长")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "成长" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(screen.getAllByText("晋级候选").length).toBeGreaterThan(0);
     expect(screen.getByText("准备度 64%")).toBeInTheDocument();
-    expect(screen.getByText("雇主获赠 Skill")).toBeInTheDocument();
+    expect(screen.getByText("雇主获赠法卷")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
@@ -955,17 +955,17 @@ describe("Admin page", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "查看 Skill Draft 检查生产健康 · Growth Skill 详情",
+        name: "查看法卷草稿 检查生产健康 · Growth Skill 详情",
       }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "Skill Draft 详情" }),
+      await screen.findByRole("dialog", { name: "法卷草稿详情" }),
     ).toBeInTheDocument();
     expect(screen.getByText("内容结构")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "关闭 Skill Draft 详情" }),
+      screen.getByRole("button", { name: "关闭 法卷草稿详情" }),
     );
 
     fireEvent.click(
@@ -981,28 +981,28 @@ describe("Admin page", () => {
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "查看获赠 Skill 检查生产健康 · Growth Skill 详情",
+        name: "查看获赠法卷 检查生产健康 · Growth Skill 详情",
       }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "获赠 Skill 详情" }),
+      await screen.findByRole("dialog", { name: "获赠法卷详情" }),
     ).toBeInTheDocument();
     expect(screen.getByText("赠送载荷")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "查看获赠 Skill grant-1 的来源 Draft",
+        name: "查看获赠法卷 grant-1 的来源草稿",
       }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "Skill Draft 详情" }),
+      await screen.findByRole("dialog", { name: "法卷草稿详情" }),
     ).toBeInTheDocument();
     expect(screen.getByText("内容结构")).toBeInTheDocument();
 
     fireEvent.click(
-      screen.getByRole("button", { name: "关闭 Skill Draft 详情" }),
+      screen.getByRole("button", { name: "关闭 法卷草稿详情" }),
     );
 
     fireEvent.click(
@@ -1032,26 +1032,26 @@ describe("Admin page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "关闭 任务详情" }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "Agent" }));
+    fireEvent.click(screen.getByRole("tab", { name: "修士" }));
 
-    expect(await screen.findByText("Agent 运营")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Agent" })).toHaveAttribute(
+    expect(await screen.findByText("修士运营")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "修士" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
 
     fireEvent.click(
       screen.getByRole("button", {
-        name: "查看 Agent agent://a2ahub/admin-1 详情",
+        name: "查看修士 agent://a2ahub/admin-1 详情",
       }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "Agent 详情" }),
+      await screen.findByRole("dialog", { name: "修士详情" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("未填写 headline")).toBeInTheDocument();
+    expect(screen.getByText("未填写命牌称号")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭 Agent 详情" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭 修士详情" }));
 
     fireEvent.click(screen.getByRole("button", { name: "暂停" }));
 
@@ -1243,7 +1243,7 @@ describe("Admin page", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByText("Agent 状态更新")).toBeInTheDocument();
+    expect(screen.getByText("修士状态更新")).toBeInTheDocument();
 
     fireEvent.click(
       screen.getByRole("button", { name: "查看审计记录 log-1 详情" }),
@@ -1256,19 +1256,19 @@ describe("Admin page", () => {
     expect(screen.getByText("req-1")).toBeInTheDocument();
     expect(screen.getByText(/资源摘要：/)).toBeInTheDocument();
     expect(
-      screen.getAllByText("Agent agent://a2ahub/admin-1").length,
+      screen.getAllByText("修士 agent://a2ahub/admin-1").length,
     ).toBeGreaterThan(0);
 
     fireEvent.click(
-      screen.getAllByRole("button", { name: "查看关联 Agent log-1" })[0],
+      screen.getAllByRole("button", { name: "查看关联修士 log-1" })[0],
     );
 
-    expect(await screen.findByRole("tab", { name: "Agent" })).toHaveAttribute(
+    expect(await screen.findByRole("tab", { name: "修士" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
     expect(
-      await screen.findByRole("dialog", { name: "Agent 详情" }),
+      await screen.findByRole("dialog", { name: "修士详情" }),
     ).toBeInTheDocument();
   });
 });

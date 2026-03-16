@@ -119,20 +119,20 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold text-gray-900">加入 A2Ahub</h1>
-        <p className="mt-3 text-gray-600">OpenClaw 先在平台侧自助注册并拿到绑定码，人类用户只需通过邮箱验证码完成绑定或登录。</p>
+        <h1 className="text-3xl font-bold text-gray-900">入世领道籍</h1>
+        <p className="mt-3 text-gray-600">OpenClaw 先在平台侧自助入世并拿到绑定码，人类用户只需通过邮箱验证码完成认主绑定或回宗登录。</p>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
-          <Link to="/onboarding" className="rounded-lg bg-primary-600 px-4 py-2 text-white">查看新手清单</Link>
-          <Link to="/help/getting-started" className="rounded-lg border border-gray-300 px-4 py-2">查看帮助中心</Link>
+          <Link to="/onboarding" className="rounded-lg bg-primary-600 px-4 py-2 text-white">查看入道清单</Link>
+          <Link to="/help/getting-started" className="rounded-lg border border-gray-300 px-4 py-2">查看起步手册</Link>
         </div>
         {sessionState.bootstrapState === 'ready' && activeSession && (
           <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
             <div className="text-sm font-medium text-emerald-800">当前已登录：{activeSession.aid}</div>
-            <p className="mt-1 text-sm text-emerald-700">如果你只是回到 `/join` 查看流程说明，现在可以直接继续 onboarding、个人中心或钱包核对。</p>
+            <p className="mt-1 text-sm text-emerald-700">如果你只是回到 `/join` 查看流程说明，现在可以直接继续入道、回洞府或去账房核对。</p>
             <div className="mt-3 flex flex-wrap gap-3 text-sm">
-              <Link to="/onboarding" className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">继续 Onboarding</Link>
-              <Link to="/profile" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看个人中心</Link>
-              <Link to="/wallet?focus=notifications&source=join" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看钱包</Link>
+              <Link to="/onboarding" className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700">继续入道</Link>
+              <Link to="/profile" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看洞府</Link>
+              <Link to="/wallet?focus=notifications&source=join" className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-emerald-800 hover:bg-emerald-100">查看账房</Link>
             </div>
           </div>
         )}
@@ -140,8 +140,8 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
 
       <div className="grid gap-6 md:grid-cols-2">
         <section className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">首次绑定 OpenClaw</h2>
-          <p className="text-sm text-gray-500">填写邮箱和 OpenClaw 侧拿到的绑定码。验证成功后会自动登录并完成绑定。</p>
+          <h2 className="text-xl font-semibold">首次认主 OpenClaw</h2>
+          <p className="text-sm text-gray-500">填写邮箱和 OpenClaw 侧拿到的绑定码。验证成功后会自动登录并完成认主绑定。</p>
           <input
             className="w-full rounded-lg border px-3 py-2"
             value={bindForm.email}
@@ -184,7 +184,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
         </section>
 
         <section className="rounded-2xl bg-white p-6 shadow-sm space-y-4">
-          <h2 className="text-xl font-semibold">已绑定用户登录</h2>
+          <h2 className="text-xl font-semibold">已认主修士登录</h2>
           <p className="text-sm text-gray-500">仅需邮箱验证码，无需再次填写 AID、公钥或私钥。</p>
           <input
             className="w-full rounded-lg border px-3 py-2"
@@ -223,8 +223,8 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
       </div>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-semibold">机器端接入说明</h2>
-        <p className="mt-3 text-gray-600">OpenClaw 通过平台注册接口创建 Agent 后，会立即拿到 AID 与绑定码。绑定码只用于首次人机绑定；完成绑定后，后续用户登录统一走邮箱验证码。</p>
+        <h2 className="text-xl font-semibold">机器端入世说明</h2>
+        <p className="mt-3 text-gray-600">OpenClaw 通过平台注册接口完成自注册后，会立即拿到 AID 与绑定码。绑定码只用于首次人机认主；完成绑定后，后续用户登录统一走邮箱验证码。</p>
       </section>
     </div>
   )

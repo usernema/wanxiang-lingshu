@@ -106,7 +106,7 @@ function renderProfile(options?: {
       promotion_readiness_score: 68,
       recommended_next_pool: 'preferred',
       promotion_candidate: true,
-      suggested_actions: ['发布至少 1 个从真实任务总结出来的 Skill，形成可展示的作品沉淀。'],
+      suggested_actions: ['发布至少 1 个从真实任务总结出来的法卷，形成可展示的作品沉淀。'],
       risk_flags: [],
       evaluation_summary: '标准池成长档案',
       last_evaluated_at: '2026-03-10T00:00:00.000Z',
@@ -467,27 +467,27 @@ describe('Profile UI regression coverage', () => {
 
     expect(await screen.findByText('Claude Worker')).toBeInTheDocument()
     expect(screen.getByText('worker-agent')).toBeInTheDocument()
-    expect(screen.getByText('状态: active')).toBeInTheDocument()
+    expect(screen.getByText('状态：活跃')).toBeInTheDocument()
     expect(screen.getByText('信誉分: 88')).toBeInTheDocument()
-    expect(screen.getByText('可展示能力')).toBeInTheDocument()
-    expect(screen.getByText('已发帖子')).toBeInTheDocument()
-    expect(screen.getByText('已发技能')).toBeInTheDocument()
+    expect(screen.getByText('可展示道法')).toBeInTheDocument()
+    expect(screen.getByText('已发论道帖')).toBeInTheDocument()
+    expect(screen.getByText('已发法卷')).toBeInTheDocument()
     expect(screen.getByText('reasoning')).toBeInTheDocument()
     expect(screen.getByText('coding')).toBeInTheDocument()
-    expect(await screen.findByText(exactTextContent('Wallet balance：120'))).toBeInTheDocument()
-    expect(await screen.findByText(exactTextContent('Frozen balance：15'))).toBeInTheDocument()
+    expect(await screen.findByText(exactTextContent('账房余额：120'))).toBeInTheDocument()
+    expect(await screen.findByText(exactTextContent('冻结灵石：15'))).toBeInTheDocument()
     expect(screen.getByText('总收入')).toBeInTheDocument()
     expect(screen.getByText('320')).toBeInTheDocument()
     expect(screen.getByText('总支出')).toBeInTheDocument()
     expect(screen.getByText('200')).toBeInTheDocument()
-    expect(await screen.findByText(exactTextContent('Provider: anthropic'))).toBeInTheDocument()
+    expect(await screen.findByText(exactTextContent('法脉来源：anthropic'))).toBeInTheDocument()
     expect(await screen.findByText('晋级候选')).toBeInTheDocument()
     expect(screen.getByText('突破准备度')).toBeInTheDocument()
     expect(screen.getByText('下一境界')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去发布任务' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
-    expect(screen.getByRole('link', { name: '去核对钱包通知' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
-    expect(screen.getByRole('link', { name: '发布可售 Skill' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
-    expect(screen.getByRole('link', { name: '去钱包通知中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
+    expect(screen.getByRole('link', { name: '去发布悬赏' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
+    expect(screen.getByRole('link', { name: '去核对账房飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
+    expect(screen.getByRole('link', { name: '上架可售法卷' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
+    expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
   })
 
   it('renders dojo overview and starts diagnostics from profile', async () => {
@@ -529,7 +529,7 @@ describe('Profile UI regression coverage', () => {
             source_draft_id: 'draft-1',
             skill_id: 'skill-gifted-1',
             title: '首单经验礼包',
-            summary: '把首次成功交付沉淀成可复用 Skill。',
+            summary: '把首次成功交付沉淀成可复用法卷。',
             category: 'development',
             grant_payload: {},
             status: 'granted',
@@ -543,7 +543,7 @@ describe('Profile UI regression coverage', () => {
       },
     })
 
-    const marketplaceLink = await screen.findByRole('link', { name: '去市场查看此 Skill' })
+    const marketplaceLink = await screen.findByRole('link', { name: '去万象楼查看此法卷' })
     expect(marketplaceLink).toHaveAttribute(
       'href',
       '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gifted-1',
@@ -586,7 +586,7 @@ describe('Profile UI regression coverage', () => {
     })
 
     expect(
-      await screen.findByText('加载个人资料失败，请检查网关、identity、credit 与 marketplace 服务。'),
+      await screen.findByText('加载修为档案失败，请检查网关、identity、credit 与 marketplace 服务。'),
     ).toBeInTheDocument()
   })
 
@@ -599,7 +599,7 @@ describe('Profile UI regression coverage', () => {
   it('shows marketplace verification focus banner when navigated from marketplace flow', async () => {
     renderProfile({ initialEntries: ['/profile?focus=credit-verification&source=marketplace'] })
 
-    expect(await screen.findByText('Wallet / Credit 变化解释')).toBeInTheDocument()
+    expect(await screen.findByText('灵石 / 账房变化解释')).toBeInTheDocument()
     expect(
       screen.getByText('请重点核对 Balance、Frozen、Earned、Spent，与当前 task / escrow 状态是否一致。'),
     ).toBeInTheDocument()
@@ -666,12 +666,12 @@ describe('Profile UI regression coverage', () => {
     })
 
     expect((await screen.findAllByText('待验收任务')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('Awaiting Acceptance')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去处理待验收任务' })).toHaveAttribute(
+    expect(await screen.findByText('候验卷')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去处理待验卷悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-activity',
     )
-    expect(screen.getByRole('link', { name: '继续当前任务流' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '继续当前历练流' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-growth',
     )

@@ -75,7 +75,7 @@ function getApplicantInsight(application: TaskApplication): ApplicantInsight {
   const proposal = (application.proposal || '').trim()
   if (!proposal) {
     return {
-      proposal: '未填写 proposal',
+      proposal: '未填写接榜玉简',
       proposalStrength: 'light',
       summary: '没有补充执行方案，建议雇主先确认交付方式与时间预期。',
     }
@@ -84,20 +84,20 @@ function getApplicantInsight(application: TaskApplication): ApplicantInsight {
     return {
       proposal,
       proposalStrength: 'strong',
-      summary: 'proposal 信息较完整，通常已覆盖做法、边界或交付承诺。',
+      summary: '接榜玉简信息较完整，通常已覆盖做法、边界或交付承诺。',
     }
   }
   if (proposal.length >= 40) {
     return {
       proposal,
       proposalStrength: 'medium',
-      summary: 'proposal 已表达基本意向，但还可以补充执行细节。',
+      summary: '接榜玉简已表达基本意向，但还可以补充执行细节。',
     }
   }
   return {
     proposal,
     proposalStrength: 'light',
-    summary: 'proposal 偏简短，分配前最好再确认执行计划。',
+    summary: '接榜玉简偏简短，点将前最好再确认执行计划。',
   }
 }
 
@@ -108,9 +108,9 @@ function getProposalStrengthTone(strength: ApplicantInsight['proposalStrength'])
 }
 
 function getProposalStrengthLabel(strength: ApplicantInsight['proposalStrength']) {
-  if (strength === 'strong') return 'proposal 完整'
-  if (strength === 'medium') return 'proposal 一般'
-  return 'proposal 简短'
+  if (strength === 'strong') return '玉简完整'
+  if (strength === 'medium') return '玉简一般'
+  return '玉简简短'
 }
 
 function formatRelativeTime(value?: string | null) {
@@ -127,7 +127,7 @@ function formatRelativeTime(value?: string | null) {
 }
 
 function formatProposalExcerpt(proposal?: string | null) {
-  if (!proposal?.trim()) return '未填写 proposal'
+  if (!proposal?.trim()) return '未填写接榜玉简'
   return proposal.trim()
 }
 
@@ -147,45 +147,45 @@ function getApplicantCountLabel(count: number) {
 }
 
 function getTaskHiringSummary(task: MarketplaceTask, applications: TaskApplication[]) {
-  if (task.status === 'open' && applications.length === 0) return '已发布，等待申请人投递 proposal。'
-  if (task.status === 'open' && applications.length > 0) return `已收到 ${applications.length} 个申请，待 employer 决策。`
-  if (task.status === 'assigned' || task.status === 'in_progress') return `已分配给 ${task.worker_aid || '指定 worker'}，escrow ${task.escrow_id ? '已创建' : '待核对'}。`
-  if (task.status === 'submitted') return `执行者 ${task.worker_aid || '已分配 worker'} 已提交交付，等待 employer 验收。`
-  if (task.status === 'completed') return '任务已完成，建议转去 Profile / Wallet 核对结算。'
-  if (task.status === 'cancelled') return '任务已取消，如存在托管应已退款。'
-  return '任务状态待确认。'
+  if (task.status === 'open' && applications.length === 0) return '悬赏已挂榜，等待同道投递接榜玉简。'
+  if (task.status === 'open' && applications.length > 0) return `悬赏已收到 ${applications.length} 份接榜申请，待发榜人决策。`
+  if (task.status === 'assigned' || task.status === 'in_progress') return `悬赏已点将给 ${task.worker_aid || '指定行脚人'}，灵石托管 ${task.escrow_id ? '已创建' : '待核对'}。`
+  if (task.status === 'submitted') return `行脚人 ${task.worker_aid || '已分配行脚人'} 已交卷，等待发榜人验卷。`
+  if (task.status === 'completed') return '悬赏已完结，建议转去洞府 / 灵石账房核对结算。'
+  if (task.status === 'cancelled') return '悬赏已撤下，如存在托管应已退款。'
+  return '当前悬赏状态待确认。'
 }
 
 function getTaskOwnershipLabel(task: MarketplaceTask, employerSession: ReturnType<typeof getSession>, workerSession: ReturnType<typeof getSession>) {
-  if (employerSession && task.employer_aid === employerSession.aid) return '你是该任务的 employer'
-  if (workerSession && task.worker_aid === workerSession.aid) return '你是该任务的 assigned worker'
-  if (workerSession && task.employer_aid !== workerSession.aid && task.status === 'open') return '你可以作为 worker 申请该任务'
-  return '你当前在观察这个任务'
+  if (employerSession && task.employer_aid === employerSession.aid) return '你是该悬赏的发榜人'
+  if (workerSession && task.worker_aid === workerSession.aid) return '你是该悬赏的已点将行脚人'
+  if (workerSession && task.employer_aid !== workerSession.aid && task.status === 'open') return '你可以作为行脚人接榜此悬赏'
+  return '你当前在观摩这道悬赏'
 }
 
 function getWorkerTaskActionSummary(task: MarketplaceTask, applications: TaskApplication[], workerSession: ReturnType<typeof getSession>) {
-  if (!workerSession) return '当前没有 worker 身份可用。'
+  if (!workerSession) return '当前没有行脚人身份可用。'
   const hasApplied = applications.some((application) => application.applicant_aid === workerSession.aid)
-  if (task.status === 'open' && !hasApplied) return '你可以提交 proposal 争取被雇佣。'
-  if (task.status === 'open' && hasApplied) return '你已提交 proposal，等待 employer 做分配决策。'
+  if (task.status === 'open' && !hasApplied) return '你可以提交接榜玉简，争取被点将。'
+  if (task.status === 'open' && hasApplied) return '你已提交接榜玉简，等待发榜人决策。'
   if ((task.status === 'assigned' || task.status === 'in_progress') && task.worker_aid === workerSession.aid) {
-    return task.status === 'assigned' ? '你已被雇佣，任务已分配，接下来可以开始交付。' : '你已被雇佣，可以开始交付并完成任务。'
+    return task.status === 'assigned' ? '你已被点将，悬赏已分配，接下来可以开始历练交卷。' : '你已被点将，可以开始交卷并完成这道悬赏。'
   }
-  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待 employer 验收或退回修改。'
-  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成此任务，建议去 Wallet 查看收入流水。'
-  return '当前这个任务没有分配给你。'
+  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已交卷，等待发榜人验卷或打回重修。'
+  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成此悬赏，建议去灵石账房查看收入流水。'
+  return '当前这道悬赏没有分配给你。'
 }
 
 function getEmployerTaskActionSummary(task: MarketplaceTask, applications: TaskApplication[], employerSession: ReturnType<typeof getSession>) {
-  if (!employerSession || task.employer_aid !== employerSession.aid) return '当前不是你的任务，无法进行雇佣决策。'
-  if (task.status === 'open' && applications.length === 0) return '任务已发布，下一步是等待或引导 worker 申请。'
-  if (task.status === 'open' && applications.length > 0) return '任务已收到申请，下一步是选择 proposal 并 assign。'
+  if (!employerSession || task.employer_aid !== employerSession.aid) return '当前不是你的悬赏，无法进行点将决策。'
+  if (task.status === 'open' && applications.length === 0) return '悬赏已挂榜，下一步是等待或引导行脚人接榜。'
+  if (task.status === 'open' && applications.length > 0) return '悬赏已收到接榜申请，下一步是查看玉简并点将。'
   if (task.status === 'assigned' || task.status === 'in_progress') {
-    return task.status === 'assigned' ? '任务已完成分配，下一步重点是确认 worker 已开始执行。' : '任务已进入执行中，下一步重点是等待 worker 完成。'
+    return task.status === 'assigned' ? '悬赏已完成点将，下一步重点是确认行脚人已开始历练。' : '悬赏已进入历练中，下一步重点是等待行脚人交卷。'
   }
-  if (task.status === 'submitted') return 'worker 已提交交付，下一步是验收通过或退回修改。'
-  if (task.status === 'completed') return '任务已闭环完成，建议核对 escrow 和 balance 变化。'
-  return '当前任务已取消。'
+  if (task.status === 'submitted') return '行脚人已交卷，下一步是验卷通过或打回重修。'
+  if (task.status === 'completed') return '悬赏已闭环完成，建议核对托管和余额变化。'
+  return '当前悬赏已撤下。'
 }
 
 function getCurrentTaskSummary(task: MarketplaceTask, applications: TaskApplication[], employerSession: ReturnType<typeof getSession>, workerSession: ReturnType<typeof getSession>) {
@@ -198,10 +198,10 @@ function getCurrentTaskSummary(task: MarketplaceTask, applications: TaskApplicat
 }
 
 function getProposalCoverageText(applications: TaskApplication[]) {
-  if (!applications.length) return '暂无 proposal。'
+  if (!applications.length) return '暂无接榜玉简。'
   const strongCount = applications.filter((application) => getApplicantInsight(application).proposalStrength === 'strong').length
-  if (strongCount === 0) return '当前 proposal 普遍偏短，建议雇主分配前先确认细节。'
-  return `${strongCount} 份 proposal 信息较完整，可优先查看。`
+  if (strongCount === 0) return '当前接榜玉简普遍偏短，建议发榜人点将前先确认细节。'
+  return `${strongCount} 份接榜玉简信息较完整，可优先查看。`
 }
 
 function getPrimaryApplicantMessage(applications: TaskApplication[]) {
@@ -229,10 +229,10 @@ function getTaskDecisionStateTone(state: string) {
 
 function getTaskQuickFacts(task: MarketplaceTask, applications: TaskApplication[]) {
   return [
-    { label: 'Decision state', value: getTaskDecisionState(task, applications), tone: getTaskDecisionStateTone(getTaskDecisionState(task, applications)) },
-    { label: 'Applicants', value: getApplicantCountLabel(applications.length), tone: 'bg-slate-100 text-slate-700' },
-    { label: 'Selected worker', value: task.worker_aid || '尚未选择执行者', tone: 'bg-slate-100 text-slate-700' },
-    { label: 'Escrow', value: task.escrow_id ? 'escrow 已建立' : 'escrow 尚未建立', tone: 'bg-slate-100 text-slate-700' },
+    { label: '榜单状态', value: getTaskDecisionState(task, applications), tone: getTaskDecisionStateTone(getTaskDecisionState(task, applications)) },
+    { label: '接榜人数', value: getApplicantCountLabel(applications.length), tone: 'bg-slate-100 text-slate-700' },
+    { label: '已点将行脚人', value: task.worker_aid || '尚未点将', tone: 'bg-slate-100 text-slate-700' },
+    { label: '灵石托管', value: task.escrow_id ? '托管已建立' : '托管尚未建立', tone: 'bg-slate-100 text-slate-700' },
   ]
 }
 
@@ -242,8 +242,8 @@ function getAssignedApplication(task: MarketplaceTask, applications: TaskApplica
 }
 
 function getTaskProposalPlaceholder(task: MarketplaceTask) {
-  if (task.status === 'open') return '说明你的执行方案、交付物、预计节奏，帮助 employer 做分配决策'
-  return '当前任务不在 open 阶段，此 proposal 仅用于回顾已提交申请内容'
+  if (task.status === 'open') return '说明你的解题方案、交卷形式与预计节奏，帮助发榜人做点将决策'
+  return '当前悬赏不在 open 阶段，此接榜玉简仅用于回顾已提交申请内容'
 }
 
 function getApplicationStatusBadge(status: string) {
@@ -278,9 +278,9 @@ function ApplicantCard({
             <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getProposalStrengthTone(insight.proposalStrength)}`}>{getProposalStrengthLabel(insight.proposalStrength)}</span>
             <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${getApplicationStatusBadge(application.status)}`}>{application.status}</span>
           </div>
-          <div className="mt-2 text-xs text-gray-500">提交于 {formatRelativeTime(application.created_at)}</div>
-          <div className="mt-3 rounded-lg bg-white p-3 text-sm text-gray-700">{formatProposalExcerpt(insight.proposal)}</div>
-          <div className="mt-2 text-sm text-gray-600">{insight.summary}</div>
+            <div className="mt-2 text-xs text-gray-500">提交于 {formatRelativeTime(application.created_at)}</div>
+            <div className="mt-3 rounded-lg bg-white p-3 text-sm text-gray-700">{formatProposalExcerpt(insight.proposal)}</div>
+            <div className="mt-2 text-sm text-gray-600">{insight.summary}</div>
         </div>
         <div className="w-full lg:max-w-[220px]">
           <button
@@ -289,9 +289,9 @@ function ApplicantCard({
             className="w-full rounded-lg bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700 disabled:bg-gray-300"
             disabled={Boolean(assignDisabledReason) || isAssignPending}
           >
-            {isAssignPending ? '分配中...' : task.status === 'open' ? '分配并创建 escrow' : '不可分配'}
+            {isAssignPending ? '点将中...' : task.status === 'open' ? '点将并创建托管' : '不可点将'}
           </button>
-          {assignDisabledReason ? <div className="mt-2 text-xs text-gray-500">{assignDisabledReason}</div> : <div className="mt-2 text-xs text-gray-500">选择该申请人后会进入 assign + escrow 流程。</div>}
+          {assignDisabledReason ? <div className="mt-2 text-xs text-gray-500">{assignDisabledReason}</div> : <div className="mt-2 text-xs text-gray-500">选择该申请人后会进入点将 + 托管流程。</div>}
         </div>
       </div>
     </div>
@@ -300,16 +300,16 @@ function ApplicantCard({
 
 function TaskPipeline({ task, applications }: { task: MarketplaceTask; applications: TaskApplication[] }) {
   const steps = [
-    { label: '发布任务', done: true },
-    { label: '收到申请', done: applications.length > 0 || task.status !== 'open' },
-    { label: '雇佣并托管', done: Boolean(task.worker_aid || task.escrow_id || task.status === 'submitted' || task.status === 'completed') },
-    { label: '提交验收', done: task.status === 'submitted' || task.status === 'completed' },
-    { label: '完成结算', done: task.status === 'completed' },
+    { label: '发榜', done: true },
+    { label: '接榜', done: applications.length > 0 || task.status !== 'open' },
+    { label: '点将托管', done: Boolean(task.worker_aid || task.escrow_id || task.status === 'submitted' || task.status === 'completed') },
+    { label: '交卷候验', done: task.status === 'submitted' || task.status === 'completed' },
+    { label: '灵石结算', done: task.status === 'completed' },
   ]
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <div className="text-sm font-medium text-gray-900">Hiring pipeline</div>
+      <div className="text-sm font-medium text-gray-900">历练流转</div>
       <div className="mt-3 grid gap-3 sm:grid-cols-5">
         {steps.map((step) => (
           <div key={step.label} className={`rounded-lg px-3 py-3 text-sm ${step.done ? 'bg-green-50 text-green-800' : 'bg-gray-50 text-gray-500'}`}>
@@ -335,23 +335,23 @@ function parseTaskQueue(value?: string | null): TaskQueue | null {
 function getTaskQueueLabel(queue: TaskQueue, role: Role) {
   const labels = role === 'worker'
     ? {
-        open: '可申请任务',
-        execution: '执行中',
-        review: '待雇主验收',
-        completed: '已完成交付',
+        open: '可接悬赏',
+        execution: '历练中',
+        review: '待发榜人验卷',
+        completed: '已完成结案',
       }
     : {
-        open: '开放招募',
-        execution: '执行中',
-        review: '等待验收',
-        completed: '已完成验收',
+        open: '开放招贤',
+        execution: '历练中',
+        review: '待验卷',
+        completed: '已完成结案',
       }
 
   return labels[queue]
 }
 
 function getTaskQueueBannerCopy(queue: TaskQueue, role: Role, count: number) {
-  const roleLabel = role === 'worker' ? '执行者视角' : '雇主视角'
+  const roleLabel = role === 'worker' ? '行脚人视角' : '发榜人视角'
   const stageLabel = getTaskQueueLabel(queue, role)
   if (count > 0) {
     return `已定位到${roleLabel}的「${stageLabel}」队列，共 ${count} 个任务。`
@@ -397,25 +397,25 @@ function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQue
   if (queue === 'open') {
     if (role === 'worker') {
       return {
-        title: '公开任务要尽快转成真实申请',
+        title: '公开悬赏要尽快转成真实接榜',
         summary: count > 0
-          ? `当前还有 ${count} 个可申请任务，建议优先挑一个投递 proposal，尽快拿到下一单。`
-          : '当前没有可申请任务，建议先优化公开主页和论坛曝光，等待新的真实需求进入市场。',
+          ? `当前还有 ${count} 个可接悬赏，建议优先挑一个投递接榜玉简，尽快拿到下一单。`
+          : '当前没有可接悬赏，建议先优化洞府与论道曝光，等待新的真实需求进入万象楼。',
         actions: [
-          { label: '去个人中心优化主页', href: '/profile?source=marketplace-open', tone: 'primary' },
-          { label: '去论坛发合作帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
+          { label: '去洞府优化命牌', href: '/profile?source=marketplace-open', tone: 'primary' },
+          { label: '去论道台发合作帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
         ],
       }
     }
 
     return {
-      title: '开放任务要尽快转成分配',
+      title: '开放悬赏要尽快转成点将',
       summary: count > 0
-        ? `当前有 ${count} 个开放招募任务，建议优先查看申请并尽快完成分配。`
-        : '当前没有开放招募中的任务，可以继续发布新的真实需求，保持供给不断档。',
+        ? `当前有 ${count} 个开放招贤悬赏，建议优先查看接榜玉简并尽快完成点将。`
+        : '当前没有开放招贤中的悬赏，可以继续发布新的真实需求，保持供给不断档。',
       actions: [
-        { label: '继续发布任务', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-open', tone: 'primary' },
-        { label: '去论坛补需求帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
+        { label: '继续发布悬赏', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-open', tone: 'primary' },
+        { label: '去论道台补需求帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
       ],
     }
   }
@@ -423,24 +423,24 @@ function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQue
   if (queue === 'execution') {
     if (role === 'worker') {
       return {
-        title: '执行中任务要尽快推进到可验收',
+        title: '历练中的悬赏要尽快推进到可验卷',
         summary: count > 0
-          ? `当前有 ${count} 个执行中任务，建议优先把交付物补齐并推进到提交验收。`
-          : '当前没有执行中任务，可以回公开任务队列继续申请新的真实任务。',
+          ? `当前有 ${count} 个历练中的悬赏，建议优先把交卷内容补齐并推进到候验状态。`
+          : '当前没有进行中的历练，可以回公开悬赏队列继续接下新的真实悬赏。',
         actions: [
-          { label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
-          { label: '回公开任务队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
+          { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
+          { label: '回公开悬赏队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
         ],
       }
     }
 
     return {
-      title: '执行中任务要盯托管与交付节奏',
+      title: '历练中的悬赏要盯托管与交卷节奏',
       summary: count > 0
-        ? `当前有 ${count} 个执行中任务，建议重点盯托管状态、交付节奏和潜在阻塞。`
-        : '当前没有执行中任务，可以回开放队列继续发布或分配任务。',
+        ? `当前有 ${count} 个历练中的悬赏，建议重点盯托管状态、交卷节奏和潜在阻塞。`
+        : '当前没有进行中的悬赏，可以回开放队列继续发布或点将悬赏。',
       actions: [
-        { label: '去钱包核对托管', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
+        { label: '去账房核对托管', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
         { label: '回开放招募队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
       ],
     }
@@ -449,52 +449,52 @@ function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQue
   if (queue === 'review') {
     if (role === 'worker') {
       return {
-        title: '待验收任务要盯住结算反馈',
+        title: '待验卷悬赏要盯住结算反馈',
         summary: count > 0
-          ? `当前有 ${count} 个待雇主验收任务，建议同步关注钱包通知与验收结果。`
-          : '当前没有待验收任务，说明交付暂时没有卡在雇主确认这一环。',
+          ? `当前有 ${count} 个待发榜人验卷悬赏，建议同步关注账房飞剑与验卷结果。`
+          : '当前没有待验卷悬赏，说明交卷暂时没有卡在发榜人确认这一环。',
         actions: [
-          { label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
-          { label: '去个人中心看成长档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
+          { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
+          { label: '去洞府看成长档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
         ],
       }
     }
 
     return {
-      title: '待验收任务优先别堆积',
+      title: '待验卷悬赏优先别堆积',
       summary: count > 0
-        ? `当前有 ${count} 个等待验收任务，建议优先完成验收，别让放款和复购卡住。`
-        : '当前没有待验收任务，说明当前没有卡在放款前最后一步。',
+        ? `当前有 ${count} 个等待验卷悬赏，建议优先完成验卷，别让放款和复购卡住。`
+        : '当前没有待验卷悬赏，说明当前没有卡在放款前最后一步。',
       actions: [
-        { label: '去钱包核对放款', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
-        { label: '去个人中心复盘结果', href: '/profile?source=marketplace-review', tone: 'secondary' },
+        { label: '去账房核对放款', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
+        { label: '去洞府复盘结果', href: '/profile?source=marketplace-review', tone: 'secondary' },
       ],
     }
   }
 
   if (role === 'worker') {
     return {
-      title: '完成交付后要把经验沉淀成资产',
+      title: '历练结案后要把经验沉淀成资产',
       summary: count > 0
-        ? `当前 completed 队列里有 ${count} 个已完成交付任务，建议优先核对收入，并把成功经验整理成公开 Skill。`
-        : '当前还没有已完成交付任务，完成首单后这里会成为你的复盘与资产沉淀入口。',
+        ? `当前 completed 队列里有 ${count} 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。`
+        : '当前还没有已结案悬赏，完成首单后这里会成为你的复盘与资产沉淀入口。',
       actions: [
-        { label: '去发布 Skill', href: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' },
-        { label: '去个人中心看成长档案', href: '/profile?source=marketplace-completed', tone: 'secondary' },
-        { label: '去钱包核对收入', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
+        { label: '去上架法卷', href: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' },
+        { label: '去洞府看成长档案', href: '/profile?source=marketplace-completed', tone: 'secondary' },
+        { label: '去账房核对收入', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
       ],
     }
   }
 
   return {
-    title: '完成验收后要把结果转成复购资产',
+    title: '验卷结案后要把结果转成复购资产',
     summary: count > 0
-      ? `当前 completed 队列里有 ${count} 个已完成验收任务，建议优先核对放款结果，再把需求模式整理成可复用模板。`
-      : '当前还没有已完成验收任务，闭环跑起来后这里会成为你的复盘与复购入口。',
+      ? `当前 completed 队列里有 ${count} 个已结案悬赏，建议优先核对放款结果，再把需求模式整理成可复用模板。`
+      : '当前还没有已结案悬赏，闭环跑起来后这里会成为你的复盘与复购入口。',
     actions: [
-      { label: '去个人中心复盘模板', href: '/profile?source=marketplace-completed', tone: 'primary' },
-      { label: '去钱包核对放款', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
-      { label: '继续发布任务', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed', tone: 'secondary' },
+      { label: '去洞府复盘模板', href: '/profile?source=marketplace-completed', tone: 'primary' },
+      { label: '去账房核对放款', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
+      { label: '继续发布悬赏', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed', tone: 'secondary' },
     ],
   }
 }
@@ -503,21 +503,21 @@ function getTaskQueueEmptyStateActions(queue: TaskQueue | null, role: Role) {
   if (queue === 'completed') {
     return role === 'worker'
       ? [
-          { label: '去发布 Skill', to: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' as const },
-          { label: '去个人中心看成长档案', to: '/profile?source=marketplace-completed' },
-          { label: '去钱包核对收入', to: '/wallet?focus=notifications&source=marketplace-completed' },
+          { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' as const },
+          { label: '去洞府看成长档案', to: '/profile?source=marketplace-completed' },
+          { label: '去账房核对收入', to: '/wallet?focus=notifications&source=marketplace-completed' },
         ]
       : [
-          { label: '去个人中心复盘模板', to: '/profile?source=marketplace-completed', tone: 'primary' as const },
-          { label: '去钱包核对放款', to: '/wallet?focus=notifications&source=marketplace-completed' },
-          { label: '继续发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed' },
+          { label: '去洞府复盘模板', to: '/profile?source=marketplace-completed', tone: 'primary' as const },
+          { label: '去账房核对放款', to: '/wallet?focus=notifications&source=marketplace-completed' },
+          { label: '继续发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed' },
         ]
   }
 
   return [
-    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' as const },
-    { label: '先去论坛发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
-    { label: '切到技能市场', to: '/marketplace?tab=skills' },
+    { label: '去发布悬赏', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' as const },
+    { label: '先去论道台发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
+    { label: '切到法卷坊', to: '/marketplace?tab=skills' },
   ]
 }
 
@@ -540,29 +540,29 @@ function getTaskWorkspaceOverview(task: MarketplaceTask, applications: TaskAppli
 }
 
 function getApplicationsLoadingCopy(task: MarketplaceTask) {
-  return task.status === 'open' ? '正在加载 proposal 列表...' : '正在加载历史申请记录...'
+  return task.status === 'open' ? '正在加载接榜玉简列表...' : '正在加载历史申请记录...'
 }
 
 function getApplicationsEmptyCopy(task: MarketplaceTask, applications: TaskApplication[]) {
   if (task.status === 'open') {
-    return applications.length === 0 ? '当前还没有申请人，下一步应先引导 worker 提交 proposal。' : '已有申请。'
+    return applications.length === 0 ? '当前还没有接榜人，下一步应先引导行脚人提交接榜玉简。' : '已有申请。'
   }
   return '当前没有可显示的历史申请记录。'
 }
 
 function getTaskApplyHint(task: MarketplaceTask, applications: TaskApplication[], workerSession: ReturnType<typeof getSession>) {
-  if (!workerSession) return '当前没有 worker session，无法提交 proposal。'
-  if (task.status !== 'open') return '当前任务不再接受新的 proposal。'
-  if (hasAppliedToTask(applications, workerSession)) return '你已经提交过 proposal，可等待 employer 决策。'
-  return 'proposal 越具体，越有利于 employer 做出雇佣决策。'
+  if (!workerSession) return '当前没有行脚人 session，无法提交接榜玉简。'
+  if (task.status !== 'open') return '当前悬赏不再接受新的接榜玉简。'
+  if (hasAppliedToTask(applications, workerSession)) return '你已经提交过接榜玉简，可等待发榜人决策。'
+  return '接榜玉简越具体，越有利于发榜人做出点将决策。'
 }
 
 function getAssignedApplicationCopy(task: MarketplaceTask, applications: TaskApplication[]) {
   const assigned = getAssignedApplication(task, applications)
   if (!assigned) {
     return {
-      title: '尚未分配执行者',
-      meta: '分配后这里会显示被雇佣 worker 的 proposal 摘要。',
+      title: '尚未点将行脚人',
+      meta: '点将后这里会显示被选中行脚人的接榜玉简摘要。',
       body: '当前还没有被分配的申请人。',
       badge: null as string | null,
     }
@@ -584,15 +584,15 @@ function getApplicationsInsights(applications: TaskApplication[]) {
 }
 
 function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplication[], workerSession: ReturnType<typeof getSession>) {
-  if (!workerSession) return '当前没有 worker 身份可用。'
-  if (task.status === 'open' && hasAppliedToTask(applications, workerSession)) return '你已提交 proposal，等待 employer 选择申请人。'
-  if (task.status === 'open') return '你可以作为 worker 申请该任务。'
+  if (!workerSession) return '当前没有行脚人身份可用。'
+  if (task.status === 'open' && hasAppliedToTask(applications, workerSession)) return '你已提交接榜玉简，等待发榜人点将。'
+  if (task.status === 'open') return '你可以作为行脚人接下这道悬赏。'
   if ((task.status === 'assigned' || task.status === 'in_progress') && task.worker_aid === workerSession.aid) {
-    return task.status === 'assigned' ? '你已被雇佣，任务已分配，接下来可以开始交付。' : '你已被雇佣，接下来可以完成任务。'
+    return task.status === 'assigned' ? '你已被点将，悬赏已分配，接下来可以开始交卷。' : '你已被点将，接下来可以完成这道悬赏。'
   }
-  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已提交交付，等待雇主验收。'
-  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成该任务，可以去 Wallet 查看收入流水。'
-  return '当前该任务没有分配给你。'
+  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已交卷，等待发榜人验卷。'
+  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成该悬赏，可以去灵石账房查看收入流水。'
+  return '当前该悬赏没有分配给你。'
 }
 
 export default function Marketplace({ sessionState }: { sessionState: AppSessionState }) {
@@ -872,7 +872,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       setName('')
       setDescription('')
       setPrice('100')
-      setActionMessage('技能已发布。')
+      setActionMessage('法卷已上架。')
       setErrorMessage(null)
       queryClient.invalidateQueries({ queryKey: ['skills'] })
     },
@@ -888,7 +888,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return api.post(`/v1/marketplace/skills/${skillId}/purchase`, { buyer_aid: session.aid })
     },
     onSuccess: () => {
-      setActionMessage('技能购买请求已完成。')
+      setActionMessage('法卷购入请求已完成。')
       setErrorMessage(null)
       queryClient.invalidateQueries({ queryKey: ['skills'] })
     },
@@ -916,7 +916,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       setTaskRequirements('')
       setTaskReward('25')
       setSelectedTaskId(created.task_id)
-      setActionMessage(`任务已创建：${created.title}`)
+      setActionMessage(`悬赏已创建：${created.title}`)
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -936,7 +936,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     },
     onSuccess: async () => {
       setApplicationProposal('')
-      setActionMessage('已提交任务申请。')
+      setActionMessage('已提交接榜玉简。')
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -951,7 +951,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return api.post(`/v1/marketplace/tasks/${taskId}/assign?worker_aid=${encodeURIComponent(workerAid)}`)
     },
     onSuccess: async () => {
-      setActionMessage('任务已分配并创建托管。')
+      setActionMessage('悬赏已点将并创建托管。')
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -974,11 +974,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       setRecentTaskOutcome({
         taskId: response.task_id,
         status: response.status,
-        message: response.status === 'submitted' ? '任务已提交验收，等待雇主确认。' : response.message,
+        message: response.status === 'submitted' ? '悬赏已交卷候验，等待发榜人确认。' : response.message,
         growthAssets: response.growth_assets ?? null,
       })
       if (response.status === 'submitted') {
-        setActionMessage('任务已提交验收，等待雇主确认。')
+        setActionMessage('悬赏已交卷候验，等待发榜人确认。')
       } else {
         setActionMessage(response.message)
       }
@@ -1004,9 +1004,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         growthAssets: response.growth_assets ?? null,
       })
       if (response.growth_assets?.employer_skill_grant_id) {
-        setActionMessage('任务已验收，托管已释放，首单成功经验已自动发布为 Skill 并赠送给雇主。')
+        setActionMessage('悬赏已验卷，托管已释放，首单成功经验已自动发布为法卷并赠送给发榜人。')
       } else if (response.growth_assets?.published_skill_id) {
-        setActionMessage('任务已验收，托管已释放，成功经验已自动发布为 Skill。')
+        setActionMessage('悬赏已验卷，托管已释放，成功经验已自动发布为法卷。')
       } else {
         setActionMessage(response.message)
       }
@@ -1024,7 +1024,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return api.post(`/v1/marketplace/tasks/${taskId}/request-revision`)
     },
     onSuccess: async () => {
-      setActionMessage('任务已退回执行中，等待 worker 继续交付。')
+      setActionMessage('悬赏已打回历练中，等待行脚人继续交卷。')
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -1039,7 +1039,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return api.post(`/v1/marketplace/tasks/${taskId}/cancel`)
     },
     onSuccess: async () => {
-      setActionMessage('任务已取消。')
+      setActionMessage('悬赏已撤下。')
       setErrorMessage(null)
       await refetchTaskWorkspace()
     },
@@ -1050,7 +1050,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   })
 
   const openProfileWithContext = () => {
-    setActionMessage('建议下一步切换到个人中心查看 balance / frozen_balance 是否符合当前任务状态。')
+    setActionMessage('建议下一步切换到洞府查看 balance / frozen_balance 是否符合当前悬赏状态。')
     setErrorMessage(null)
     navigate('/profile?focus=credit-verification&source=marketplace')
   }
@@ -1108,11 +1108,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, marketTab, selectedTaskId])
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PageStateCard message="正在恢复市场访问所需会话..." />
+    return <PageStateCard message="正在恢复万象楼访问所需会话..." />
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PageStateCard message={sessionState.errorMessage || '市场访问会话恢复失败。'} tone="error" />
+    return <PageStateCard message={sessionState.errorMessage || '万象楼访问会话恢复失败。'} tone="error" />
   }
 
   return (
@@ -1120,12 +1120,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">能力市场</h1>
-            <p className="mt-2 text-sm text-gray-600">当前页面按雇主 / 执行者工作视角组织同一账号的任务、申请、验收与结算流程。</p>
+            <h1 className="text-3xl font-bold">万象楼 · 历练悬赏 / 法卷坊</h1>
+            <p className="mt-2 text-sm text-gray-600">当前页面按发榜人 / 行脚人双视角组织同一账号的悬赏、接榜、验卷、结算与法卷沉淀流程。</p>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="雇主视角" aid={employerSession?.aid} />
-            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="执行者视角" aid={workerSession?.aid} />
+            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="发榜人视角" aid={employerSession?.aid} />
+            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="行脚人视角" aid={workerSession?.aid} />
             <span className="rounded-full bg-gray-100 px-3 py-2 text-gray-600">当前身份：{currentSession?.aid || '访客'}</span>
           </div>
         </div>
@@ -1133,19 +1133,19 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         {errorMessage && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
         {focusedMarketplaceFocus === 'create-task' && marketTab === 'tasks' && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            已定位到发布任务区，可直接创建新的真实任务。
+            已定位到发榜区，可直接创建新的真实悬赏。
           </div>
         )}
         {focusedMarketplaceFocus === 'publish-skill' && marketTab === 'skills' && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            已定位到发布技能区，可直接沉淀并上架你的能力资产。
+            已定位到上架法卷区，可直接沉淀并上架你的能力资产。
           </div>
         )}
         {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && marketTab === 'tasks' && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
             {requestedTask
-              ? `已定位到任务工作台：${requestedTask.title}`
-              : '正在定位指定任务；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
+              ? `已定位到悬赏工作台：${requestedTask.title}`
+              : '正在定位指定悬赏；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
           </div>
         )}
         {focusedTaskQueue && marketTab === 'tasks' && (
@@ -1161,14 +1161,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           className={`rounded-full px-4 py-2 text-sm ${marketTab === 'tasks' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 shadow-sm'}`}
           onClick={() => setMarketTab('tasks')}
         >
-          任务市场
+          历练榜
         </button>
         <button
           type="button"
           className={`rounded-full px-4 py-2 text-sm ${marketTab === 'skills' ? 'bg-primary-600 text-white' : 'bg-white text-gray-700 shadow-sm'}`}
           onClick={() => setMarketTab('skills')}
         >
-          技能市场
+          法卷坊
         </button>
       </div>
 
@@ -1181,10 +1181,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               : 'border-amber-200 bg-amber-50 text-amber-800'
         }`}>
           {skillsQuery.isLoading
-            ? '正在定位指定 Skill...'
+            ? '正在定位指定法卷...'
             : focusedSkill
-              ? `${focusedSkillSource === 'gifted-grant' ? '已定位到获赠 Skill' : '已定位到指定 Skill'}：${focusedSkill.name}。你可以在这里继续查看公开 listing、定价和市场反馈。`
-              : '目标 Skill 当前不在公开市场，可能已下架、未发布或尚未同步。'}
+              ? `${focusedSkillSource === 'gifted-grant' ? '已定位到获赠法卷' : '已定位到指定法卷'}：${focusedSkill.name}。你可以在这里继续查看卷面详情、定价和市集反馈。`
+              : '目标法卷当前不在公开市场，可能已下架、未发布或尚未同步。'}
         </div>
       )}
 
@@ -1196,7 +1196,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <div className="rounded-2xl bg-white p-6 shadow-sm">
               <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <h2 className="text-xl font-semibold">任务列表</h2>
+                  <h2 className="text-xl font-semibold">悬赏榜单</h2>
                   {tasksQuery.isFetching && !tasksQuery.isLoading && <div className="mt-1 text-xs text-gray-400">列表刷新中...</div>}
                 </div>
                 <select
@@ -1204,7 +1204,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   onChange={(e) => setTaskStatus(e.target.value)}
                   className="rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-primary-500"
                 >
-                  <option value="">全部状态</option>
+                  <option value="">全部榜单状态</option>
                   <option value="open">open</option>
                   <option value="assigned">assigned</option>
                   <option value="in_progress">in_progress</option>
@@ -1215,11 +1215,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               </div>
 
               <div className="space-y-3">
-                {tasksQuery.isLoading && <PageStateCard message="加载任务中..." compact />}
-                {tasksQuery.isError && <PageStateCard message="任务加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
+                {tasksQuery.isLoading && <PageStateCard message="加载悬赏中..." compact />}
+                {tasksQuery.isError && <PageStateCard message="悬赏加载失败，请检查网关与 marketplace 服务。" tone="error" compact />}
                 {!tasksQuery.isLoading && !tasksQuery.isError && visibleTasks.length === 0 && (
                   <PageStateCard
-                    message={focusedTaskQueue ? '当前阶段队列里没有符合条件的任务。' : '当前没有符合筛选条件的任务。'}
+                    message={focusedTaskQueue ? '当前阶段队列里没有符合条件的悬赏。' : '当前没有符合筛选条件的悬赏。'}
                     compact
                     actions={taskEmptyStateActions}
                   />
@@ -1234,15 +1234,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                     <div className="mb-2 flex items-start justify-between gap-3">
                       <div>
                         <h3 className="text-lg font-semibold">{task.title}</h3>
-                        <div className="mt-1 text-xs text-gray-500">任务 ID: {task.task_id}</div>
+                        <div className="mt-1 text-xs text-gray-500">悬赏 ID: {task.task_id}</div>
                       </div>
                       <StatusBadge status={task.status} />
                     </div>
                     <p className="mb-4 line-clamp-2 text-sm text-gray-600">{task.description}</p>
                     <div className="grid gap-2 text-sm text-gray-500 md:grid-cols-2">
                       <div>雇主：{task.employer_aid}</div>
-                      <div>执行者：{task.worker_aid || '未分配'}</div>
-                      <div>奖励：{task.reward} 积分</div>
+                      <div>行脚人：{task.worker_aid || '未点将'}</div>
+                      <div>赏格：{task.reward} 灵石</div>
                       <div>托管：{task.escrow_id || '未创建'}</div>
                     </div>
                   </button>
@@ -1251,14 +1251,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             </div>
 
             <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold">发布任务</h2>
+              <h2 className="mb-4 text-xl font-semibold">发布悬赏</h2>
               <form onSubmit={submitTask} className="space-y-3">
-                <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="任务标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="任务描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="任务要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-                <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="奖励积分" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+                <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+                <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+                <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+                <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
                 <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
-                  {createTask.isPending ? '创建中...' : '以 Employer 身份发布任务'}
+                  {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
                 </button>
               </form>
             </div>
@@ -1266,7 +1266,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
           <div className="space-y-6">
             <div ref={taskWorkspaceRef} className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="mb-4 text-xl font-semibold">任务详情</h2>
+              <h2 className="mb-4 text-xl font-semibold">悬赏工作台</h2>
               {taskQueueGuide && (
                 <div className="mb-4">
                   <TaskQueueGuideCard guide={taskQueueGuide} />
@@ -1283,14 +1283,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   </div>
                   {selectedTask.requirements && (
                     <div className="rounded-xl bg-gray-50 p-4">
-                      <div className="mb-1 font-medium">要求</div>
+                      <div className="mb-1 font-medium">榜单要求</div>
                       <div className="text-gray-600">{selectedTask.requirements}</div>
                     </div>
                   )}
                   <div className="grid gap-3 md:grid-cols-2">
                     <InfoCard icon={<Briefcase className="h-4 w-4" />} label="雇主" value={selectedTask.employer_aid} />
-                    <InfoCard icon={<UserCheck className="h-4 w-4" />} label="执行者" value={selectedTask.worker_aid || '未分配'} />
-                    <InfoCard icon={<CheckCircle2 className="h-4 w-4" />} label="奖励" value={`${selectedTask.reward} 积分`} />
+                    <InfoCard icon={<UserCheck className="h-4 w-4" />} label="行脚人" value={selectedTask.worker_aid || '未点将'} />
+                    <InfoCard icon={<CheckCircle2 className="h-4 w-4" />} label="赏格" value={`${selectedTask.reward} 灵石`} />
                     <InfoCard icon={<Star className="h-4 w-4" />} label="托管" value={selectedTask.escrow_id || '未创建'} />
                   </div>
 
@@ -1334,7 +1334,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   )}
 
                   {assignedApplicationCopy && (
-                    <SectionHint title="当前被雇佣 / 已锁定 proposal">
+                    <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
                       <div className="space-y-2">
                         <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
                         <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
@@ -1355,13 +1355,13 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
                   <div className="space-y-3 border-t border-gray-100 pt-4">
                     <div className="flex items-center gap-2">
-                      <h4 className="font-medium">申请列表</h4>
+                      <h4 className="font-medium">接榜玉简</h4>
                       {applicationsQuery.isFetching && <span className="text-xs text-gray-400">刷新中...</span>}
                     </div>
                     <RoleSummaryBanner message={applicationsInsights.coverage} />
                     <RoleSummaryBanner message={applicationsInsights.priority} />
                     {applicationsQuery.isLoading && <div className="text-gray-500">{getApplicationsLoadingCopy(selectedTask)}</div>}
-                    {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">申请列表加载失败，请稍后重试。</div>}
+                    {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">接榜玉简加载失败，请稍后重试。</div>}
                     {!applicationsQuery.isLoading && !applicationsQuery.isError && currentApplications.length === 0 && <div className="text-gray-500">{getApplicationsEmptyCopy(selectedTask, currentApplications)}</div>}
                     {currentApplications.map((application) => {
                       const assignDisabledReason = getTaskActionDisabledReason('assign', selectedTask, employerSession, workerSession, application.applicant_aid)
@@ -1380,7 +1380,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   </div>
 
                   <div className="space-y-3 border-t border-gray-100 pt-4">
-                    <h4 className="font-medium">Worker 操作</h4>
+                    <h4 className="font-medium">行脚人操作</h4>
                     {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
                     <form onSubmit={submitApplication} className="space-y-3">
                       <textarea
@@ -1392,7 +1392,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       />
                       <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
                       <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
-                        {applyTask.isPending ? '申请中...' : '以 Worker 身份申请任务'}
+                        {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
                       </button>
                       {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
                     </form>
@@ -1402,21 +1402,21 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       disabled={!canCompleteSelectedTask || completeTask.isPending}
                       className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {completeTask.isPending ? '提交中...' : '以 Worker 身份提交验收'}
+                      {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
                     </button>
                     {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
                   </div>
 
                   <div className="border-t border-gray-100 pt-4">
-                    <h4 className="mb-3 font-medium">Employer 操作</h4>
-                    <div className="mb-3 text-xs text-gray-500">雇主可以基于 proposal 质量、申请覆盖度和 escrow 状态做出分配、验收、退回修改或取消决策。</div>
+                    <h4 className="mb-3 font-medium">发榜人操作</h4>
+                    <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
                     <button
                       type="button"
                       onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
                       disabled={!canAcceptSelectedTask || acceptTask.isPending}
                       className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {acceptTask.isPending ? '验收中...' : '以 Employer 身份验收并放款'}
+                      {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
                     </button>
                     {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
                     <button
@@ -1425,7 +1425,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
                       className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {requestRevisionTask.isPending ? '退回中...' : '退回修改'}
+                      {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
                     </button>
                     {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
                     <button
@@ -1434,14 +1434,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       disabled={!canCancelSelectedTask || cancelTask.isPending}
                       className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
-                      {cancelTask.isPending ? '取消中...' : '以 Employer 身份取消任务'}
+                      {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
                     </button>
                     {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
                   </div>
                 </div>
               ) : (
                 <p className="text-sm text-gray-500">
-                  {focusedTaskQueue ? '当前队列里暂时没有可选任务，可先按上方建议继续推进。' : '请选择一个任务查看详情、申请列表与后续操作。'}
+                  {focusedTaskQueue ? '当前队列里暂时没有可选悬赏，可先按上方建议继续推进。' : '请选择一道悬赏查看详情、接榜玉简与后续操作。'}
                 </p>
               )}
             </div>
@@ -1451,15 +1451,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
-              {skillsQuery.isLoading && <PageStateCard message="加载技能中..." compact />}
-              {skillsQuery.isError && <PageStateCard message="技能加载失败，请检查 marketplace 服务。" tone="error" compact />}
+              {skillsQuery.isLoading && <PageStateCard message="加载法卷中..." compact />}
+              {skillsQuery.isError && <PageStateCard message="法卷加载失败，请检查 marketplace 服务。" tone="error" compact />}
               {!skillsQuery.isLoading && !skillsQuery.isError && skillsQuery.data?.length === 0 && (
                 <PageStateCard
-                  message="当前暂无技能。"
+                  message="当前暂无法卷。"
                   compact
                   actions={[
-                    { label: '去发布技能', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
-                    { label: '切到任务市场', to: '/marketplace?tab=tasks' },
+                    { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
+                    { label: '切到历练榜', to: '/marketplace?tab=tasks' },
                   ]}
                 />
               )}
@@ -1492,11 +1492,11 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-2xl font-bold text-primary-600">{skill.price} 积分</div>
+                      <div className="text-2xl font-bold text-primary-600">{skill.price} 灵石</div>
                       <div className="text-xs text-gray-400">发布者 {skill.author_aid}</div>
                     </div>
                     <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
-                      {purchaseSkill.isPending ? '处理中...' : '购买'}
+                      {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
                     </button>
                   </div>
                 </div>
@@ -1505,13 +1505,13 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           </div>
 
           <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="mb-4 text-xl font-semibold">发布技能</h2>
+            <h2 className="mb-4 text-xl font-semibold">上架法卷</h2>
             <div className="space-y-3">
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="技能名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="技能描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-              <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="价格" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+              <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+              <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
               <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
-                {publishSkill.isPending ? '发布中...' : '发布技能'}
+                {publishSkill.isPending ? '上架中...' : '上架法卷'}
               </button>
             </div>
           </form>
@@ -1528,43 +1528,43 @@ function getTaskActionDisabledReason(
   workerSession: ReturnType<typeof getSession>,
   workerAid?: string,
 ) {
-  if (!task) return '请先选择一个任务。'
+  if (!task) return '请先选择一道悬赏。'
 
   switch (action) {
     case 'apply':
-      if (!workerSession) return '当前没有可用的 worker session。'
-      if (task.status !== 'open') return '只有 open 状态的任务可以申请。'
-      if (task.employer_aid === workerSession.aid) return '雇主本人不能以 worker 身份申请自己的任务。'
+      if (!workerSession) return '当前没有可用的行脚人 session。'
+      if (task.status !== 'open') return '只有 open 状态的悬赏可以接榜。'
+      if (task.employer_aid === workerSession.aid) return '发榜人本人不能以行脚人身份接自己的悬赏。'
       return null
     case 'assign':
-      if (!employerSession) return '当前没有可用的 employer session。'
-      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以执行分配。'
-      if (task.status !== 'open') return '只有 open 状态的任务可以分配。'
-      if (task.worker_aid || task.escrow_id) return '当前任务已经分配或已创建托管。'
-      if (!workerAid) return '请先选择要分配的申请人。'
+      if (!employerSession) return '当前没有可用的发榜人 session。'
+      if (task.employer_aid !== employerSession.aid) return '只有悬赏所属发榜人可以执行点将。'
+      if (task.status !== 'open') return '只有 open 状态的悬赏可以点将。'
+      if (task.worker_aid || task.escrow_id) return '当前悬赏已经分配或已创建托管。'
+      if (!workerAid) return '请先选择要点将的申请人。'
       return null
     case 'complete':
-      if (!workerSession) return '当前没有可用的 worker session。'
-      if (task.status === 'submitted') return '该任务已提交验收，等待 employer 决策。'
-      if (task.status !== 'assigned' && task.status !== 'in_progress') return '只有 assigned / in_progress 状态的任务可以提交验收。'
-      if (task.worker_aid !== workerSession.aid) return '只有被分配的 worker 可以完成该任务。'
-      if (!task.escrow_id) return '当前任务缺少 escrow，无法提交验收。'
+      if (!workerSession) return '当前没有可用的行脚人 session。'
+      if (task.status === 'submitted') return '该悬赏已交卷候验，等待发榜人决策。'
+      if (task.status !== 'assigned' && task.status !== 'in_progress') return '只有 assigned / in_progress 状态的悬赏可以交卷候验。'
+      if (task.worker_aid !== workerSession.aid) return '只有被点将的行脚人可以完成该悬赏。'
+      if (!task.escrow_id) return '当前悬赏缺少 escrow，无法交卷候验。'
       return null
     case 'accept':
-      if (!employerSession) return '当前没有可用的 employer session。'
-      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以验收任务。'
-      if (task.status !== 'submitted') return '只有 submitted 状态的任务可以验收放款。'
-      if (!task.escrow_id) return '当前任务缺少 escrow，无法验收放款。'
+      if (!employerSession) return '当前没有可用的发榜人 session。'
+      if (task.employer_aid !== employerSession.aid) return '只有悬赏所属发榜人可以验卷放款。'
+      if (task.status !== 'submitted') return '只有 submitted 状态的悬赏可以验卷放款。'
+      if (!task.escrow_id) return '当前悬赏缺少 escrow，无法验卷放款。'
       return null
     case 'requestRevision':
-      if (!employerSession) return '当前没有可用的 employer session。'
-      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以退回修改。'
-      if (task.status !== 'submitted') return '只有 submitted 状态的任务可以退回修改。'
+      if (!employerSession) return '当前没有可用的发榜人 session。'
+      if (task.employer_aid !== employerSession.aid) return '只有悬赏所属发榜人可以打回重修。'
+      if (task.status !== 'submitted') return '只有 submitted 状态的悬赏可以打回重修。'
       return null
     case 'cancel':
-      if (!employerSession) return '当前没有可用的 employer session。'
-      if (task.employer_aid !== employerSession.aid) return '只有任务所属 employer 可以取消任务。'
-      if (!['open', 'assigned', 'in_progress'].includes(task.status)) return '只有 open / assigned / in_progress 状态的任务可以取消。'
+      if (!employerSession) return '当前没有可用的发榜人 session。'
+      if (task.employer_aid !== employerSession.aid) return '只有悬赏所属发榜人可以撤榜。'
+      if (!['open', 'assigned', 'in_progress'].includes(task.status)) return '只有 open / assigned / in_progress 状态的悬赏可以撤榜。'
       return null
   }
 }
@@ -1585,21 +1585,21 @@ function mapMarketplaceError(error: unknown, action:
 
     if (status === 401) return '当前登录已失效或已过期，请先刷新会话。'
     if (status === 403) {
-      if (action === 'createTask' || action === 'assignTask' || action === 'acceptTask' || action === 'requestRevisionTask' || action === 'cancelTask') return '当前 employer 身份与任务所有者不匹配。'
-      if (action === 'applyTask' || action === 'completeTask') return '当前 worker 身份与请求中的执行者不匹配。'
+      if (action === 'createTask' || action === 'assignTask' || action === 'acceptTask' || action === 'requestRevisionTask' || action === 'cancelTask') return '当前发榜人身份与悬赏所有者不匹配。'
+      if (action === 'applyTask' || action === 'completeTask') return '当前行脚人身份与请求中的执行者不匹配。'
       return detail || '当前身份没有执行该操作的权限。'
     }
-    if (status === 404) return detail || '目标任务不存在，列表可能已过期。'
-    if (status === 409) return detail || '当前任务状态不允许执行该操作。'
+    if (status === 404) return detail || '目标悬赏不存在，列表可能已过期。'
+    if (status === 409) return detail || '当前悬赏状态不允许执行该操作。'
     if (status === 400) {
-      if (detail?.includes('Only assigned worker can complete the task')) return '只有当前被分配的 worker 才能完成该任务。'
-      if (detail?.includes('Task has no escrow to submit for acceptance')) return '当前任务缺少 escrow，无法提交验收。请先检查分配与 credit 托管状态。'
-      if (detail?.includes('Task has no escrow to release')) return '当前任务缺少 escrow，无法验收放款。请先检查分配与 credit 托管状态。'
-      if (detail?.includes('Task is not open for applications')) return '当前任务不再处于 open 状态，无法继续申请。'
-      if (detail?.includes('Employer cannot apply to own task')) return '雇主本人不能申请自己的任务。'
-      if (detail?.includes('Assigned worker must have an application')) return '只能从已提交 proposal 的申请人里进行分配。'
-      if (detail?.includes('worker_aid is required')) return '分配任务时必须明确选择一个申请人。'
-      if (detail?.includes('Failed to create escrow')) return '创建 escrow 失败，请检查 employer 余额与 credit 服务状态。'
+      if (detail?.includes('Only assigned worker can complete the task')) return '只有当前被点将的行脚人才可完成该悬赏。'
+      if (detail?.includes('Task has no escrow to submit for acceptance')) return '当前悬赏缺少 escrow，无法交卷候验。请先检查点将与 credit 托管状态。'
+      if (detail?.includes('Task has no escrow to release')) return '当前悬赏缺少 escrow，无法验卷放款。请先检查点将与 credit 托管状态。'
+      if (detail?.includes('Task is not open for applications')) return '当前悬赏不再处于 open 状态，无法继续接榜。'
+      if (detail?.includes('Employer cannot apply to own task')) return '发榜人本人不能接自己的悬赏。'
+      if (detail?.includes('Assigned worker must have an application')) return '只能从已提交接榜玉简的申请人里进行点将。'
+      if (detail?.includes('worker_aid is required')) return '点将悬赏时必须明确选择一个申请人。'
+      if (detail?.includes('Failed to create escrow')) return '创建 escrow 失败，请检查发榜人余额与 credit 服务状态。'
       if (detail?.includes('Failed to release escrow')) return '释放 escrow 失败，请检查 credit 服务状态。'
       if (detail?.includes('Failed to refund escrow')) return '退款 escrow 失败，请检查 credit 服务状态。'
       return detail || '请求参数或服务状态不满足当前操作。'
@@ -1609,15 +1609,15 @@ function mapMarketplaceError(error: unknown, action:
   }
 
   const fallback: Record<typeof action, string> = {
-    publishSkill: '技能发布失败，请检查当前 session 与 marketplace 服务。',
-    purchaseSkill: '技能购买失败，请检查余额、session 与 marketplace 服务。',
-    createTask: '任务创建失败，请检查 employer session。',
-    applyTask: '任务申请失败，请检查 worker session。',
-    assignTask: '任务分配失败，请检查 employer 身份、余额和申请列表。',
-    completeTask: '任务提交验收失败，请确认当前 worker 即为 assigned worker。',
-    acceptTask: '任务验收失败，请确认当前 employer 为任务所有者。',
-    requestRevisionTask: '任务退回修改失败，请确认当前 employer 为任务所有者。',
-    cancelTask: '任务取消失败，请确认当前 employer 为任务所有者。',
+    publishSkill: '法卷上架失败，请检查当前 session 与 marketplace 服务。',
+    purchaseSkill: '法卷购入失败，请检查余额、session 与 marketplace 服务。',
+    createTask: '悬赏创建失败，请检查发榜人 session。',
+    applyTask: '接榜失败，请检查行脚人 session。',
+    assignTask: '点将失败，请检查发榜人身份、余额和接榜玉简列表。',
+    completeTask: '交卷候验失败，请确认当前行脚人即为 assigned worker。',
+    acceptTask: '验卷失败，请确认当前发榜人为悬赏所有者。',
+    requestRevisionTask: '打回重修失败，请确认当前发榜人为悬赏所有者。',
+    cancelTask: '撤榜失败，请确认当前发榜人为悬赏所有者。',
   }
 
   return fallback[action]
@@ -1643,8 +1643,8 @@ function getRecommendedMarketplaceAction(
 ): RecommendedMarketplaceAction {
   if (!task) {
     return {
-      title: '先选择一个任务',
-      description: '从左侧列表中选择一个任务后，系统会根据当前状态推荐最合适的下一步。',
+      title: '先选择一道悬赏',
+      description: '从左侧列表中选择一道悬赏后，系统会根据当前状态推荐最合适的下一步。',
       ctaLabel: null,
       ctaKind: null,
       hint: null,
@@ -1654,30 +1654,30 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'open' && context.role === 'worker' && !context.applyDisabledReason) {
     return {
-      title: '推荐先申请这个任务',
-      description: '当前任务仍处于 open 状态，最顺的下一步是先以 Worker 身份提交申请。',
-      ctaLabel: '立即申请',
+      title: '推荐先接下这道悬赏',
+      description: '当前悬赏仍处于 open 状态，最顺的下一步是先以行脚人身份投递接榜玉简。',
+      ctaLabel: '立即接榜',
       ctaKind: 'apply',
-      hint: '提交申请后，Employer 侧就能看到申请列表并继续分配。',
+      hint: '提交接榜玉简后，发榜人侧就能看到申请列表并继续点将。',
       tone: 'blue',
     }
   }
 
   if (task.status === 'open' && context.applications.length > 0) {
     return {
-      title: '推荐切到申请列表完成分配',
-      description: '当前任务已经具备申请人，下一步最适合由 Employer 选择申请人并创建 escrow。',
+      title: '推荐切到接榜玉简完成点将',
+      description: '当前悬赏已经具备申请人，下一步最适合由发榜人选择申请人并创建 escrow。',
       ctaLabel: null,
       ctaKind: null,
-      hint: '下方“申请列表”中的分配按钮就是当前推荐动作。',
+      hint: '下方“接榜玉简”中的点将按钮就是当前推荐动作。',
       tone: 'amber',
     }
   }
 
   if (task.status === 'assigned') {
     return {
-      title: '推荐先推进交付启动',
-      description: '当前任务已经完成分配并建立托管，下一步重点是让 Worker 尽快开始执行。',
+      title: '推荐先推进历练启动',
+      description: '当前悬赏已经完成点将并建立托管，下一步重点是让行脚人尽快开始历练。',
       ctaLabel: null,
       ctaKind: null,
       hint: '可以先看上方阶段卡、申请摘要和当前托管状态，确认执行信息是否完整。',
@@ -1687,31 +1687,31 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'in_progress' && context.role === 'worker' && !context.completeDisabledReason) {
     return {
-      title: '推荐先提交验收',
-      description: '当前任务已经进入 in_progress，且当前 Worker 就是被分配执行者，可以先提交交付等待验收。',
-      ctaLabel: '提交验收',
+      title: '推荐先交卷候验',
+      description: '当前悬赏已经进入 in_progress，且当前行脚人就是被点将执行者，可以先提交交卷等待验卷。',
+      ctaLabel: '提交交卷',
       ctaKind: 'complete',
-      hint: '提交后会进入待验收状态，由 Employer 决定放款或退回修改。',
+      hint: '提交后会进入待验卷状态，由发榜人决定放款或打回重修。',
       tone: 'amber',
     }
   }
 
   if (task.status === 'submitted' && !context.acceptDisabledReason) {
     return {
-      title: '推荐验收并放款',
-      description: '当前任务已经收到交付，下一步最适合由 Employer 验收，通过后再释放托管并生成成长资产。',
-      ctaLabel: '立即验收',
+      title: '推荐验卷并放款',
+      description: '当前悬赏已经收到交卷，下一步最适合由发榜人验卷，通过后再释放托管并生成成长资产。',
+      ctaLabel: '立即验卷',
       ctaKind: 'accept',
-      hint: '如果结果不满足预期，也可以使用下方“退回修改”。',
+      hint: '如果结果不满足预期，也可以使用下方“打回重修”。',
       tone: 'amber',
     }
   }
 
   if (task.status === 'completed') {
     return {
-      title: '推荐去 Profile 验证余额变化',
-      description: '任务已经 completed，接下来最有价值的是切到个人中心确认 reward 和资金状态是否符合预期。',
-      ctaLabel: '查看 Profile',
+      title: '推荐去洞府验证灵石变化',
+      description: '悬赏已经 completed，接下来最有价值的是切到洞府确认赏格和资金状态是否符合预期。',
+      ctaLabel: '查看洞府',
       ctaKind: 'profile',
       hint: '重点关注 balance、frozen_balance 与 credit 解释区。',
       tone: 'green',
@@ -1720,9 +1720,9 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'cancelled') {
     return {
-      title: '推荐去 Profile 验证退款结果',
-      description: '任务已经 cancelled，下一步最适合确认 Employer 侧资金是否已回到可解释状态。',
-      ctaLabel: '查看 Profile',
+      title: '推荐去洞府验证退款结果',
+      description: '悬赏已经 cancelled，下一步最适合确认发榜人侧资金是否已回到可解释状态。',
+      ctaLabel: '查看洞府',
       ctaKind: 'profile',
       hint: '重点关注 frozen_balance 是否回落，以及 credit 解释区是否能说明当前状态。',
       tone: 'slate',
@@ -1799,9 +1799,9 @@ function getTaskStageGuide(
 ): TaskStageGuide {
   if (!task) {
     return {
-      title: '未选择任务',
-      summary: '请先从左侧列表中选择一个任务，以查看当前闭环阶段。',
-      nextAction: '选择任务',
+      title: '未选择悬赏',
+      summary: '请先从左侧列表中选择一道悬赏，以查看当前闭环阶段。',
+      nextAction: '选择悬赏',
       blockers: [],
       progressLabel: '待选择',
       progressTone: 'slate',
@@ -1811,59 +1811,59 @@ function getTaskStageGuide(
   if (task.status === 'open') {
     const hasApplications = context.applications.length > 0
     return {
-      title: hasApplications ? '已进入待分配阶段' : '已进入招募阶段',
+      title: hasApplications ? '已进入待点将阶段' : '已进入招贤阶段',
       summary: hasApplications
-        ? `当前任务已有 ${context.applications.length} 个申请，Employer 可以选择申请人并创建 escrow。`
-        : '当前任务已发布但还没有完成分配，Worker 可以先申请该任务。',
-      nextAction: hasApplications ? 'Employer 分配 Worker' : 'Worker 申请任务',
+        ? `当前悬赏已有 ${context.applications.length} 个申请，发榜人可以选择申请人并创建 escrow。`
+        : '当前悬赏已发布但还没有完成点将，行脚人可以先接下这道悬赏。',
+      nextAction: hasApplications ? '发榜人点将行脚人' : '行脚人接榜',
       blockers: [context.role === 'worker' ? context.applyDisabledReason : null, context.cancelDisabledReason].filter(Boolean) as string[],
-      progressLabel: hasApplications ? '待分配' : '招募中',
+      progressLabel: hasApplications ? '待点将' : '招贤中',
       progressTone: hasApplications ? 'amber' : 'blue',
     }
   }
 
   if (task.status === 'assigned') {
     return {
-      title: '已分配，等待开始执行',
+      title: '已点将，等待开始历练',
       summary: task.escrow_id
-        ? '任务已完成分配，Credit escrow 已创建，接下来由 Worker 开始推进交付。'
-        : '任务已完成分配，但当前 escrow 信息缺失，需要先检查托管状态。',
-      nextAction: 'Worker 开始交付',
+        ? '悬赏已完成点将，Credit escrow 已创建，接下来由行脚人开始推进交卷。'
+        : '悬赏已完成点将，但当前 escrow 信息缺失，需要先检查托管状态。',
+      nextAction: '行脚人开始交卷',
       blockers: [context.completeDisabledReason, context.cancelDisabledReason].filter(Boolean) as string[],
-      progressLabel: '已分配',
+      progressLabel: '已点将',
       progressTone: 'amber',
     }
   }
 
   if (task.status === 'in_progress') {
     return {
-      title: '已托管，等待交付',
+      title: '已托管，等待交卷',
       summary: task.escrow_id
-        ? '任务已分配成功，Credit escrow 已创建，接下来等待 Worker 完成交付。'
-        : '任务处于进行中，但当前 escrow 信息缺失，需要先检查托管状态。',
-      nextAction: 'Worker 完成任务',
+        ? '悬赏已分配成功，Credit escrow 已创建，接下来等待行脚人完成交卷。'
+        : '悬赏处于进行中，但当前 escrow 信息缺失，需要先检查托管状态。',
+      nextAction: '行脚人完成悬赏',
       blockers: [context.completeDisabledReason, context.cancelDisabledReason].filter(Boolean) as string[],
-      progressLabel: '执行中',
+      progressLabel: '历练中',
       progressTone: 'amber',
     }
   }
 
   if (task.status === 'submitted') {
     return {
-      title: '待雇主验收',
-      summary: 'Worker 已提交交付，下一步由 Employer 决定验收放款或退回修改。',
-      nextAction: 'Employer 验收或退回修改',
+      title: '待发榜人验卷',
+      summary: '行脚人已提交交卷，下一步由发榜人决定验卷放款或打回重修。',
+      nextAction: '发榜人验卷或打回重修',
       blockers: [context.acceptDisabledReason, context.requestRevisionDisabledReason].filter(Boolean) as string[],
-      progressLabel: '待验收',
+      progressLabel: '待验卷',
       progressTone: 'amber',
     }
   }
 
   if (task.status === 'completed') {
     return {
-      title: '闭环完成',
-      summary: '任务已完成，Reward 与 escrow 已进入完成态，可以切换到 Profile / Credit 侧验证余额变化。',
-      nextAction: '查看余额与结果',
+      title: '结案完成',
+      summary: '悬赏已完成，赏格与 escrow 已进入完成态，可以切换到洞府 / Credit 侧验证余额变化。',
+      nextAction: '查看灵石与结果',
       blockers: [],
       progressLabel: '已完成',
       progressTone: 'green',
@@ -1872,7 +1872,7 @@ function getTaskStageGuide(
 
   return {
     title: '闭环已中止',
-    summary: '当前任务已取消，若此前存在 escrow，资金应已退款给 Employer。',
+    summary: '当前悬赏已撤下，若此前存在 escrow，资金应已退款给发榜人。',
     nextAction: '验证退款结果',
     blockers: [],
     progressLabel: '已取消',
@@ -1894,7 +1894,7 @@ function TaskLifecycleStageCard({ stageGuide }: { stageGuide: TaskStageGuide }) 
     <div className={`rounded-xl border p-4 ${toneClass}`}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <div className="text-xs font-medium uppercase tracking-wide opacity-80">当前闭环阶段</div>
+          <div className="text-xs font-medium uppercase tracking-wide opacity-80">当前历练阶段</div>
           <div className="mt-1 text-base font-semibold">{stageGuide.title}</div>
           <div className="mt-2 text-sm opacity-90">{stageGuide.summary}</div>
         </div>
@@ -1923,7 +1923,7 @@ function TaskLifecycleStageCard({ stageGuide }: { stageGuide: TaskStageGuide }) 
 function TaskQueueGuideCard({ guide }: { guide: TaskQueueGuideDescriptor }) {
   return (
     <div className="rounded-2xl border border-primary-200 bg-primary-50 p-5 text-sm text-primary-900">
-      <div className="text-xs font-medium uppercase tracking-wide text-primary-700">当前队列运营建议</div>
+      <div className="text-xs font-medium uppercase tracking-wide text-primary-700">当前队列修行建议</div>
       <div className="mt-1 text-lg font-semibold">{guide.title}</div>
       <div className="mt-2 text-primary-800">{guide.summary}</div>
       <div className="mt-4 flex flex-wrap gap-3">
@@ -2001,17 +2001,17 @@ function DiagnosticsCard({ diagnosticsQuery }: { diagnosticsQuery: ReturnType<ty
 
 function TaskStateGuide({ task }: { task: MarketplaceTask }) {
   const guide = {
-    open: '当前任务处于 open：worker 可以申请，任务 employer 可以从申请列表中分配执行者。',
-    assigned: '当前任务处于 assigned：任务已完成分配，通常表示托管已建立，下一步等待 worker 开始执行。',
-    in_progress: '当前任务处于 in_progress：只有被分配的 worker 可以提交验收，employer 可以 cancel。',
-    submitted: '当前任务处于 submitted：worker 已提交交付，employer 可以验收放款或退回修改。',
-    completed: '当前任务处于 completed：任务已完成，托管应已释放，不再允许 assign / complete / cancel。',
-    cancelled: '当前任务处于 cancelled：任务已取消，不再允许 apply / assign / complete / cancel。',
-  }[task.status] || '当前任务状态未知，请结合服务端状态判断可执行操作。'
+    open: '当前悬赏处于 open：行脚人可以接榜，发榜人可以从接榜玉简里点将执行者。',
+    assigned: '当前悬赏处于 assigned：悬赏已完成点将，通常表示托管已建立，下一步等待行脚人开始历练。',
+    in_progress: '当前悬赏处于 in_progress：只有被点将的行脚人可以交卷候验，发榜人可以撤榜。',
+    submitted: '当前悬赏处于 submitted：行脚人已提交交卷，发榜人可以验卷放款或打回重修。',
+    completed: '当前悬赏处于 completed：悬赏已完成，托管应已释放，不再允许 assign / complete / cancel。',
+    cancelled: '当前悬赏处于 cancelled：悬赏已撤下，不再允许 apply / assign / complete / cancel。',
+  }[task.status] || '当前悬赏状态未知，请结合服务端状态判断可执行操作。'
 
   return (
     <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
-      <div className="font-medium">状态机说明</div>
+      <div className="font-medium">悬赏状态机说明</div>
       <div className="mt-1">{guide}</div>
     </div>
   )
@@ -2022,12 +2022,12 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
   if (!shouldShow) return null
 
   const summary = task.status === 'submitted'
-    ? '当前任务已进入待验收阶段，建议同时盯住钱包通知与 Profile 资金解释，避免放款后信息不同步。'
+    ? '当前悬赏已进入待验卷阶段，建议同时盯住账房飞剑与洞府资金解释，避免放款后信息不同步。'
     : task.status === 'completed'
-      ? '当前任务已完成，建议立即核对钱包通知、余额变化和 Profile 里的 credit 解释。'
+      ? '当前悬赏已完成，建议立即核对账房飞剑、余额变化和洞府里的 credit 解释。'
       : task.status === 'cancelled'
-        ? '当前任务已取消，如有托管，建议核对退款通知和冻结余额是否已回落。'
-        : '当前任务已经涉及托管或结算，建议同步核对钱包和 Profile。'
+        ? '当前悬赏已撤下，如有托管，建议核对退款通知和冻结余额是否已回落。'
+        : '当前悬赏已经涉及托管或结算，建议同步核对账房和洞府。'
 
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -2035,10 +2035,10 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
       <div className="mt-2">{summary}</div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link to="/wallet?focus=notifications&source=marketplace-task" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
-          去钱包通知中心
+          去账房飞剑中心
         </Link>
         <Link to="/profile?focus=credit-verification&source=marketplace" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50">
-          去 Profile 核对资金
+          去洞府核对资金
         </Link>
       </div>
     </div>
@@ -2052,15 +2052,15 @@ function TaskOutcomeCard({ outcome }: { outcome: RecentTaskOutcome }) {
 
   return (
     <div className={`rounded-xl border p-4 ${isAccepted ? 'border-green-200 bg-green-50 text-green-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{isAccepted ? '本次任务沉淀结果' : '验收后预期沉淀'}</div>
+      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{isAccepted ? '本次悬赏沉淀结果' : '验卷后预期沉淀'}</div>
       <div className="mt-1 text-base font-semibold">{getTaskOutcomeTitle(outcome)}</div>
       <div className="mt-2 text-sm opacity-90">{getTaskOutcomeDescription(outcome)}</div>
       {growthAssets && (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <OutcomeMetric label="Skill 草稿" value={growthAssets.skill_draft_id || '未生成'} />
-          <OutcomeMetric label="雇主模板" value={growthAssets.employer_template_id || '未生成'} />
+          <OutcomeMetric label="法卷草稿" value={growthAssets.skill_draft_id || '未生成'} />
+          <OutcomeMetric label="发榜模板" value={growthAssets.employer_template_id || '未生成'} />
           <OutcomeMetric label="获赠记录" value={growthAssets.employer_skill_grant_id || '未生成'} />
-          <OutcomeMetric label="已发布 Skill" value={growthAssets.published_skill_id || '未发布'} />
+          <OutcomeMetric label="已发布法卷" value={growthAssets.published_skill_id || '未发布'} />
         </div>
       )}
       {actions.length > 0 && (
@@ -2093,31 +2093,31 @@ function OutcomeMetric({ label, value }: { label: string; value: string }) {
 }
 
 function getTaskOutcomeTitle(outcome: RecentTaskOutcome) {
-  if (outcome.status === 'submitted') return '任务已提交验收，等待成长资产在验收后落地'
-  if (outcome.growthAssets?.employer_skill_grant_id) return '验收完成，Skill 已自动发布并赠送给雇主'
-  if (outcome.growthAssets?.published_skill_id) return '验收完成，成功经验已自动沉淀为 Skill'
-  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) return '验收完成，成长资产已成功沉淀'
-  return '验收完成，托管已释放'
+  if (outcome.status === 'submitted') return '悬赏已交卷候验，等待成长资产在验卷后落地'
+  if (outcome.growthAssets?.employer_skill_grant_id) return '验卷完成，法卷已自动发布并赠送给发榜人'
+  if (outcome.growthAssets?.published_skill_id) return '验卷完成，成功经验已自动沉淀为法卷'
+  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) return '验卷完成，成长资产已成功沉淀'
+  return '验卷完成，托管已释放'
 }
 
 function getTaskOutcomeDescription(outcome: RecentTaskOutcome) {
   if (outcome.status === 'submitted') {
-    return '当前托管仍处于待验收阶段。雇主确认后，平台会尝试生成 Skill 草稿、雇主模板，以及首单赠送 Skill。'
+    return '当前托管仍处于待验卷阶段。发榜人确认后，平台会尝试生成法卷草稿、发榜模板，以及首单赠送法卷。'
   }
 
   if (outcome.growthAssets?.employer_skill_grant_id) {
-    return '这次真实任务已经完成从交付 → 自动沉淀 → 雇主可复购的闭环。建议立即查看赠送 Skill 和模板复用入口。'
+    return '这次真实悬赏已经完成从交卷 → 自动沉淀 → 发榜人可复购的闭环。建议立即查看赠送法卷和模板复用入口。'
   }
 
   if (outcome.growthAssets?.published_skill_id) {
-    return '这次真实任务的成功经验已经沉淀成公开 Skill，可以直接回到市场查看定价、曝光和后续成交。'
+    return '这次真实悬赏的成功经验已经沉淀成公开法卷，可以直接回到万象楼查看定价、曝光和后续成交。'
   }
 
   if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) {
-    return '这次任务已经沉淀出可复用资产，建议继续回个人中心查看模板、草稿和后续复用路径。'
+    return '这次悬赏已经沉淀出可复用资产，建议继续回洞府查看模板、草稿和后续复用路径。'
   }
 
-  return '本次任务已完成并释放托管，但当前没有返回新的成长资产。建议优先核对钱包通知和个人中心。'
+  return '本次悬赏已完成并释放托管，但当前没有返回新的成长资产。建议优先核对账房飞剑和洞府。'
 }
 
 function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[] {
@@ -2125,20 +2125,20 @@ function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[
   const actions: TaskOutcomeAction[] = []
 
   if (outcome.status === 'submitted') {
-    actions.push({ label: '去钱包盯通知', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
-    actions.push({ label: '去个人中心看成长档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
+    actions.push({ label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
+    actions.push({ label: '去洞府看成长档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
     return actions
   }
 
   if (growthAssets?.employer_skill_grant_id && growthAssets.published_skill_id) {
     actions.push({
-      label: '去查看获赠 Skill',
+      label: '去查看获赠法卷',
       href: buildGiftedSkillMarketplaceHref(growthAssets.employer_skill_grant_id, growthAssets.published_skill_id),
       tone: 'primary',
     })
   } else if (growthAssets?.published_skill_id) {
     actions.push({
-      label: '去查看新发布 Skill',
+      label: '去查看新发布法卷',
       href: buildSkillMarketplaceHref(growthAssets.published_skill_id, 'task-acceptance'),
       tone: 'primary',
     })
@@ -2146,14 +2146,14 @@ function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[
 
   if (growthAssets?.employer_template_id || growthAssets?.skill_draft_id) {
     actions.push({
-      label: growthAssets?.employer_template_id ? '去个人中心复用模板' : '去个人中心查看草稿',
+      label: growthAssets?.employer_template_id ? '去洞府复用模板' : '去洞府查看草稿',
       href: '/profile?source=marketplace-growth',
       tone: actions.length === 0 ? 'primary' : 'secondary',
     })
   }
 
   actions.push({
-    label: '去钱包通知中心',
+    label: '去账房飞剑中心',
     href: '/wallet?focus=notifications&source=marketplace-acceptance',
     tone: actions.length === 0 ? 'primary' : 'secondary',
   })

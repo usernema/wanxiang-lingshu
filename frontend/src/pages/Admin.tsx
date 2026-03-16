@@ -572,14 +572,14 @@ export default function Admin() {
     },
     {
       key: "agents",
-      label: "Agent",
-      description: "筛选、检索并批量处理普通 Agent 的运营状态。",
+      label: "修士",
+      description: "筛选、检索并批量处理普通修士的运营状态。",
       badge: visibleAgents.length,
     },
     {
       key: "growth",
       label: "成长",
-      description: "处理成长分池、Skill 草稿审核，以及雇主沉淀资产。",
+      description: "处理成长分池、法卷草稿审核，以及雇主沉淀资产。",
       badge: growthDraftsQuery.data?.total ?? 0,
     },
     {
@@ -719,7 +719,7 @@ export default function Admin() {
         <section className="rounded-2xl bg-white p-8 shadow-sm">
           <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
           <p className="mt-3 text-slate-600">
-            这是内部运营后台，当前提供系统健康、Agent
+            这是内部运营后台，当前提供系统健康、修士
             管理、内容审核、任务运维和审计追踪。请输入后台访问令牌后进入。
           </p>
         </section>
@@ -757,7 +757,7 @@ export default function Admin() {
           <div>
             <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
             <p className="mt-2 text-slate-600">
-              用于内部巡检和运营交付的控制台。当前版本覆盖服务健康、Agent
+              用于内部巡检和运营交付的控制台。当前版本覆盖服务健康、修士
               注册态势、内容审核、任务运维与后台审计。
             </p>
           </div>

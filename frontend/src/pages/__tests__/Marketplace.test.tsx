@@ -133,7 +133,7 @@ describe('Marketplace UI regression coverage', () => {
       <Marketplace sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复市场访问所需会话...')).toBeInTheDocument()
+    expect(await screen.findByText('正在恢复万象楼访问所需会话...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when marketplace session restoration fails', async () => {
@@ -147,10 +147,10 @@ describe('Marketplace UI regression coverage', () => {
   it('shows empty-state copy when task list is empty', async () => {
     renderMarketplace({ tasks: [] })
 
-    expect(await screen.findByText('当前没有符合筛选条件的任务。')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去发布任务' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
-    expect(screen.getByRole('link', { name: '先去论坛发需求帖' })).toHaveAttribute('href', '/forum?focus=create-post&source=marketplace-empty')
-    expect(screen.getByRole('link', { name: '切到技能市场' })).toHaveAttribute('href', '/marketplace?tab=skills')
+    expect(await screen.findByText('当前没有符合筛选条件的悬赏。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去发布悬赏' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
+    expect(screen.getByRole('link', { name: '先去论道台发需求帖' })).toHaveAttribute('href', '/forum?focus=create-post&source=marketplace-empty')
+    expect(screen.getByRole('link', { name: '切到法卷坊' })).toHaveAttribute('href', '/marketplace?tab=skills')
   })
 
   it('shows diagnostics summary and selected-task anomaly message', async () => {
@@ -204,12 +204,12 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('雇主本人不能以 worker 身份申请自己的任务。')).toBeInTheDocument()
+    expect(await screen.findByText('发榜人本人不能以行脚人身份接自己的悬赏。')).toBeInTheDocument()
 
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: /缺少托管任务/i }))
 
-    expect((await screen.findAllByText('当前任务缺少 escrow，无法提交验收。')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('当前悬赏缺少 escrow，无法交卷候验。')).length).toBeGreaterThan(0)
   })
 
   it('shows assign disabled hint when escrow already exists', async () => {
@@ -228,7 +228,7 @@ describe('Marketplace UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('当前任务已经分配或已创建托管。')).toBeInTheDocument()
+    expect(await screen.findByText('当前悬赏已经分配或已创建托管。')).toBeInTheDocument()
   })
 
   it('shows state-guide copy for open completed and cancelled tasks', async () => {
@@ -241,18 +241,18 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(
-      await screen.findByText('当前任务处于 open：worker 可以申请，任务 employer 可以从申请列表中分配执行者。'),
+      await screen.findByText('当前悬赏处于 open：行脚人可以接榜，发榜人可以从接榜玉简里点将执行者。'),
     ).toBeInTheDocument()
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: /已完成任务/i }))
     expect(
-      await screen.findByText('当前任务处于 completed：任务已完成，托管应已释放，不再允许 assign / complete / cancel。'),
+      await screen.findByText('当前悬赏处于 completed：悬赏已完成，托管应已释放，不再允许 assign / complete / cancel。'),
     ).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: /已取消任务/i }))
     expect(
-      await screen.findByText('当前任务处于 cancelled：任务已取消，不再允许 apply / assign / complete / cancel。'),
+      await screen.findByText('当前悬赏处于 cancelled：悬赏已撤下，不再允许 apply / assign / complete / cancel。'),
     ).toBeInTheDocument()
   })
 
@@ -286,12 +286,12 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    const completeButton = await screen.findByRole('button', { name: '以 Worker 身份提交验收' })
+    const completeButton = await screen.findByRole('button', { name: '以行脚人身份交卷候验' })
 
     await waitFor(() => expect(completeButton).toBeEnabled())
     await user.click(completeButton)
 
-    expect((await screen.findAllByText('任务已提交验收，等待雇主确认。')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('悬赏已交卷候验，等待发榜人确认。')).length).toBeGreaterThan(0)
   })
 
   it('shows in_progress state-guide copy', async () => {
@@ -307,9 +307,9 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('状态机说明')).toBeInTheDocument()
+    expect(await screen.findByText('悬赏状态机说明')).toBeInTheDocument()
     expect(
-      await screen.findByText('当前任务处于 in_progress：只有被分配的 worker 可以提交验收，employer 可以 cancel。'),
+      await screen.findByText('当前悬赏处于 in_progress：只有被点将的行脚人可以交卷候验，发榜人可以撤榜。'),
     ).toBeInTheDocument()
   })
 
@@ -336,13 +336,13 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    const completeButton = await screen.findByRole('button', { name: '以 Worker 身份提交验收' })
+    const completeButton = await screen.findByRole('button', { name: '以行脚人身份交卷候验' })
 
     await waitFor(() => expect(completeButton).toBeEnabled())
     await user.click(completeButton)
 
     expect(
-      await screen.findByText('当前任务缺少 escrow，无法提交验收。请先检查分配与 credit 托管状态。'),
+      await screen.findByText('当前悬赏缺少 escrow，无法交卷候验。请先检查点将与 credit 托管状态。'),
     ).toBeInTheDocument()
   })
 
@@ -382,15 +382,15 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Worker 身份提交验收' }))
+    await user.click(await screen.findByRole('button', { name: '以行脚人身份交卷候验' }))
 
-    expect((await screen.findAllByText('任务已提交验收，等待雇主确认。')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('任务已提交验收，等待成长资产在验收后落地')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去钱包盯通知' })).toHaveAttribute(
+    expect((await screen.findAllByText('悬赏已交卷候验，等待发榜人确认。')).length).toBeGreaterThan(0)
+    expect(await screen.findByText('悬赏已交卷候验，等待成长资产在验卷后落地')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去账房盯飞剑' })).toHaveAttribute(
       'href',
       '/wallet?focus=notifications&source=marketplace-submitted',
     )
-    expect(screen.getByRole('link', { name: '去个人中心看成长档案' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去洞府看成长档案' })).toHaveAttribute(
       'href',
       '/profile?source=marketplace-submitted',
     )
@@ -429,22 +429,22 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Employer 身份验收并放款' }))
+    await user.click(await screen.findByRole('button', { name: '以发榜人身份验卷并放款' }))
 
-    expect(await screen.findByText('验收完成，Skill 已自动发布并赠送给雇主')).toBeInTheDocument()
+    expect(await screen.findByText('验卷完成，法卷已自动发布并赠送给发榜人')).toBeInTheDocument()
     expect(screen.getByText('draft_growth_1')).toBeInTheDocument()
     expect(screen.getByText('tmpl_growth_1')).toBeInTheDocument()
     expect(screen.getByText('grant_growth_1')).toBeInTheDocument()
     expect(screen.getByText('skill_growth_1')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去查看获赠 Skill' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去查看获赠法卷' })).toHaveAttribute(
       'href',
       '/marketplace?tab=skills&source=gifted-grant&grant_id=grant_growth_1&skill_id=skill_growth_1',
     )
-    expect(screen.getByRole('link', { name: '去个人中心复用模板' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去洞府复用模板' })).toHaveAttribute(
       'href',
       '/profile?source=marketplace-growth',
     )
-    expect(screen.getAllByRole('link', { name: '去钱包通知中心' }).some((link) => link.getAttribute('href') === '/wallet?focus=notifications&source=marketplace-acceptance')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '去账房飞剑中心' }).some((link) => link.getAttribute('href') === '/wallet?focus=notifications&source=marketplace-acceptance')).toBe(true)
   })
 
   it('maps 401 errors into session-expired product copy', async () => {
@@ -462,7 +462,7 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Worker 身份申请任务' }))
+    await user.click(await screen.findByRole('button', { name: '以行脚人身份接榜' }))
 
     expect(await screen.findByText('当前登录已失效或已过期，请先刷新会话。')).toBeInTheDocument()
   })
@@ -490,9 +490,9 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Worker 身份提交验收' }))
+    await user.click(await screen.findByRole('button', { name: '以行脚人身份交卷候验' }))
 
-    expect(await screen.findByText('当前 worker 身份与请求中的执行者不匹配。')).toBeInTheDocument()
+    expect(await screen.findByText('当前行脚人身份与请求中的执行者不匹配。')).toBeInTheDocument()
   })
 
   it('surfaces 409 conflict detail in the error banner', async () => {
@@ -515,7 +515,7 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '以 Employer 身份取消任务' }))
+    await user.click(await screen.findByRole('button', { name: '以发榜人身份撤榜' }))
 
     expect(await screen.findByText('Task status changed by another actor')).toBeInTheDocument()
   })
@@ -553,18 +553,18 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐去 Profile 验证余额变化')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去钱包通知中心' })).toHaveAttribute(
+    expect(await screen.findByText('推荐去洞府验证灵石变化')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute(
       'href',
       '/wallet?focus=notifications&source=marketplace-task',
     )
-    expect(screen.getByRole('link', { name: '去 Profile 核对资金' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去洞府核对资金' })).toHaveAttribute(
       'href',
       '/profile?focus=credit-verification&source=marketplace',
     )
 
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: '查看 Profile' }))
+    await user.click(screen.getByRole('button', { name: '查看洞府' }))
 
     expect(await screen.findByText('Profile Route Target')).toBeInTheDocument()
   })
@@ -576,9 +576,9 @@ describe('Marketplace UI regression coverage', () => {
       skills: [],
     })
 
-    expect(await screen.findByText('当前暂无技能。')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去发布技能' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill')
-    expect(screen.getByRole('link', { name: '切到任务市场' })).toHaveAttribute('href', '/marketplace?tab=tasks')
+    expect(await screen.findByText('当前暂无法卷。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去上架法卷' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill')
+    expect(screen.getByRole('link', { name: '切到历练榜' })).toHaveAttribute('href', '/marketplace?tab=tasks')
   })
 
   it('surfaces recommended apply action for open tasks in worker view', async () => {
@@ -597,8 +597,8 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐先申请这个任务')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '立即申请' })).toBeInTheDocument()
+    expect(await screen.findByText('推荐先接下这道悬赏')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '立即接榜' })).toBeInTheDocument()
   })
 
   it('surfaces recommended complete action for assigned in-progress tasks in worker view', async () => {
@@ -618,8 +618,8 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('推荐先提交验收')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '提交验收' })).toBeInTheDocument()
+    expect(await screen.findByText('推荐先交卷候验')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '提交交卷' })).toBeInTheDocument()
   })
 
   it('opens skills tab and highlights gifted skill context from deep link', async () => {
@@ -642,7 +642,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到获赠 Skill：首单复用 Skill。你可以在这里继续查看公开 listing、定价和市场反馈。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到获赠法卷：首单复用 Skill。你可以在这里继续查看卷面详情、定价和市集反馈。')).toBeInTheDocument()
     expect(screen.getByText('获赠来源')).toBeInTheDocument()
   })
 
@@ -688,7 +688,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到执行者视角的「可申请任务」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到行脚人视角的「可接悬赏」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /公开任务队列/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /自己的开放任务/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /已提交任务/i })).not.toBeInTheDocument()
@@ -725,10 +725,10 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到雇主视角的「等待验收」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到发榜人视角的「待验卷」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /待验收目标任务/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /别人的待验收任务/i })).not.toBeInTheDocument()
-    expect(await screen.findByText('当前任务处于 submitted：worker 已提交交付，employer 可以验收放款或退回修改。')).toBeInTheDocument()
+    expect(await screen.findByText('当前悬赏处于 submitted：行脚人已提交交卷，发榜人可以验卷放款或打回重修。')).toBeInTheDocument()
   })
 
   it('filters worker execution queue from deep link and keeps assigned tasks readable', async () => {
@@ -759,10 +759,10 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到执行者视角的「执行中」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到行脚人视角的「历练中」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /已分配执行任务/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /别人的执行任务/i })).not.toBeInTheDocument()
-    expect(await screen.findByText('当前任务处于 assigned：任务已完成分配，通常表示托管已建立，下一步等待 worker 开始执行。')).toBeInTheDocument()
+    expect(await screen.findByText('当前悬赏处于 assigned：悬赏已完成点将，通常表示托管已建立，下一步等待行脚人开始历练。')).toBeInTheDocument()
   })
 
   it('shows completed queue growth guidance for worker deep link', async () => {
@@ -785,13 +785,13 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(await screen.findByRole('button', { name: /已完成交付任务/i })).toBeInTheDocument()
-    expect(await screen.findByText('完成交付后要把经验沉淀成资产')).toBeInTheDocument()
-    expect(screen.getByText('当前 completed 队列里有 1 个已完成交付任务，建议优先核对收入，并把成功经验整理成公开 Skill。')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去发布 Skill' })).toHaveAttribute(
+    expect(await screen.findByText('历练结案后要把经验沉淀成资产')).toBeInTheDocument()
+    expect(screen.getByText('当前 completed 队列里有 1 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去上架法卷' })).toHaveAttribute(
       'href',
       '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed',
     )
-    expect(screen.getByRole('link', { name: '去钱包核对收入' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去账房核对收入' })).toHaveAttribute(
       'href',
       '/wallet?focus=notifications&source=marketplace-completed',
     )
@@ -814,11 +814,11 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('当前阶段队列里没有符合条件的任务。')).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: '去发布 Skill' }).some((link) => (
+    expect(await screen.findByText('当前阶段队列里没有符合条件的悬赏。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '去上架法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed'
     ))).toBe(true)
-    expect(screen.getAllByRole('link', { name: '去个人中心看成长档案' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '去洞府看成长档案' }).some((link) => (
       link.getAttribute('href') === '/profile?source=marketplace-completed'
     ))).toBe(true)
   })
@@ -832,7 +832,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到任务工作台：指定任务工作台')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到悬赏工作台：指定任务工作台')).toBeInTheDocument()
     expect(screen.getByTestId('route-location')).toHaveTextContent(
       '/marketplace?tab=tasks&task=task-focus-2&focus=task-workspace',
     )

@@ -440,7 +440,7 @@ export function AdminOverviewPanel({
     <>
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Agent 总数"
+          title="修士总数"
           value={overview?.summary.agentsTotal ?? "—"}
           tone="emerald"
         />
@@ -504,7 +504,7 @@ export function AdminOverviewPanel({
           <div>
             <h2 className="text-xl font-semibold text-slate-900">运营快照</h2>
             <p className="text-sm text-slate-500">
-              当前筛选结果下的 Agent、内容和任务状态分布
+              当前筛选结果下的修士、内容和任务状态分布
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
@@ -513,7 +513,7 @@ export function AdminOverviewPanel({
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
           <div className="rounded-xl border border-slate-200 p-4">
-            <p className="text-sm font-medium text-slate-900">Agent 状态</p>
+            <p className="text-sm font-medium text-slate-900">修士状态</p>
             <div className="mt-3 flex flex-wrap gap-2">
               <SummaryChip
                 label="正常"
@@ -609,7 +609,7 @@ export function AdminOverviewPanel({
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            title="Agent 状态变更"
+          title="修士状态变更"
             value={moderationActionSummary.agentStatusUpdates}
             tone="amber"
           />
@@ -823,9 +823,9 @@ export function AdminGrowthPanel({
     <section className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Agent Growth</h2>
+          <h2 className="text-xl font-semibold text-slate-900">修为成长</h2>
           <p className="text-sm text-slate-500">
-            查看分池结果、手动重评成功任务沉淀出的 Skill
+            查看分池结果、手动重评成功任务沉淀出的法卷
             草稿，以及雇主私有模板。
           </p>
         </div>
@@ -836,7 +836,7 @@ export function AdminGrowthPanel({
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard
-          title="已评估 Agent"
+          title="已评估修士"
           value={growthOverview?.evaluated_agents ?? "—"}
           tone="emerald"
         />
@@ -869,7 +869,7 @@ export function AdminGrowthPanel({
         <div className="rounded-2xl border border-slate-200 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-slate-900">分池 Agent</h3>
+              <h3 className="font-semibold text-slate-900">分池修士</h3>
               <p className="text-sm text-slate-500">
                 支持按成熟度与主领域快速筛查
               </p>
@@ -982,7 +982,7 @@ export function AdminGrowthPanel({
                     )}
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
-                    完成 {agent.completed_task_count} · 活跃 Skill{" "}
+                    完成 {agent.completed_task_count} · 活跃法卷{" "}
                     {agent.active_skill_count} · 总任务 {agent.total_task_count}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
@@ -1067,9 +1067,9 @@ export function AdminGrowthPanel({
         <div className="rounded-2xl border border-slate-200 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-slate-900">Skill Draft 审核</h3>
+              <h3 className="font-semibold text-slate-900">法卷草稿审核</h3>
               <p className="text-sm text-slate-500">
-                对成功任务沉淀的 Skill 草稿进行通过、发布或归档。
+                对成功任务沉淀的法卷草稿进行通过、发布或归档。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1115,7 +1115,7 @@ export function AdminGrowthPanel({
           <div className="space-y-3">
             {isDraftsLoading && (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                正在加载 Skill 草稿…
+                正在加载法卷草稿…
               </p>
             )}
             {!isDraftsLoading &&
@@ -1147,7 +1147,7 @@ export function AdminGrowthPanel({
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      aria-label={`查看 Skill Draft ${draft.title} 详情`}
+                      aria-label={`查看法卷草稿 ${draft.title} 详情`}
                       onClick={() => openGrowthDraftDetail(draft)}
                       className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                     >
@@ -1194,7 +1194,7 @@ export function AdminGrowthPanel({
               ))}
             {!isDraftsLoading && visibleGrowthDrafts.length === 0 && (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                当前还没有可审核的 Skill 草稿。
+                当前还没有可审核的法卷草稿。
               </p>
             )}
           </div>
@@ -1241,7 +1241,7 @@ export function AdminGrowthPanel({
                     {summarizeText(template.summary, 120)}
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    来源任务：{template.source_task_id} · 执行 Agent：
+                    来源任务：{template.source_task_id} · 执行修士：
                     {template.worker_aid || "—"} · 复用 {template.reuse_count}
                   </p>
                   <div className="mt-3">
@@ -1267,9 +1267,9 @@ export function AdminGrowthPanel({
         <div className="rounded-2xl border border-slate-200 p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-slate-900">雇主获赠 Skill</h3>
+              <h3 className="font-semibold text-slate-900">雇主获赠法卷</h3>
               <p className="text-sm text-slate-500">
-                查看首单 OpenClaw 成功验收后，系统自动赠送给雇主的 Skill 资产。
+                查看首单 OpenClaw 成功验收后，系统自动赠送给雇主的法卷资产。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1279,7 +1279,7 @@ export function AdminGrowthPanel({
           <div className="space-y-3">
             {isGrantsLoading && (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                正在加载赠送 Skill…
+                正在加载赠送法卷…
               </p>
             )}
             {!isGrantsLoading &&
@@ -1305,13 +1305,13 @@ export function AdminGrowthPanel({
                     {summarizeText(grant.summary, 120)}
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    来源任务：{grant.source_task_id} · 执行 Agent：
-                    {grant.worker_aid} · Skill：{grant.skill_id}
+                    来源任务：{grant.source_task_id} · 执行修士：
+                    {grant.worker_aid} · 法卷：{grant.skill_id}
                   </p>
                   <div className="mt-3">
                     <button
                       type="button"
-                      aria-label={`查看获赠 Skill ${grant.title} 详情`}
+                      aria-label={`查看获赠法卷 ${grant.title} 详情`}
                       onClick={() => openEmployerSkillGrantDetail(grant)}
                       className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                     >
@@ -1322,7 +1322,7 @@ export function AdminGrowthPanel({
               ))}
             {!isGrantsLoading && employerSkillGrantItems.length === 0 && (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                当前还没有获赠 Skill 资产。
+                当前还没有获赠法卷资产。
               </p>
             )}
           </div>
@@ -1480,7 +1480,7 @@ export function AdminGrowthPanel({
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
         <StatCard title="已产出草稿" value={growthDraftTotal} tone="slate" />
         <StatCard
-          title="已赠送 Skill"
+          title="已赠送法卷"
           value={employerSkillGrantTotal}
           tone="emerald"
         />
@@ -2280,7 +2280,7 @@ export function AdminDojoPanel({
           tone="emerald"
         />
         <StatCard
-          title="已绑定 Agent"
+          title="已绑定修士"
           value={dojoOverview?.active_coach_bindings ?? "—"}
           tone="slate"
         />
@@ -2446,7 +2446,7 @@ export function AdminDojoPanel({
             <div>
               <h3 className="font-semibold text-slate-900">当前绑定</h3>
               <p className="text-sm text-slate-500">
-                查看已经进入道场的 Agent。
+                查看已经进入道场的修士。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -2494,7 +2494,7 @@ export function AdminDojoPanel({
               ))}
             {!isBindingsLoading && prioritizedBindings.length === 0 && (
               <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                当前还没有已绑定的道场 Agent。
+                当前还没有已绑定的道场修士。
               </p>
             )}
           </div>
@@ -2559,7 +2559,7 @@ export function AdminDojoPanel({
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-slate-900">候选 Agent 分配台</h3>
+            <h3 className="font-semibold text-slate-900">候选修士分配台</h3>
             <p className="text-sm text-slate-500">
               从成长池选人，直接绑定教练并推进到对应阶段。
             </p>
@@ -2739,7 +2739,7 @@ export function AdminDojoPanel({
           })}
           {prioritizedAgents.length === 0 && (
             <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              当前筛选下没有候选 Agent。
+              当前筛选下没有候选修士。
             </p>
           )}
         </div>
@@ -3752,9 +3752,9 @@ export function AdminAgentsPanel({
       <div className="rounded-2xl bg-white p-6 shadow-sm xl:col-span-1">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-slate-900">Agent 运营</h2>
+            <h2 className="text-xl font-semibold text-slate-900">修士运营</h2>
             <p className="text-sm text-slate-500">
-              筛选、检索并管理普通 Agent 状态
+              筛选、检索并管理普通修士状态
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
@@ -3811,7 +3811,7 @@ export function AdminAgentsPanel({
         </div>
         {selectedAgentAids.length > 0 && (
           <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-            <span>已选 {selectedAgentAids.length} 个 Agent</span>
+            <span>已选 {selectedAgentAids.length} 个修士</span>
             <button
               type="button"
               onClick={() => handleBatchAgentAction("active")}
@@ -3882,7 +3882,7 @@ export function AdminAgentsPanel({
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  aria-label={`查看 Agent ${agent.aid} 详情`}
+                  aria-label={`查看修士 ${agent.aid} 详情`}
                   onClick={() => openAgentDetail(agent)}
                   className="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                 >
@@ -3930,7 +3930,7 @@ export function AdminAgentsPanel({
           ))}
           {visibleAgents.length === 0 && (
             <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              当前筛选条件下没有 Agent。
+              当前筛选条件下没有修士。
             </p>
           )}
         </div>

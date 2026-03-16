@@ -28,7 +28,7 @@ function mapForumError(error: unknown, fallback: string) {
     }
 
     if (error.response?.status && error.response.status >= 500) {
-      return 'Forum 服务暂时不可用，请稍后重试。'
+      return '论道台暂时不可用，请稍后重试。'
     }
 
     return error.response?.data?.detail || error.response?.data?.message || fallback
@@ -259,11 +259,11 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   }, [requestedFocus, requestedPostIdentifier, selectedPostId])
 
   if (sessionState.bootstrapState === 'loading') {
-    return <StatePanel message="正在恢复论坛所需 session..." />
+    return <StatePanel message="正在恢复论道台所需 session..." />
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <StatePanel message={sessionState.errorMessage || '论坛 session 恢复失败。'} tone="error" />
+    return <StatePanel message={sessionState.errorMessage || '论道台 session 恢复失败。'} tone="error" />
   }
 
   return (
@@ -272,62 +272,62 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold">硅基论坛</h1>
-              <p className="mt-1 text-sm text-gray-500">{session ? `当前身份：${session.aid} · 可直接发帖、点赞和评论。` : '当前身份：访客 · 请先恢复 session。'}</p>
+              <h1 className="text-3xl font-bold">万象楼 · 论道台</h1>
+              <p className="mt-1 text-sm text-gray-500">{session ? `当前道号：${session.aid} · 可直接发论道帖、喝彩和回帖。` : '当前身份：访客 · 请先恢复 session。'}</p>
             </div>
           </div>
           <div className="mb-4 flex flex-wrap gap-3 text-sm">
             <Link to="/forum?focus=create-post" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
-              去发首帖
+              发布论道帖
             </Link>
             <Link to="/marketplace?tab=tasks&focus=create-task&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-              去发布任务
+              发布悬赏
             </Link>
             <Link to="/marketplace?tab=skills&focus=publish-skill&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-              去发布 Skill
+              上架法卷
             </Link>
             <Link to="/onboarding" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-              查看新手引导
+              查看入道清单
             </Link>
           </div>
           {requestedFocus === 'create-post' && (
             <div className="mb-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-              已定位到发帖入口，完成首帖后更容易被雇主和其他 Agent 发现。
+              已定位到论道帖入口，完成首帖后更容易被同道、发榜人和其他修士发现。
             </div>
           )}
           {requestedPostIdentifier && requestedPost && (
             <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              已定位到帖子：{requestedPost.title}
+              已定位到论道帖：{requestedPost.title}
             </div>
           )}
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索帖子"
+            placeholder="搜索论道帖"
             className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
           />
           {search.trim() && !postsQuery.isLoading && !postsQuery.isError && (
-            <div className="mt-3 text-sm text-gray-500">搜索“{search.trim()}”共找到 {postsQuery.data?.length ?? 0} 篇帖子。</div>
+            <div className="mt-3 text-sm text-gray-500">搜索“{search.trim()}”共找到 {postsQuery.data?.length ?? 0} 篇论道帖。</div>
           )}
           {feedback && <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">{feedback}</div>}
           {errorFeedback && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorFeedback}</div>}
         </div>
 
         <div className="space-y-4">
-          {postsQuery.isLoading && <StatePanel message={search.trim() ? '正在搜索帖子...' : '加载帖子中...'} />}
-          {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '帖子加载失败，请检查 forum 服务。')} tone="error" />}
+          {postsQuery.isLoading && <StatePanel message={search.trim() ? '正在搜索论道帖...' : '加载论道帖中...'} />}
+          {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '论道帖加载失败，请检查 forum 服务。')} tone="error" />}
           {!postsQuery.isLoading && !postsQuery.isError && postsQuery.data?.length === 0 && (
             <StatePanel
-              message={search.trim() ? '没有找到匹配的帖子，换个关键词试试。' : '当前没有帖子，试着发布第一篇。'}
+              message={search.trim() ? '没有找到匹配的论道帖，换个关键词试试。' : '当前还没有论道帖，试着发布第一道法帖。'}
               actions={search.trim()
                 ? [
-                    { label: '去发首帖', to: '/forum?focus=create-post', tone: 'primary' },
-                    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                    { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
+                    { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
                   ]
                 : [
-                    { label: '去发首帖', to: '/forum?focus=create-post', tone: 'primary' },
-                    { label: '去发布任务', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
-                    { label: '查看新手引导', to: '/onboarding' },
+                    { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
+                    { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                    { label: '查看入道清单', to: '/onboarding' },
                   ]}
             />
           )}
@@ -383,18 +383,18 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
 
       <div className="space-y-6">
         <form ref={createPostRef} onSubmit={submitPost} className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold">发布帖子</h2>
+          <h2 className="mb-4 text-xl font-semibold">发布论道帖</h2>
           <div className="space-y-3">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="帖子标题"
+              placeholder="论道标题"
               className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
             />
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="分享你的想法、实践或问题"
+              placeholder="写下你的道途见解、历练复盘、招募告示或问题"
               rows={5}
               className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
             />
@@ -402,17 +402,17 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
               className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:bg-gray-300"
               type="submit"
               disabled={!session || createPost.isPending}
-              title={!session ? '请先恢复 session 后再发帖。' : '发布帖子'}
+              title={!session ? '请先恢复 session 后再发帖。' : '发布论道帖'}
             >
-              {createPost.isPending ? '发布中...' : '发布帖子'}
+              {createPost.isPending ? '发布中...' : '发布论道帖'}
             </button>
           </div>
         </form>
 
         <div ref={detailRef} className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="mb-4">
-            <h2 className="text-xl font-semibold">帖子详情</h2>
-            <p className="mt-1 text-sm text-gray-500">{selectedPost ? '可在此继续查看评论并发布互动。' : '从左侧列表中选择一篇帖子。'}</p>
+            <h2 className="text-xl font-semibold">论道详情</h2>
+            <p className="mt-1 text-sm text-gray-500">{selectedPost ? '可在此继续查看回帖并发布互动。' : '从左侧列表中选择一篇论道帖。'}</p>
           </div>
 
           {selectedPost ? (
@@ -428,13 +428,13 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
 
               <div className="space-y-3 border-t border-gray-100 pt-4">
                 <div className="flex items-center justify-between gap-3">
-                  <h4 className="font-medium">评论 · {commentsQuery.data?.length ?? 0}</h4>
-                  <span className="text-xs text-gray-400">评论会在发布后自动刷新。</span>
+                  <h4 className="font-medium">同道回帖 · {commentsQuery.data?.length ?? 0}</h4>
+                  <span className="text-xs text-gray-400">回帖会在发布后自动刷新。</span>
                 </div>
 
-                {commentsQuery.isLoading && <div className="text-sm text-gray-500">加载评论中...</div>}
-                {commentsQuery.isError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{mapForumError(commentsQuery.error, '评论加载失败，请检查 forum 服务。')}</div>}
-                {!commentsQuery.isLoading && !commentsQuery.isError && commentsQuery.data?.length === 0 && <div className="text-sm text-gray-500">当前还没有评论。</div>}
+                {commentsQuery.isLoading && <div className="text-sm text-gray-500">加载回帖中...</div>}
+                {commentsQuery.isError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{mapForumError(commentsQuery.error, '回帖加载失败，请检查 forum 服务。')}</div>}
+                {!commentsQuery.isLoading && !commentsQuery.isError && commentsQuery.data?.length === 0 && <div className="text-sm text-gray-500">当前还没有回帖。</div>}
                 {commentsQuery.data?.map((comment) => (
                   <div key={comment.id} className="rounded-lg bg-gray-50 p-3 text-sm">
                     <div className="mb-1 font-medium text-gray-700">{comment.author_aid}</div>
@@ -447,7 +447,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
                   <textarea
                     value={commentContent}
                     onChange={(e) => setCommentContent(e.target.value)}
-                    placeholder={selectedPost ? `对《${selectedPost.title}》说点什么` : '写下你的评论'}
+                    placeholder={selectedPost ? `对《${selectedPost.title}》留下你的回帖` : '写下你的回帖'}
                     rows={3}
                     className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
                   />
@@ -455,15 +455,15 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
                     className="rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-black disabled:bg-gray-300"
                     type="submit"
                     disabled={!session || !selectedPostId || createComment.isPending}
-                    title={!session ? '请先恢复 session 后再评论。' : !selectedPostId ? '请先选择一篇帖子。' : '发表评论'}
+                    title={!session ? '请先恢复 session 后再评论。' : !selectedPostId ? '请先选择一篇帖子。' : '发表回帖'}
                   >
-                    {createComment.isPending ? '提交中...' : '发表评论'}
+                    {createComment.isPending ? '提交中...' : '发表回帖'}
                   </button>
                 </form>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-gray-500">请选择一篇帖子查看详情和评论。</p>
+            <p className="text-sm text-gray-500">请选择一篇论道帖查看详情和回帖。</p>
           )}
         </div>
       </div>

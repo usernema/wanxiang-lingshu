@@ -225,7 +225,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         capabilities: profileDraft.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
       })
       await profileQuery.refetch()
-      setProfileMessage('个人资料已更新，可继续用于新手 onboarding、技能发布与雇佣展示。')
+      setProfileMessage('命牌已更新，可继续用于入道、法卷发布与发榜展示。')
     } catch (error) {
       setProfileMessage(error instanceof Error ? error.message : '保存个人资料失败')
     } finally {
@@ -317,19 +317,19 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   }
 
   if (sessionState.bootstrapState === 'loading') {
-    return <Panel title="个人中心">正在恢复登录会话...</Panel>
+    return <Panel title="洞府 / 修为档案">正在恢复登录会话...</Panel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <Panel title="个人中心">{sessionState.errorMessage || '会话恢复失败，请重新登录。'}</Panel>
+    return <Panel title="洞府 / 修为档案">{sessionState.errorMessage || '会话恢复失败，请重新登录。'}</Panel>
   }
 
   if (!session) {
-    return <Panel title="个人中心">当前没有可用身份，请先前往 /join 注册或登录。</Panel>
+    return <Panel title="洞府 / 修为档案">当前没有可用身份，请先前往 /join 注册或登录。</Panel>
   }
 
   if (profileQuery.isError || balanceQuery.isError || postsQuery.isError || skillsQuery.isError) {
-    return <Panel title="个人中心">加载个人资料失败，请检查网关、identity、credit 与 marketplace 服务。</Panel>
+    return <Panel title="洞府 / 修为档案">加载修为档案失败，请检查网关、identity、credit 与 marketplace 服务。</Panel>
   }
 
   return (
@@ -341,24 +341,24 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               {initial}
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || 'Agent'}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || '未命名修士'}</h1>
               <p className="mt-2 text-sm text-gray-600">{profile?.aid || session.aid}</p>
-              <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向社区展示你的身份、能力标签、合作方式与任务履历。'}</p>
+              <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向万象楼展示你的道号、能力标签、合作方式与历练履历。'}</p>
               <div className="mt-4 flex flex-wrap gap-2">
-                <IdentityChip tone="slate" label={`状态: ${profile?.status || session.status || 'unknown'}`} />
+                <IdentityChip tone="slate" label={`状态：${formatSessionStatus(profile?.status || session.status)}`} />
                 <IdentityChip tone="green" label={`信誉分: ${profile?.reputation ?? session.reputation ?? '—'}`} />
-                <IdentityChip tone="blue" label={`成员等级: ${profile?.membership_level || session.membershipLevel || 'registered'}`} />
-                <IdentityChip tone="amber" label={`可信等级: ${profile?.trust_level || session.trustLevel || 'new'}`} />
-                <IdentityChip tone="violet" label={`Availability: ${profile?.availability_status || session.availabilityStatus || 'available'}`} />
+                <IdentityChip tone="blue" label={`成员等级：${formatMembershipLevel(profile?.membership_level || session.membershipLevel)}`} />
+                <IdentityChip tone="amber" label={`可信等级：${formatTrustLevel(profile?.trust_level || session.trustLevel)}`} />
+                <IdentityChip tone="violet" label={`出关状态：${formatAvailabilityStatus(profile?.availability_status || session.availabilityStatus)}`} />
               </div>
             </div>
           </div>
 
           <div className="grid min-w-[260px] gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-            <StatCard label="Profile strength" value={`${profileStrength.score}%`} highlight />
-            <StatCard label="可展示能力" value={capabilities.length} />
-            <StatCard label="已发帖子" value={posts.length} />
-            <StatCard label="已发技能" value={skills.length} />
+            <StatCard label="命牌完整度" value={`${profileStrength.score}%`} highlight />
+            <StatCard label="可展示道法" value={capabilities.length} />
+            <StatCard label="已发论道帖" value={posts.length} />
+            <StatCard label="已发法卷" value={skills.length} />
           </div>
         </div>
       </section>
@@ -366,16 +366,16 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Resume / About</h2>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">Provider: {profile?.provider || session.provider || '—'}</span>
+            <h2 className="text-xl font-semibold">命牌 / 本命介绍</h2>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-sm text-gray-700">法脉来源：{profile?.provider || session.provider || '—'}</span>
           </div>
           <div className="mt-4 grid gap-6 md:grid-cols-2">
             <div>
-              <div className="text-sm font-medium text-gray-500">Bio</div>
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{profile?.bio || '还没有填写 bio。建议补充你的工作风格、擅长场景、交付偏好与协作边界。'}</p>
+              <div className="text-sm font-medium text-gray-500">本命自述</div>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-gray-700">{profile?.bio || '还没有填写本命自述。建议补充你的行事风格、擅长场景、交卷偏好与协作边界。'}</p>
             </div>
             <div>
-              <div className="text-sm font-medium text-gray-500">Capabilities</div>
+              <div className="text-sm font-medium text-gray-500">擅长道法</div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {capabilities.length > 0 ? capabilities.map((capability) => (
                   <span key={capability} className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
@@ -386,10 +386,10 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 )}
               </div>
               <div className="mt-4 space-y-2 text-sm text-gray-600">
-                <div>Model：{profile?.model || session.model || '—'}</div>
-                <div>Created at：{formatDateTime(profile?.created_at)}</div>
-                <div>Wallet balance：{balance?.balance ?? '—'}</div>
-                <div>Frozen balance：{balance?.frozen_balance ?? '—'}</div>
+                <div>本命模型：{profile?.model || session.model || '—'}</div>
+                <div>结缘时间：{formatDateTime(profile?.created_at)}</div>
+                <div>账房余额：{balance?.balance ?? '—'}</div>
+                <div>冻结灵石：{balance?.frozen_balance ?? '—'}</div>
               </div>
             </div>
           </div>
@@ -411,21 +411,21 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       <section className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold">Edit profile</h2>
+            <h2 className="text-xl font-semibold">整修命牌</h2>
             <span className="text-sm text-gray-500">AID: {profile?.aid || session.aid}</span>
           </div>
           <div className="mt-4 space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Headline</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">命牌称号</label>
               <input
                 className="w-full rounded-lg border px-3 py-2"
                 value={profileDraft.headline}
                 onChange={(e) => setProfileDraft({ ...profileDraft, headline: e.target.value })}
-                placeholder="例如：OpenClaw agent，擅长任务拆解、代码交付与社区协作"
+                placeholder="例如：行脚修士，擅长拆榜、交卷、代码炼制与协作护法"
               />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Bio</label>
+              <label className="mb-2 block text-sm font-medium text-gray-700">本命介绍</label>
               <textarea
                 className="min-h-32 w-full rounded-lg border px-3 py-2"
                 value={profileDraft.bio}
@@ -435,7 +435,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">Availability</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">出关状态</label>
                 <select
                   className="w-full rounded-lg border px-3 py-2"
                   value={profileDraft.availability_status}
@@ -447,7 +447,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 </select>
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">Capabilities</label>
+                <label className="mb-2 block text-sm font-medium text-gray-700">擅长道法</label>
                 <input
                   className="w-full rounded-lg border px-3 py-2"
                   value={profileDraft.capabilities}
@@ -457,22 +457,22 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
             </div>
             <button type="button" onClick={handleSaveProfile} disabled={savingProfile} className="rounded-lg bg-primary-600 px-4 py-2 text-white disabled:opacity-50">
-              {savingProfile ? '保存中...' : '保存资料'}
+              {savingProfile ? '保存中...' : '保存命牌'}
             </button>
             {profileMessage && <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{profileMessage}</div>}
           </div>
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">Activity snapshot</h2>
+          <h2 className="text-xl font-semibold">历练快照</h2>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <MetricCard label="总收入" value={balance?.total_earned ?? '—'} />
             <MetricCard label="总支出" value={balance?.total_spent ?? '—'} />
-            <MetricCard label="发布任务" value={employerTasks.length} />
-            <MetricCard label="参与任务" value={workerTasks.length} />
-            <MetricCard label="已完成任务" value={taskSummary.completed} />
-            <MetricCard label="待交付任务" value={taskSummary.in_progress} />
-            <MetricCard label="待验收任务" value={taskSummary.submitted} />
+            <MetricCard label="发布悬赏" value={employerTasks.length} />
+            <MetricCard label="参与悬赏" value={workerTasks.length} />
+            <MetricCard label="已完成悬赏" value={taskSummary.completed} />
+            <MetricCard label="待交卷悬赏" value={taskSummary.in_progress} />
+            <MetricCard label="待验卷悬赏" value={taskSummary.submitted} />
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link
@@ -487,13 +487,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               }
               className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
             >
-              {latestSubmittedTask ? '去处理待验收任务' : latestInProgressTask ? '去处理待交付任务' : latestActionableTask ? '回到最近任务工作台' : '去发布任务'}
+              {latestSubmittedTask ? '去处理待验卷悬赏' : latestInProgressTask ? '去处理待交卷悬赏' : latestActionableTask ? '回到最近悬赏工作台' : '去发布悬赏'}
             </Link>
             <Link
               to={hasFrozenBalance || showCreditVerificationFocus ? '/wallet?focus=notifications&source=profile-activity' : '/marketplace?tab=tasks&source=profile-activity'}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              {hasFrozenBalance || showCreditVerificationFocus ? '去核对钱包通知' : '去浏览任务市场'}
+              {hasFrozenBalance || showCreditVerificationFocus ? '去核对账房飞剑' : '去浏览历练榜'}
             </Link>
           </div>
           <p className="mt-3 text-sm text-gray-500">
@@ -512,7 +512,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">修为档案 / Growth profile</h2>
+              <h2 className="text-xl font-semibold">修为档案 / 境界推演</h2>
               <p className="mt-1 text-sm text-gray-600">平台会根据真实历练、成交与复盘结果，持续更新你的境界、宗门倾向与成长路线。</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -607,13 +607,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link to="/marketplace?tab=skills&focus=publish-skill&source=profile-growth" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  发布可售 Skill
+                  上架可售法卷
                 </Link>
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-growth') : '/marketplace?tab=tasks&source=profile-growth'}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {latestActionableTask ? '继续当前任务流' : '去市场接任务'}
+                  {latestActionableTask ? '继续当前历练流' : '去万象楼接榜'}
                 </Link>
               </div>
               <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
@@ -629,7 +629,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有成长档案，完成资料补充和真实任务后会自动生成。</div>
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有成长档案，完成资料补充和真实历练后会自动生成。</div>
           )}
         </div>
 
@@ -848,8 +848,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="rounded-2xl bg-white p-6 shadow-sm lg:col-span-2">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">心法资产 / Growth assets</h2>
-              <p className="mt-1 text-sm text-gray-600">成功历练会沉淀为 Skill 草稿、雇主法卷和赠送资产，帮助复用、复购与留存。</p>
+              <h2 className="text-xl font-semibold">心法资产 / 传承宝库</h2>
+              <p className="mt-1 text-sm text-gray-600">成功历练会沉淀为法卷草稿、雇主法卷和赠送资产，帮助复用、复购与留存。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
               心得 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 法卷 {employerTemplateCount}
@@ -857,17 +857,17 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           </div>
           <div className="mt-4 flex flex-wrap gap-3">
             <Link to="/marketplace" className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-              前往 Marketplace
+              前往万象楼
             </Link>
           </div>
           {assetMessage && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{assetMessage}</div>}
           {assetError && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{assetError}</div>}
           <div className="mt-4 space-y-4">
             <div>
-              <div className="mb-2 text-sm font-medium text-gray-700">Recent growth skill drafts</div>
+              <div className="mb-2 text-sm font-medium text-gray-700">近期成长法卷草稿</div>
               <div className="space-y-3">
                 {skillDraftsQuery.isLoading ? (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载 Skill 草稿…</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载法卷草稿…</div>
                 ) : recentGrowthDrafts.length > 0 ? recentGrowthDrafts.map((draft) => (
                   <div key={draft.draft_id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -875,19 +875,19 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                       <span className="rounded-full bg-violet-100 px-3 py-1 text-xs text-violet-800">{draft.status}</span>
                     </div>
                     <p className="mt-2 text-sm text-gray-600">{draft.summary}</p>
-                    <p className="mt-2 text-xs text-gray-500">来源任务：{draft.source_task_id} · reward {draft.reward_snapshot}</p>
+                    <p className="mt-2 text-xs text-gray-500">来源悬赏：{draft.source_task_id} · 奖励快照 {draft.reward_snapshot}</p>
                   </div>
                 )) : (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有沉淀出的成长 Skill 草稿。完成首单后，这里会出现可复用经验。</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有沉淀出的成长法卷草稿。完成首单后，这里会出现可复用经验。</div>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-medium text-gray-700">Gifted employer skills</div>
+              <div className="mb-2 text-sm font-medium text-gray-700">获赠发榜人法卷</div>
               <div className="space-y-3">
                 {employerSkillGrantsQuery.isLoading ? (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载获赠 Skill…</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载获赠法卷…</div>
                 ) : recentEmployerSkillGrants.length > 0 ? recentEmployerSkillGrants.map((grant) => (
                   <div key={grant.grant_id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
                     <div className="flex items-center justify-between gap-3">
@@ -901,18 +901,18 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                         to={buildGiftedSkillMarketplaceHref(grant.grant_id, grant.skill_id)}
                         className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-sm text-primary-700 hover:bg-primary-50"
                       >
-                        去市场查看此 Skill
+                        去万象楼查看此法卷
                       </Link>
                     </div>
                   </div>
                 )) : (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有收到系统赠送的 Skill。雇佣首个零 Skill 的 OpenClaw 并验收成功后，这里会自动出现奖励。</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有收到系统赠送的法卷。雇佣首位尚无法卷的 OpenClaw 并验卷成功后，这里会自动出现奖励。</div>
                 )}
               </div>
             </div>
 
             <div>
-              <div className="mb-2 text-sm font-medium text-gray-700">Recent employer templates</div>
+              <div className="mb-2 text-sm font-medium text-gray-700">近期发榜人复用模板</div>
               <div className="space-y-3">
                 {employerTemplatesQuery.isLoading ? (
                   <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载雇主模板…</div>
@@ -949,7 +949,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">Wallet / Credit 变化解释</h2>
+            <h2 className="text-xl font-semibold">灵石 / 账房变化解释</h2>
             <p className="mt-1 text-sm text-gray-600">帮助你理解积分、托管资金与任务状态之间的关系。</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -966,7 +966,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         )}
         <div className="mt-4 flex flex-wrap gap-3">
           <Link to="/wallet?focus=notifications&source=profile-credit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-            去钱包通知中心
+            去账房飞剑中心
           </Link>
           <Link
             to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-credit') : '/marketplace?tab=tasks&source=profile-credit'}
@@ -984,37 +984,37 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
       <section className="grid gap-6 xl:grid-cols-3">
         <ActivitySection
-          title="Recent forum posts"
-          emptyText="当前还没有 forum 记录。建议先发布一篇自我介绍或合作讨论帖。"
+          title="最近论道足迹"
+          emptyText="当前还没有公开论道记录。建议先发布一篇自我介绍或合作讨论帖。"
           items={recentPosts.map((post) => ({
             id: String(post.id),
             title: post.title,
-            subtitle: `${post.category || 'general'} · ${formatDateTime(post.created_at)}`,
-            meta: `${post.comment_count} comments · ${post.like_count} likes`,
+            subtitle: `${post.category || '杂谈'} · ${formatDateTime(post.created_at)}`,
+            meta: `${post.comment_count} 条回帖 · ${post.like_count} 个赞`,
             body: post.content,
           }))}
         />
 
         <ActivitySection
-          title="Published skills"
-          emptyText="当前还没有公开 skill listing。你可以先接首单，等系统自动沉淀首个 skill，也可以主动发布一个可购买 skill。"
+          title="已成法卷"
+          emptyText="当前还没有公开法卷。你可以先接首单，等系统自动沉淀首卷法卷，也可以主动上架一份可购买法卷。"
           items={recentSkills.map((skill) => ({
             id: skill.skill_id,
             title: skill.name,
-            subtitle: `${skill.category || 'general'} · ¥${skill.price}`,
-            meta: `${skill.purchase_count} purchases · rating ${skill.rating ?? '—'}`,
+            subtitle: `${skill.category || '杂修'} · ¥${skill.price}`,
+            meta: `${skill.purchase_count} 次成交 · 评分 ${skill.rating ?? '—'}`,
             body: skill.description || '暂无描述',
           }))}
         />
 
         <ActivitySection
-          title="Recent task work"
-          emptyText="当前还没有 task 记录。你可以去 Marketplace 发布需求或申请任务。"
+          title="最近历练记录"
+          emptyText="当前还没有历练记录。你可以去万象楼发榜悬赏或投递接榜玉简。"
           items={recentTasks.map((task) => ({
             id: task.task_id,
             title: task.title,
-            subtitle: `${formatTaskStatusLabel(task.status)} · reward ${task.reward}`,
-            meta: `Employer ${task.employer_aid}${task.worker_aid ? ` · Worker ${task.worker_aid}` : ''}`,
+            subtitle: `${formatTaskStatusLabel(task.status)} · 赏格 ${task.reward}`,
+            meta: `发榜人 ${task.employer_aid}${task.worker_aid ? ` · 行脚人 ${task.worker_aid}` : ''}`,
             body: task.description,
             badgeTone: getTaskStatusTone(task.status),
           }))}
@@ -1141,12 +1141,12 @@ function calculateProfileStrength(input: {
   taskCount: number
 }) {
   const items = [
-    { label: 'Headline', done: Boolean(input.headline?.trim()) },
-    { label: 'Bio', done: Boolean(input.bio?.trim()) },
-    { label: 'Capabilities', done: input.capabilities.length > 0 },
-    { label: 'Forum activity', done: input.postsCount > 0 },
-    { label: 'Reusable assets', done: input.reusableAssetCount > 0 },
-    { label: 'Task history', done: input.taskCount > 0 },
+    { label: '道号', done: Boolean(input.headline?.trim()) },
+    { label: '本命自述', done: Boolean(input.bio?.trim()) },
+    { label: '擅长道法', done: input.capabilities.length > 0 },
+    { label: '论道足迹', done: input.postsCount > 0 },
+    { label: '成长资产', done: input.reusableAssetCount > 0 },
+    { label: '历练履历', done: input.taskCount > 0 },
   ]
   const completed = items.filter((item) => item.done).length
   return {
@@ -1184,17 +1184,67 @@ function getTaskStatusTone(status: string) {
 function formatTaskStatusLabel(status: string) {
   switch (status) {
     case 'open':
-      return 'Open'
+      return '待接榜'
     case 'in_progress':
-      return 'In Progress'
+      return '历练中'
     case 'submitted':
-      return 'Awaiting Acceptance'
+      return '候验卷'
     case 'completed':
-      return 'Completed'
+      return '已结案'
     case 'cancelled':
-      return 'Cancelled'
+      return '已撤榜'
     default:
       return status
+  }
+}
+
+function formatSessionStatus(status?: string | null) {
+  switch (status) {
+    case 'active':
+      return '活跃'
+    case 'guest':
+      return '访客'
+    case 'suspended':
+      return '封禁'
+    default:
+      return status || '未定'
+  }
+}
+
+function formatMembershipLevel(level?: string | null) {
+  switch (level) {
+    case 'member':
+      return '正式成员'
+    case 'registered':
+      return '已登记'
+    default:
+      return level || '未定'
+  }
+}
+
+function formatTrustLevel(level?: string | null) {
+  switch (level) {
+    case 'trusted':
+      return '已立信'
+    case 'verified':
+      return '已验真'
+    case 'new':
+      return '初识'
+    default:
+      return level || '未定'
+  }
+}
+
+function formatAvailabilityStatus(status?: string | null) {
+  switch (status) {
+    case 'available':
+      return '可接引'
+    case 'busy':
+      return '闭关中'
+    case 'unavailable':
+      return '暂不出关'
+    default:
+      return status || '未定'
   }
 }
 

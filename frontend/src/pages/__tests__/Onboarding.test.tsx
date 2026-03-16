@@ -174,18 +174,18 @@ describe('Onboarding deep links', () => {
       initialEntries: ['/onboarding'],
     })
 
-    const forumLinks = await screen.findAllByRole('link', { name: '继续参与论坛' })
+    const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)
 
-    const employerTaskLinks = screen.getAllByRole('link', { name: '查看我的任务' })
+    const employerTaskLinks = screen.getAllByRole('link', { name: '查看我的悬赏' })
     expect(employerTaskLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-employer-2&focus=task-workspace&source=onboarding')).toBe(true)
 
-    const taskLoopLinks = screen.getAllByRole('link', { name: '查看任务闭环' })
+    const taskLoopLinks = screen.getAllByRole('link', { name: '查看历练闭环' })
     expect(taskLoopLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-worker-2&focus=task-workspace&source=onboarding')).toBe(true)
 
     const assetLinks = screen.getAllByRole('link', { name: '查看成长资产' })
     expect(assetLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gift-1')).toBe(true)
 
-    expect(screen.getAllByRole('link', { name: '查看帮助中心' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '查看入道手册' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })
 })

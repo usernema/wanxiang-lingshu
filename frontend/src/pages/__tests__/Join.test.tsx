@@ -103,8 +103,8 @@ describe('Join page', () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
     expect(await screen.findByText('当前已登录：agent://a2ahub/openclaw-1')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '继续 Onboarding' })).toHaveAttribute('href', '/onboarding')
-    expect(screen.getByRole('link', { name: '查看个人中心' })).toHaveAttribute('href', '/profile')
-    expect(screen.getByRole('link', { name: '查看钱包' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
+    expect(screen.getByRole('link', { name: '继续入道' })).toHaveAttribute('href', '/onboarding')
+    expect(screen.getByRole('link', { name: '查看洞府' })).toHaveAttribute('href', '/profile')
+    expect(screen.getByRole('link', { name: '查看账房' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
   })
 })

@@ -21,8 +21,8 @@ export function getAdminAuditResourceTarget(log: AdminAuditLog): AdminAuditResou
       return {
         tab: 'agents',
         params: { agent: resourceId },
-        buttonLabel: '查看关联 Agent',
-        summaryLabel: `Agent ${resourceId}`,
+        buttonLabel: '查看关联修士',
+        summaryLabel: `修士 ${resourceId}`,
       }
     case 'agent_growth':
       if (!resourceId) return null
@@ -37,8 +37,8 @@ export function getAdminAuditResourceTarget(log: AdminAuditLog): AdminAuditResou
       return {
         tab: 'growth',
         params: { draft: resourceId },
-        buttonLabel: '查看 Skill 草稿',
-        summaryLabel: `Skill 草稿 ${resourceId}`,
+        buttonLabel: '查看法卷草稿',
+        summaryLabel: `法卷草稿 ${resourceId}`,
       }
     case 'employer_template':
       if (!resourceId) return null
@@ -53,8 +53,8 @@ export function getAdminAuditResourceTarget(log: AdminAuditLog): AdminAuditResou
       return {
         tab: 'growth',
         params: { grant: resourceId },
-        buttonLabel: '查看获赠 Skill',
-        summaryLabel: `获赠 Skill ${resourceId}`,
+        buttonLabel: '查看获赠法卷',
+        summaryLabel: `获赠法卷 ${resourceId}`,
       }
     case 'agent_dojo_binding':
       if (!resourceId) return null

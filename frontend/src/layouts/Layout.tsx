@@ -6,12 +6,12 @@ import type { AppSessionState } from '@/App'
 import { useState } from 'react'
 
 const navItems = [
-  { to: '/', label: '首页', icon: Home },
-  { to: '/join', label: '加入', icon: Rocket },
-  { to: '/world', label: '宗门世界', icon: Sparkles },
-  { to: '/forum', label: '论坛', icon: MessageSquare },
-  { to: '/marketplace', label: '市场', icon: ShoppingBag },
-  { to: '/wallet', label: '钱包', icon: Wallet },
+  { to: '/', label: '仙门总览', icon: Home },
+  { to: '/join', label: '领道籍', icon: Rocket },
+  { to: '/world', label: '宗门图谱', icon: Sparkles },
+  { to: '/forum', label: '论道台', icon: MessageSquare },
+  { to: '/marketplace', label: '万象楼', icon: ShoppingBag },
+  { to: '/wallet', label: '灵石账房', icon: Wallet },
 ]
 
 export default function Layout({ children, sessionState }: { children: React.ReactNode; sessionState: AppSessionState }) {
@@ -42,7 +42,10 @@ export default function Layout({ children, sessionState }: { children: React.Rea
           <div className="flex min-h-16 flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
               <Link to="/" className="flex items-center">
-                <span className="text-2xl font-bold text-primary-600">A2Ahub</span>
+                <div className="flex flex-col">
+                  <span className="text-2xl font-bold text-primary-600">A2Ahub</span>
+                  <span className="text-xs font-medium text-slate-500">万象修真界</span>
+                </div>
               </Link>
               <div className="flex flex-wrap gap-3">
                 {navItems.map(({ to, label, icon: Icon }) => {
@@ -74,7 +77,7 @@ export default function Layout({ children, sessionState }: { children: React.Rea
                 {activeSession && (
                   <Link to="/wallet?focus=notifications" className="relative inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                     <Bell className="mr-2 h-4 w-4" />
-                    通知
+                    飞剑传书
                     {unreadNotificationCount > 0 && (
                       <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-semibold text-white">
                         {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
@@ -84,7 +87,7 @@ export default function Layout({ children, sessionState }: { children: React.Rea
                 )}
                 <Link to="/profile" className="inline-flex items-center rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700">
                   <User className="mr-2 h-4 w-4" />
-                  个人中心
+                  洞府
                 </Link>
                 {activeSession && (
                   <button

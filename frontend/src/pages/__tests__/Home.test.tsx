@@ -52,9 +52,9 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByRole('link', { name: '注册 / 登录' })).toHaveAttribute('href', '/join')
-    expect(screen.queryByText('本周继续做什么')).not.toBeInTheDocument()
-    expect(await screen.findByText('正式版主链路说明')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
+    expect(screen.queryByText('本周修行指引')).not.toBeInTheDocument()
+    expect(await screen.findByText('修行主链路')).toBeInTheDocument()
   })
 
   it('renders worker-focused next actions and growth roadmap', async () => {
@@ -211,29 +211,29 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByText('本周继续做什么')).toBeInTheDocument()
-    expect(screen.getByText('首页工作视角')).toBeInTheDocument()
-    expect(screen.getAllByText('执行者视角').length).toBeGreaterThan(0)
-    expect(screen.getByText('角色任务漏斗')).toBeInTheDocument()
-    expect(screen.getByText('可申请任务')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去浏览任务' })).toHaveAttribute(
+    expect((await screen.findAllByText('本周修行指引')).length).toBeGreaterThan(0)
+    expect(screen.getByText('当前修行身份')).toBeInTheDocument()
+    expect(screen.getAllByText('行脚人视角').length).toBeGreaterThan(0)
+    expect(screen.getByText('历练流转漏斗')).toBeInTheDocument()
+    expect(screen.getByText('可接悬赏')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去浏览悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&queue=open&source=home-worker-funnel',
     )
-    const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '回到执行工作台' })
+    const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '回到历练工作台' })
     expect(taskWorkspaceLinks.length).toBeGreaterThan(0)
     taskWorkspaceLinks.forEach((link) => {
       expect(link).toHaveAttribute('href', '/marketplace?tab=tasks&task=task_123&focus=task-workspace&source=home-worker')
     })
-    const taskActionTitles = await screen.findAllByText('继续执行中任务')
+    const taskActionTitles = await screen.findAllByText('继续当前历练')
     expect(taskActionTitles.length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: '去看通知中心' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '去看飞剑传书' })).toHaveAttribute(
       'href',
       '/wallet?focus=notifications&source=home',
     )
-    expect(screen.getByText('7 天成长路径')).toBeInTheDocument()
-    expect(screen.getByText('Day 7')).toBeInTheDocument()
-    expect(screen.getByText('沉淀并发布首个 Skill')).toBeInTheDocument()
+    expect(screen.getByText('七日入道路径')).toBeInTheDocument()
+    expect(screen.getByText('第七日')).toBeInTheDocument()
+    expect(screen.getByText('沉淀并发布首卷法卷')).toBeInTheDocument()
     expect(mockSetActiveRole).toHaveBeenCalledWith('worker')
   })
 
@@ -369,11 +369,11 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '雇主视角' }))
+    await user.click(await screen.findByRole('button', { name: '发榜人视角' }))
 
-    expect((await screen.findAllByText('雇主视角')).length).toBeGreaterThanOrEqual(2)
-    expect((await screen.findAllByText('继续雇主任务流转')).length).toBeGreaterThan(0)
-    const employerWorkspaceLinks = screen.getAllByRole('link', { name: '回到雇主工作台' })
+    expect((await screen.findAllByText('发榜人视角')).length).toBeGreaterThanOrEqual(2)
+    expect((await screen.findAllByText('继续推进当前悬赏')).length).toBeGreaterThan(0)
+    const employerWorkspaceLinks = screen.getAllByRole('link', { name: '回到发榜工作台' })
     expect(employerWorkspaceLinks.length).toBeGreaterThan(0)
     employerWorkspaceLinks.forEach((link) => {
       expect(link).toHaveAttribute(
@@ -381,9 +381,9 @@ describe('Home page', () => {
         '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer',
       )
     })
-    expect(screen.getByText('角色任务漏斗')).toBeInTheDocument()
-    expect(screen.getByText('等待验收')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去验收任务' })).toHaveAttribute(
+    expect(screen.getByText('历练流转漏斗')).toBeInTheDocument()
+    expect(screen.getByText('待验卷')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去验卷' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer-funnel-review',
     )
@@ -487,7 +487,7 @@ describe('Home page', () => {
               employer_aid: 'employer-agent',
               worker_aid: 'worker-agent',
               title: '已完成交付任务',
-              description: '完成后沉淀为 Skill',
+              description: '完成后沉淀为法卷',
               reward: 25,
               status: 'completed',
               created_at: '2026-03-14T00:00:00.000Z',
@@ -505,14 +505,14 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect((await screen.findAllByText('继续运营已沉淀 Skill')).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: '去运营 Skill' }).some((link) => (
+    expect((await screen.findAllByText('继续运营已沉淀法卷')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
     ))).toBe(true)
-    expect(screen.getAllByRole('link', { name: '去运营 Skill' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
     ))).toBe(true)
-    expect(screen.queryByText('去任务市场申请首单')).not.toBeInTheDocument()
+    expect(screen.queryByText('去历练榜接首单')).not.toBeInTheDocument()
   })
 
   it('routes employer completed funnel card to profile assets when reusable templates already exist', async () => {
@@ -631,7 +631,7 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '雇主视角' }))
+    await user.click(await screen.findByRole('button', { name: '发榜人视角' }))
 
     expect((await screen.findAllByText('复盘模板并继续放大复购')).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (

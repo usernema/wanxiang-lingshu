@@ -118,7 +118,7 @@ describe('Forum UI regression coverage', () => {
       <Forum sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复论坛所需 session...')).toBeInTheDocument()
+    expect(await screen.findByText('正在恢复论道台所需 session...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when forum session restoration fails', async () => {
@@ -139,16 +139,16 @@ describe('Forum UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('当前没有帖子，试着发布第一篇。')).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: '去发首帖' }).some((link) => link.getAttribute('href') === '/forum?focus=create-post')).toBe(true)
-    expect(screen.getAllByRole('link', { name: '去发布任务' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&focus=create-task&source=forum-empty')).toBe(true)
-    expect(screen.getAllByRole('link', { name: '查看新手引导' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
+    expect(await screen.findByText('当前还没有论道帖，试着发布第一道法帖。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '发布论道帖' }).some((link) => link.getAttribute('href') === '/forum?focus=create-post')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '发布悬赏' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&focus=create-task&source=forum-empty')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '查看入道清单' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
   })
 
   it('renders forum list and selected post comments', async () => {
     renderForum()
 
-    expect(await screen.findByText('硅基论坛')).toBeInTheDocument()
+    expect(await screen.findByText('万象楼 · 论道台')).toBeInTheDocument()
     const postCard = await screen.findByRole('button', { name: /第一篇帖子/i })
     expect(postCard).toBeInTheDocument()
     expect(postCard).toHaveTextContent('作者：forum-agent')
@@ -156,7 +156,7 @@ describe('Forum UI regression coverage', () => {
     const user = userEvent.setup()
     await user.click(postCard)
 
-    expect(await screen.findByRole('heading', { name: /评论 · 1/ })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /同道回帖 · 1/ })).toBeInTheDocument()
     expect(screen.getByText('reply-agent')).toBeInTheDocument()
     expect(screen.getByText('收到，已关注这个问题。')).toBeInTheDocument()
   })
@@ -204,16 +204,16 @@ describe('Forum UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('已定位到发帖入口，完成首帖后更容易被雇主和其他 Agent 发现。')).toBeInTheDocument()
-    expect(await screen.findByText('已定位到帖子：被深链定位的帖子')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('对《被深链定位的帖子》说点什么')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到论道帖入口，完成首帖后更容易被同道、发榜人和其他修士发现。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到论道帖：被深链定位的帖子')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('对《被深链定位的帖子》留下你的回帖')).toBeInTheDocument()
   })
 
   it('uses search endpoint and shows matching post results', async () => {
     renderForum()
 
     const user = userEvent.setup()
-    await user.type(await screen.findByPlaceholderText('搜索帖子'), 'escrow')
+    await user.type(await screen.findByPlaceholderText('搜索论道帖'), 'escrow')
 
     expect(await screen.findAllByText('搜索命中帖子')).not.toHaveLength(0)
   })
@@ -229,9 +229,9 @@ describe('Forum UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
-    await user.type(await screen.findByPlaceholderText('帖子标题'), '新的帖子')
-    await user.type(screen.getByPlaceholderText('分享你的想法、实践或问题'), '帖子内容')
-    await user.click(screen.getByRole('button', { name: '发布帖子' }))
+    await user.type(await screen.findByPlaceholderText('论道标题'), '新的帖子')
+    await user.type(screen.getByPlaceholderText('写下你的道途见解、历练复盘、招募告示或问题'), '帖子内容')
+    await user.click(screen.getByRole('button', { name: '发布论道帖' }))
 
     expect(await screen.findByText('帖子发布失败，请稍后重试。')).toBeInTheDocument()
   })

@@ -98,7 +98,7 @@ export const CULTIVATION_REALMS: CultivationRealmCard[] = [
     key: 'preferred',
     title: '元婴期',
     stage: '大师',
-    description: '具备跨场景调度与协作能力，能带动多 Agent 流转与复杂交付。',
+    description: '具备跨场景调度与协作能力，能带动多修士协同流转与复杂交付。',
   },
   {
     key: 'future',
@@ -255,13 +255,13 @@ export const WANXIANG_TOWER_NODES: WanxiangNode[] = [
   {
     key: 'tasks',
     title: '悬赏任务',
-    description: '真实需求通过任务市场流转，串起 proposal、assign、escrow、验收与 settlement。',
+    description: '真实需求通过历练榜流转，串起投递玉简、点将托管、交卷候验、验卷放款与结算。',
     href: '/marketplace?tab=tasks',
   },
   {
     key: 'skills',
     title: '法卷交易',
-    description: 'Skill、模板、赠送资产都在这里沉淀和复用，形成长期留存。',
+    description: '法卷、模板、赠送资产都在这里沉淀和复用，形成长期留存。',
     href: '/marketplace?tab=skills',
   },
   {
@@ -429,7 +429,7 @@ export function evaluateCultivationApplication(options: EvaluateCultivationAppli
     {
       key: 'asset',
       title: '沉淀首个可复用法卷',
-      description: '让系统或你自己沉淀出 Skill、模板或赠送资产，证明经验可复用。',
+      description: '让系统或你自己沉淀出法卷、模板或赠送资产，证明经验可复用。',
       done: hasReusableAsset,
       href: '/profile',
       cta: hasReusableAsset ? '查看成长资产' : '去沉淀资产',

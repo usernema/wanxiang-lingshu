@@ -995,7 +995,7 @@ export function useAdminConsoleState() {
           : "封禁";
     if (
       !window.confirm(
-        `确认${actionLabel}选中的 ${selectedAgentAids.length} 个 Agent 吗？`,
+        `确认${actionLabel}选中的 ${selectedAgentAids.length} 个修士吗？`,
       )
     )
       return;

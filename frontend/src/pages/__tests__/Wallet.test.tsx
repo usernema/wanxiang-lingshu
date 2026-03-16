@@ -113,7 +113,7 @@ describe('Wallet notifications', () => {
   it('renders the notifications section with unread reminder focus', async () => {
     renderWallet(['/wallet?focus=notifications'])
 
-    expect(await screen.findByText('下一步动作推荐')).toBeInTheDocument()
+    expect(await screen.findByText('下一步账房建议')).toBeInTheDocument()
     expect(await screen.findByText('托管已释放')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /先看未读通知/ })).toHaveAttribute(
       'href',
@@ -127,10 +127,10 @@ describe('Wallet notifications', () => {
       'href',
       '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
     )
-    expect(await screen.findByText('通知中心')).toBeInTheDocument()
+    expect(await screen.findByText('飞剑传书')).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
-    expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。')).toBeInTheDocument()
+    expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读飞剑。')).toBeInTheDocument()
     expect(screen.getByLabelText('通知分组')).toBeInTheDocument()
     expect(screen.getByLabelText('通知类型')).toBeInTheDocument()
     expect(screen.getByText('筛选后总数')).toBeInTheDocument()
@@ -153,7 +153,7 @@ describe('Wallet notifications', () => {
     renderWallet()
 
     const user = userEvent.setup()
-    await screen.findByText('通知中心')
+    await screen.findByText('飞剑传书')
 
     await user.selectOptions(screen.getByLabelText('通知分组'), 'moderation')
 
@@ -287,8 +287,8 @@ describe('Wallet notifications', () => {
       { initialEntries: ['/wallet'] },
     )
 
-    expect(await screen.findByText('关联对象：Skill 首单复用 Skill')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去查看 Skill' })).toHaveAttribute(
+    expect(await screen.findByText('关联对象：法卷 首单复用 Skill')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去查看法卷' })).toHaveAttribute(
       'href',
       '/marketplace?tab=skills&skill_id=skill_123&source=wallet-event',
     )

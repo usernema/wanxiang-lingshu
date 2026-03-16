@@ -118,12 +118,12 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="text-3xl font-bold">钱包与积分</h1>
-        <p className="mt-3 text-gray-600">查看可用余额、冻结积分，以及 purchase / escrow / settlement 相关的账本变化。</p>
+        <h1 className="text-3xl font-bold">灵石钱庄 / 账房</h1>
+        <p className="mt-3 text-gray-600">查看可用灵石、冻结灵石，以及购卷、托管、放款、结算相关的账本变化。</p>
       </section>
 
-      {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载钱包...</div>}
-      {(balanceQuery.isError || transactionsQuery.isError) && <div className="rounded-2xl bg-red-50 p-6 text-sm text-red-700">加载钱包失败，请检查 gateway 与 credit service。</div>}
+      {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载账房...</div>}
+      {(balanceQuery.isError || transactionsQuery.isError) && <div className="rounded-2xl bg-red-50 p-6 text-sm text-red-700">加载账房失败，请检查 gateway 与 credit service。</div>}
 
       {balanceQuery.data && (
         <section className="grid gap-6 md:grid-cols-4">
@@ -143,8 +143,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">下一步动作推荐</h2>
-            <p className="mt-1 text-sm text-gray-600">根据未读通知、冻结积分和最近流水，把你下一步最该处理的入口直接拉出来。</p>
+            <h2 className="text-xl font-semibold">下一步账房建议</h2>
+            <p className="mt-1 text-sm text-gray-600">根据未读飞剑、冻结灵石和最近流水，把你下一步最该处理的入口直接拉出来。</p>
           </div>
           <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">实时建议 {recommendedActions.length}</span>
         </div>
@@ -158,8 +158,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">通知中心</h2>
-            <p className="mt-1 text-sm text-gray-600">托管、账号状态、论坛审核等关键事件会在这里提醒，避免真实流转静默发生。</p>
+            <h2 className="text-xl font-semibold">飞剑传书</h2>
+            <p className="mt-1 text-sm text-gray-600">托管、账号状态、论道审核等关键事件会在这里提醒，避免真实流转静默发生。</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">未读 {unreadNotificationCount}</span>
@@ -176,7 +176,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
 
         {showNotificationsFocus && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读通知。
+            这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读飞剑。
           </div>
         )}
         {notificationError && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{notificationError}</div>}
@@ -349,9 +349,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </div>
 
         {transactionsQuery.isLoading ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载 transaction history...</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载账房流水...</div>
         ) : transactions.length === 0 ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有积分流水。先去 Marketplace 购买 skill、发布任务或完成 escrow。</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有灵石流水。先去万象楼购买法卷、发布悬赏或完成托管。</div>
         ) : (
           <div className="mt-6 space-y-3">
             {transactions.map((transaction) => {
@@ -526,8 +526,8 @@ function buildWalletRecommendedActions({
       tone: 'green',
     })
     actions.push({
-      label: '去市场查看 Skill',
-      description: '也可以先购买一个 Skill，完整体验钱包、托管与结算流转。',
+      label: '去万象楼查看法卷',
+      description: '也可以先购买一卷法卷，完整体验账房、托管与结算流转。',
       href: '/marketplace?tab=skills&source=wallet-empty',
       tone: 'slate',
     })
@@ -540,8 +540,8 @@ function buildWalletRecommendedActions({
     })
   } else if (skillHref) {
     actions.push({
-      label: '回到最近 Skill',
-      description: '最近流水已关联 Skill，可继续查看详情或形成复购。',
+      label: '回到最近法卷',
+      description: '最近流水已关联法卷，可继续查看详情或形成复购。',
       href: skillHref,
       tone: 'slate',
     })
@@ -549,8 +549,8 @@ function buildWalletRecommendedActions({
 
   if (actions.length === 0) {
     actions.push({
-      label: '继续浏览 Marketplace',
-      description: '当前资金状态平稳，可以继续发布任务或购买 Skill。',
+      label: '继续浏览万象楼',
+      description: '当前资金状态平稳，可以继续发布悬赏或购买法卷。',
       href: '/marketplace?source=wallet-default',
       tone: 'primary',
     })
@@ -637,8 +637,8 @@ function buildSkillMarketplaceHref(skillId: string, source = 'wallet') {
 function getResourceLabel(metadata: Record<string, string>) {
   if (metadata.task_title) return `任务 ${metadata.task_title}`
   if (metadata.task_id) return `任务 ${metadata.task_id}`
-  if (metadata.skill_name) return `Skill ${metadata.skill_name}`
-  if (metadata.skill_id) return `Skill ${metadata.skill_id}`
+  if (metadata.skill_name) return `法卷 ${metadata.skill_name}`
+  if (metadata.skill_id) return `法卷 ${metadata.skill_id}`
   if (metadata.escrow_id) return `托管 ${metadata.escrow_id}`
   return ''
 }
@@ -751,7 +751,7 @@ function getNotificationContextSummary(notification: Notification) {
 
   switch (notification.type) {
     case 'agent_status_changed':
-      append('Agent', metadata.aid)
+      append('修士', metadata.aid)
       append('状态', formatStatusLabel(metadata.status))
       append('原状态', formatStatusLabel(metadata.previous_status))
       break
@@ -831,9 +831,9 @@ function TransactionActionLink({ metadata }: { metadata: Record<string, string> 
 
 function getContextActionLabel(link: string, metadata: Record<string, string>) {
   if (link.includes('/marketplace') && (metadata.task_id || metadata.task_title)) return '去任务工作台'
-  if (link.includes('/marketplace') && (metadata.skill_id || metadata.skill_name)) return '去查看 Skill'
-  if (link.includes('/forum')) return '去论坛查看'
-  if (link.includes('/profile')) return '去个人中心'
-  if (link.includes('/wallet')) return '查看通知中心'
+  if (link.includes('/marketplace') && (metadata.skill_id || metadata.skill_name)) return '去查看法卷'
+  if (link.includes('/forum')) return '去论道台查看'
+  if (link.includes('/profile')) return '去洞府查看'
+  if (link.includes('/wallet')) return '查看飞剑中心'
   return '查看相关页'
 }
