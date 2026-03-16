@@ -8,7 +8,14 @@ PYTHON_BIN="${PYTHON_BIN:-python3}"
 TMP_DIR="${TMP_DIR:-/tmp/a2ahub-production-smoke}"
 CURL_INSECURE="${CURL_INSECURE:-false}"
 CURL_RESOLVE="${CURL_RESOLVE:-}"
+AUTH_REQUEST_INTERVAL_SECONDS="${AUTH_REQUEST_INTERVAL_SECONDS:-4}"
+API_REQUEST_INTERVAL_SECONDS="${API_REQUEST_INTERVAL_SECONDS:-0}"
+REQUEST_RETRY_MAX="${REQUEST_RETRY_MAX:-4}"
+REQUEST_RETRY_BASE_SECONDS="${REQUEST_RETRY_BASE_SECONDS:-4}"
 mkdir -p "$TMP_DIR"
+
+LAST_AUTH_REQUEST_AT=0
+LAST_API_REQUEST_AT=0
 
 CURL_ARGS=()
 if [[ "$CURL_INSECURE" == "true" ]]; then
@@ -56,6 +63,14 @@ curl_soft() {
   fi
 }
 
+curl_request() {
+  if [[ ${#CURL_ARGS[@]} -gt 0 ]]; then
+    curl -sS "$@" "${CURL_ARGS[@]}"
+  else
+    curl -sS "$@"
+  fi
+}
+
 curl_json() {
   local url="$1"
   curl_fail "$url"
@@ -76,20 +91,134 @@ assert_non_2xx() {
   fi
 }
 
+classify_rate_bucket() {
+  local path="$1"
+  case "$path" in
+    /v1/agents/register|/v1/agents/challenge|/v1/agents/login|/v1/agents/refresh|/v1/agents/email/*|/v1/agents/dev/*)
+      printf 'auth'
+      ;;
+    *)
+      printf 'api'
+      ;;
+  esac
+}
+
+bucket_interval() {
+  local bucket="$1"
+  case "$bucket" in
+    auth) printf '%s' "$AUTH_REQUEST_INTERVAL_SECONDS" ;;
+    *) printf '%s' "$API_REQUEST_INTERVAL_SECONDS" ;;
+  esac
+}
+
+bucket_last_request_at() {
+  local bucket="$1"
+  case "$bucket" in
+    auth) printf '%s' "$LAST_AUTH_REQUEST_AT" ;;
+    *) printf '%s' "$LAST_API_REQUEST_AT" ;;
+  esac
+}
+
+set_bucket_last_request_at() {
+  local bucket="$1"
+  local value="$2"
+  case "$bucket" in
+    auth) LAST_AUTH_REQUEST_AT="$value" ;;
+    *) LAST_API_REQUEST_AT="$value" ;;
+  esac
+}
+
+throttle_bucket() {
+  local bucket="$1"
+  local interval now last elapsed sleep_for
+  interval="$(bucket_interval "$bucket")"
+  if [[ "$interval" -le 0 ]]; then
+    return
+  fi
+
+  now="$(date +%s)"
+  last="$(bucket_last_request_at "$bucket")"
+  if [[ "$last" -gt 0 ]]; then
+    elapsed=$((now - last))
+    if [[ "$elapsed" -lt "$interval" ]]; then
+      sleep_for=$((interval - elapsed))
+      sleep "$sleep_for"
+      now="$(date +%s)"
+    fi
+  fi
+
+  set_bucket_last_request_at "$bucket" "$now"
+}
+
+extract_retry_after() {
+  local headers_file="$1"
+  awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {gsub(/\r/, "", $2); print $2; exit}' "$headers_file"
+}
+
 api_json() {
   local method="$1"
   local path="$2"
   local token="${3:-}"
   local body="${4:-}"
+  local bucket headers_file response_file status attempt retry_after sleep_for
   local headers=(-H "Content-Type: application/json")
   if [[ -n "$token" ]]; then
     headers+=(-H "Authorization: Bearer $token")
   fi
-  if [[ -n "$body" ]]; then
-    curl_fail -X "$method" "${BASE_URL}${path}" "${headers[@]}" -d "$body"
-  else
-    curl_fail -X "$method" "${BASE_URL}${path}" "${headers[@]}"
-  fi
+
+  bucket="$(classify_rate_bucket "$path")"
+  headers_file="$(mktemp "${TMP_DIR}/headers.XXXXXX")"
+  response_file="$(mktemp "${TMP_DIR}/body.XXXXXX")"
+  attempt=1
+
+  while [[ "$attempt" -le "$REQUEST_RETRY_MAX" ]]; do
+    throttle_bucket "$bucket"
+    : >"$headers_file"
+    : >"$response_file"
+
+    if [[ -n "$body" ]]; then
+      status="$(curl_request -X "$method" "${BASE_URL}${path}" "${headers[@]}" -d "$body" -D "$headers_file" -o "$response_file" -w '%{http_code}')"
+    else
+      status="$(curl_request -X "$method" "${BASE_URL}${path}" "${headers[@]}" -D "$headers_file" -o "$response_file" -w '%{http_code}')"
+    fi
+
+    if [[ "$status" =~ ^2 ]]; then
+      cat "$response_file"
+      rm -f "$headers_file" "$response_file"
+      return 0
+    fi
+
+    if [[ "$status" == "429" && "$attempt" -lt "$REQUEST_RETRY_MAX" ]]; then
+      retry_after="$(extract_retry_after "$headers_file")"
+      if [[ ! "$retry_after" =~ ^[0-9]+$ ]]; then
+        sleep_for=$((REQUEST_RETRY_BASE_SECONDS * attempt))
+      else
+        sleep_for="$retry_after"
+      fi
+      echo "Rate limited on ${method} ${path}; retrying in ${sleep_for}s (${attempt}/${REQUEST_RETRY_MAX})" >&2
+      sleep "$sleep_for"
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    if [[ "$status" =~ ^5 && "$attempt" -lt "$REQUEST_RETRY_MAX" ]]; then
+      sleep_for=$((REQUEST_RETRY_BASE_SECONDS * attempt))
+      echo "Server error on ${method} ${path}; retrying in ${sleep_for}s (${attempt}/${REQUEST_RETRY_MAX})" >&2
+      sleep "$sleep_for"
+      attempt=$((attempt + 1))
+      continue
+    fi
+
+    echo "Request failed: ${method} ${path} -> ${status}" >&2
+    cat "$response_file" >&2
+    rm -f "$headers_file" "$response_file"
+    return 1
+  done
+
+  echo "Request failed after retries: ${method} ${path}" >&2
+  cat "$response_file" >&2
+  rm -f "$headers_file" "$response_file"
+  return 1
 }
 
 sign_message() {
