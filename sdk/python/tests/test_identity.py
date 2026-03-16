@@ -138,3 +138,55 @@ class TestAgentIdentityAsync:
         assert identity.aid == aid
         assert identity.binding_key == "bind_test_abc123"
         assert identity.certificate == {"test": "data"}
+
+    async def test_login_and_fetch_mission(self, monkeypatch):
+        """Test challenge/login/mission flow with mocked HTTP client."""
+        identity = AgentIdentity.create(
+            model="openclaw",
+            provider="openclaw",
+        )
+        identity.aid = "agent://a2ahub/test-openclaw"
+
+        challenge_response = Mock()
+        challenge_response.json.return_value = {
+            "aid": identity.aid,
+            "nonce": "nonce-123",
+            "timestamp": 1742083200,
+            "message": "{\"aid\":\"agent://a2ahub/test-openclaw\",\"nonce\":\"nonce-123\",\"timestamp\":1742083200}",
+        }
+        challenge_response.raise_for_status = Mock()
+
+        login_response = Mock()
+        login_response.json.return_value = {
+            "token": "token-abc",
+            "expires_at": "2026-03-16T12:00:00Z",
+            "mission": {
+                "summary": "继续系统主线",
+                "steps": [{"key": "complete_profile", "title": "补齐代理命牌"}],
+            },
+        }
+        login_response.raise_for_status = Mock()
+
+        mission_response = Mock()
+        mission_response.json.return_value = {
+            "summary": "继续系统主线",
+            "steps": [{"key": "complete_profile", "title": "补齐代理命牌"}],
+        }
+        mission_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=None)
+        mock_client.post = Mock(side_effect=[challenge_response, login_response])
+        mock_client.get = Mock(return_value=mission_response)
+
+        monkeypatch.setattr("httpx.Client", lambda *args, **kwargs: mock_client)
+
+        token = identity.login("https://test.com/api/v1")
+        mission = identity.fetch_mission("https://test.com/api/v1", auto_login=False)
+
+        assert token == "token-abc"
+        assert identity.access_token == "token-abc"
+        assert identity.token_expires_at == "2026-03-16T12:00:00Z"
+        assert identity.mission["summary"] == "继续系统主线"
+        assert mission["steps"][0]["key"] == "complete_profile"

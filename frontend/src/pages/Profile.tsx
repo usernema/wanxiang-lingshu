@@ -4,12 +4,28 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import PageTabBar from '@/components/ui/PageTabBar'
 import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
-import { formatAutopilotStateLabel } from '@/lib/agentAutopilot'
+import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { formatCultivationActionLabel, formatCultivationDomainLabel, formatCultivationRealmLabel, formatCultivationRiskLabel, formatCultivationSchoolLabel, formatCultivationScopeLabel, formatCultivationStageLabel, getCultivationSectDetail, getCultivationSectDetailByDomain } from '@/lib/cultivation'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
 type ProfileTab = 'dashboard' | 'growth' | 'assets' | 'activity'
+type ProfileObserverSignal = {
+  label: string
+  value: string
+  tone: 'primary' | 'amber' | 'green' | 'slate'
+}
+
+type ProfileCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
+
+type ProfileCockpitCard = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  tone: ProfileCockpitCardTone
+}
 
 export default function Profile({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
@@ -155,10 +171,12 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
   const systemNextAction = growthProfile?.next_action
   const systemInterventionReason = growthProfile?.intervention_reason
-  const profileFocus = useMemo(() => new URLSearchParams(location.search).get('focus'), [location.search])
-  const profileSource = useMemo(() => new URLSearchParams(location.search).get('source'), [location.search])
+  const profileSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const profileFocus = profileSearchParams.get('focus')
+  const profileSource = profileSearchParams.get('source')
+  const requestedTab = parseProfileTab(profileSearchParams.get('tab'))
   const showCreditVerificationFocus = profileFocus === 'credit-verification'
-  const [activeTab, setActiveTab] = useState<ProfileTab>(() => inferInitialProfileTab(profileFocus, profileSource))
+  const [activeTab, setActiveTab] = useState<ProfileTab>(() => requestedTab || inferInitialProfileTab(profileFocus, profileSource))
   const initial = profile?.model?.slice(0, 1).toUpperCase() || 'A'
   const capabilities = useMemo(() => (profile?.capabilities || session?.capabilities || []).filter(Boolean), [profile?.capabilities, session?.capabilities])
   const recentPosts = posts.slice(0, 3)
@@ -207,6 +225,164 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     ],
     [autopilotStateLabel, growthProfile, profileStrength.score, recentTasks.length, reusableAssetCount],
   )
+  const profileObserverReason = useMemo(() => {
+    if (systemInterventionReason) return systemInterventionReason
+    if (hasFrozenBalance) return `当前有 ${toNumber(balance?.frozen_balance)} 灵石仍在冻结，建议优先看账房与关联任务。`
+    if (latestSubmittedTask) return `当前有任务正处于候验卷阶段，建议优先观察验收与放款。`
+    if ((dojoOverview?.open_mistake_count || 0) > 0) return `道场当前仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题，建议优先观察补训是否推进。`
+    if (taskSummary.completed > 0 && reusableAssetCount === 0) return '已经出现成功历练，但尚未形成稳定心法资产，建议优先收口经验沉淀。'
+    return null
+  }, [
+    balance?.frozen_balance,
+    dojoOverview?.open_mistake_count,
+    hasFrozenBalance,
+    latestSubmittedTask,
+    reusableAssetCount,
+    systemInterventionReason,
+    taskSummary.completed,
+  ])
+  const profileObserverStatus = useMemo(
+    () =>
+      getAgentObserverStatus({
+        autopilotState: growthProfile?.autopilot_state,
+        interventionReason: profileObserverReason,
+        frozenBalance: toNumber(balance?.frozen_balance),
+      }),
+    [balance?.frozen_balance, growthProfile?.autopilot_state, profileObserverReason],
+  )
+  const profileObserverTone = getAgentObserverTone(profileObserverStatus.level)
+  const profileObserverSignals = useMemo<ProfileObserverSignal[]>(
+    () => [
+      {
+        label: '当前主线',
+        value: autopilotStateLabel,
+        tone: growthProfile ? 'primary' : 'slate',
+      },
+      {
+        label: '账房状态',
+        value: hasFrozenBalance ? `${toNumber(balance?.frozen_balance)} 灵石冻结中` : '账房稳定',
+        tone: hasFrozenBalance ? 'amber' : 'green',
+      },
+      {
+        label: '心法资产',
+        value: reusableAssetCount > 0 ? `${reusableAssetCount} 份可复用资产` : '尚未形成资产库',
+        tone: reusableAssetCount > 0 ? 'green' : 'slate',
+      },
+      {
+        label: '道场进度',
+        value: dojoOverview ? `${formatDojoStageLabel(dojoOverview.stage)} / ${dojoOverview.open_mistake_count} 错题` : '待进入道场',
+        tone: dojoOverview?.open_mistake_count ? 'amber' : dojoOverview ? 'primary' : 'slate',
+      },
+    ],
+    [
+      autopilotStateLabel,
+      balance?.frozen_balance,
+      dojoOverview,
+      growthProfile,
+      hasFrozenBalance,
+      reusableAssetCount,
+    ],
+  )
+  const profileCockpitCards = useMemo<ProfileCockpitCard[]>(() => {
+    const observerCardTone: ProfileCockpitCardTone =
+      profileObserverStatus.level === 'action' ? 'amber' : profileObserverStatus.level === 'watch' ? 'primary' : 'green'
+
+    const latestFlowDescription = latestSubmittedTask
+      ? `当前有任务待验卷：${latestSubmittedTask.title || latestSubmittedTask.task_id}，建议优先观察验收与放款。`
+      : latestInProgressTask
+        ? `当前有任务在历练中：${latestInProgressTask.title || latestInProgressTask.task_id}，账房与交付仍在继续流转。`
+        : hasFrozenBalance
+          ? `当前有 ${toNumber(balance?.frozen_balance)} 灵石冻结，建议优先核对托管与飞剑。`
+          : recentTasks[0]
+            ? `最近一条历练是「${recentTasks[0].title}」，当前没有强提醒。`
+            : '当前还没有真实历练记录，建议先形成首轮闭环。'
+
+    const growthHref = systemNextAction?.href || '/profile?tab=growth&source=profile-cockpit-growth'
+
+    return [
+      {
+        key: 'summary',
+        title: '系统结论',
+        description: profileObserverStatus.summary,
+        href:
+          profileObserverStatus.level === 'stable'
+            ? latestActionableTask
+              ? buildTaskWorkspaceHref(latestActionableTask, 'profile-cockpit-summary')
+              : growthHref
+            : '/profile?tab=growth&source=profile-cockpit-summary',
+        cta: profileObserverStatus.level === 'stable' ? '继续黑箱推进' : '查看主线信号',
+        tone: observerCardTone,
+      },
+      {
+        key: 'growth',
+        title: '当前主线',
+        description: systemNextAction?.title
+          ? `${systemNextAction.title}${systemNextAction.description ? `：${systemNextAction.description}` : ''}`
+          : `当前主线为「${autopilotStateLabel}」，等待系统继续推进。`,
+        href: growthHref,
+        cta: systemNextAction?.cta || '查看主线细节',
+        tone: growthProfile ? 'primary' : 'slate',
+      },
+      {
+        key: 'training',
+        title: '训练与沉淀',
+        description:
+          (dojoOverview?.open_mistake_count || 0) > 0
+            ? `道场仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题与 ${dojoOverview?.pending_plan_count || 0} 条待补训计划，建议继续纠错。`
+            : reusableAssetCount > 0
+              ? `当前已沉淀 ${reusableAssetCount} 份可复用资产，可继续复用、赠送或发榜。`
+              : taskSummary.completed > 0
+                ? '已经出现成功历练，但沉淀资产仍偏少，建议优先把经验收成心法。'
+                : '当前还没有稳定资产库，先完成真实历练形成首轮沉淀。',
+        href:
+          (dojoOverview?.open_mistake_count || 0) > 0
+            ? '/profile?tab=growth&source=profile-cockpit-training'
+            : '/profile?tab=assets&source=profile-cockpit-assets',
+        cta:
+          (dojoOverview?.open_mistake_count || 0) > 0
+            ? '去看训练场'
+            : reusableAssetCount > 0
+              ? '查看心法资产'
+              : '去沉淀经验',
+        tone:
+          (dojoOverview?.open_mistake_count || 0) > 0
+            ? 'amber'
+            : reusableAssetCount > 0
+              ? 'green'
+              : taskSummary.completed > 0
+                ? 'amber'
+                : 'slate',
+      },
+      {
+        key: 'activity',
+        title: '任务与账房',
+        description: latestFlowDescription,
+        href: latestActionableTask
+          ? buildTaskWorkspaceHref(latestActionableTask, 'profile-cockpit-activity')
+          : hasFrozenBalance
+            ? '/wallet?focus=notifications&source=profile-cockpit-activity'
+            : '/wallet?focus=transactions&source=profile-cockpit-activity',
+        cta: latestActionableTask ? '回到任务工作台' : hasFrozenBalance ? '去账房飞剑中心' : '查看历练账房',
+        tone: latestSubmittedTask || hasFrozenBalance ? 'amber' : latestInProgressTask ? 'primary' : 'slate',
+      },
+    ]
+  }, [
+    autopilotStateLabel,
+    balance?.frozen_balance,
+    dojoOverview?.open_mistake_count,
+    dojoOverview?.pending_plan_count,
+    growthProfile,
+    hasFrozenBalance,
+    latestActionableTask,
+    latestInProgressTask,
+    latestSubmittedTask,
+    profileObserverStatus.level,
+    profileObserverStatus.summary,
+    recentTasks,
+    reusableAssetCount,
+    systemNextAction,
+    taskSummary.completed,
+  ])
 
   useEffect(() => {
     if (!profile) return
@@ -233,8 +409,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   }, [dojoAttempt?.artifact?.answers, dojoQuestions])
 
   useEffect(() => {
-    setActiveTab(inferInitialProfileTab(profileFocus, profileSource))
-  }, [profileFocus, profileSource])
+    setActiveTab(requestedTab || inferInitialProfileTab(profileFocus, profileSource))
+  }, [profileFocus, profileSource, requestedTab])
 
   const handleSaveProfile = async () => {
     setSavingProfile(true)
@@ -366,6 +542,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || '未命名修士'}</h1>
               <p className="mt-2 text-sm text-gray-600">{profile?.aid || session.aid}</p>
               <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向万象楼展示你的道号、能力标签、合作方式与历练履历。'}</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">这里更像 OpenClaw 的洞府驾驶舱。人类优先看主线、训练、账房与沉淀，不必逐项干预黑箱内部细节。</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <IdentityChip tone="slate" label={`状态：${formatSessionStatus(profile?.status || session.status)}`} />
                 <IdentityChip tone="green" label={`信誉分: ${profile?.reputation ?? session.reputation ?? '—'}`} />
@@ -373,6 +550,32 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 <IdentityChip tone="blue" label={`成员等级：${formatMembershipLevel(profile?.membership_level || session.membershipLevel)}`} />
                 <IdentityChip tone="amber" label={`可信等级：${formatTrustLevel(profile?.trust_level || session.trustLevel)}`} />
                 <IdentityChip tone="violet" label={`出关状态：${formatAvailabilityStatus(profile?.availability_status || session.availabilityStatus)}`} />
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  to="/profile?tab=growth&source=profile-header-growth"
+                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                >
+                  看系统主线
+                </Link>
+                <Link
+                  to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-header-task') : '/marketplace?tab=tasks&source=profile-header-task'}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  {latestActionableTask ? '回到最近任务' : '去万象楼任务台'}
+                </Link>
+                <Link
+                  to={hasFrozenBalance ? '/wallet?focus=notifications&source=profile-header-wallet' : '/wallet?focus=transactions&source=profile-header-wallet'}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  {hasFrozenBalance ? '先看账房飞剑' : '去看账房流水'}
+                </Link>
+                <Link
+                  to="/profile?tab=assets&source=profile-header-assets"
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  看心法资产
+                </Link>
               </div>
             </div>
           </div>
@@ -418,6 +621,51 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             {systemInterventionReason}
           </div>
         )}
+      </section>
+
+      <section className={`rounded-2xl border px-6 py-5 ${profileObserverTone.panel}`}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm font-medium text-slate-900">洞府观察结论</div>
+              <span className={`rounded-full px-3 py-1 text-sm font-medium ${profileObserverTone.badge}`}>{profileObserverStatus.title}</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-700">{profileObserverStatus.summary}</p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setActiveTab('growth')}
+              className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-primary-700 shadow-sm hover:bg-primary-50"
+            >
+              看系统主线
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('assets')}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              看心法资产
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('activity')}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              看历练账房
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {profileObserverSignals.map((signal) => (
+            <ProfileObserverSignalCard key={signal.label} signal={signal} />
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {profileCockpitCards.map((card) => (
+            <ProfileCockpitLinkCard key={card.key} card={card} />
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
@@ -1186,11 +1434,44 @@ function IdentityChip({ label, tone }: { label: string; tone: 'slate' | 'green' 
   return <span className={`rounded-full px-3 py-1 text-sm ${toneClass}`}>{label}</span>
 }
 
+function ProfileCockpitLinkCard({ card }: { card: ProfileCockpitCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  )
+}
+
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-gray-50 p-4">
       <div className="text-sm text-gray-500">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-gray-900">{value}</div>
+    </div>
+  )
+}
+
+function ProfileObserverSignalCard({ signal }: { signal: ProfileObserverSignal }) {
+  const toneClass = {
+    primary: 'border-primary-200 bg-white/80 text-primary-900',
+    amber: 'border-amber-200 bg-white/80 text-amber-900',
+    green: 'border-emerald-200 bg-white/80 text-emerald-900',
+    slate: 'border-slate-200 bg-white/80 text-slate-900',
+  }[signal.tone]
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <div className="text-xs uppercase tracking-wide opacity-70">{signal.label}</div>
+      <div className="mt-1 text-sm font-medium">{signal.value}</div>
     </div>
   )
 }
@@ -1288,6 +1569,14 @@ function inferInitialProfileTab(focus?: string | null, source?: string | null): 
   if (focus === 'assets' || source === 'gifted-grant') return 'assets'
   if (focus === 'growth' || focus === 'dojo' || source === 'world-ascension') return 'growth'
   return 'dashboard'
+}
+
+function parseProfileTab(value?: string | null): ProfileTab | null {
+  if (value === 'dashboard' || value === 'growth' || value === 'assets' || value === 'activity') {
+    return value
+  }
+
+  return null
 }
 
 function toNumber(value: string | number | undefined) {

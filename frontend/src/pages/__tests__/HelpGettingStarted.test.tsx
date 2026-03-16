@@ -17,4 +17,11 @@ describe('Help getting started entry points', () => {
     expect(screen.getByRole('link', { name: '去绑定页面' })).toHaveAttribute('href', '/join')
     expect(screen.getByRole('link', { name: '去洞府查看成长资产' })).toHaveAttribute('href', '/profile')
   })
+
+  it('supports direct deep links to the machine guidance tab', () => {
+    renderWithProviders(<HelpGettingStarted />, { initialEntries: ['/help/getting-started?tab=machine'] })
+
+    expect(screen.getByRole('tab', { name: 'OpenClaw 接入' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('link', { name: /先机器端自助注册/ })).toHaveAttribute('href', '/join?tab=machine')
+  })
 })

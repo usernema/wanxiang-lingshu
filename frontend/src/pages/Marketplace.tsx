@@ -63,10 +63,30 @@ type QueueGuideAction = {
   tone: 'primary' | 'secondary'
 }
 
+type MarketplaceCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
+
+type MarketplaceCockpitCard = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  tone: MarketplaceCockpitCardTone
+}
+
 type TaskQueueGuideDescriptor = {
   title: string
   summary: string
   actions: QueueGuideAction[]
+}
+
+type TaskWorkspacePhaseCardDescriptor = {
+  key: string
+  title: string
+  summary: string
+  cta: string
+  tone: 'primary' | 'amber' | 'green' | 'slate'
+  current: boolean
 }
 
 type ApplicantInsight = {
@@ -484,6 +504,23 @@ function ObserverActionCard({ action }: { action: MarketplaceObserverAction }) {
   return (
     <Link to={action.href} className={className}>
       {action.label}
+    </Link>
+  )
+}
+
+function MarketplaceCockpitLinkCard({ card }: { card: MarketplaceCockpitCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-green-200 bg-green-50 text-green-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
     </Link>
   )
 }
@@ -1074,6 +1111,86 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     }),
     [focusedTaskQueue, marketTab, role, selectedTask],
   )
+  const marketplaceQueueHref = focusedTaskQueue
+    ? `/marketplace?${new URLSearchParams({ tab: 'tasks', queue: focusedTaskQueue }).toString()}`
+    : '/marketplace?tab=tasks'
+  const marketplaceWorkspaceHref = selectedTask
+    ? `/marketplace?${new URLSearchParams({ tab: 'tasks', task: selectedTask.task_id, focus: 'task-workspace', source: 'marketplace-cockpit' }).toString()}`
+    : marketplaceQueueHref
+  const marketplaceCockpitCards = useMemo<MarketplaceCockpitCard[]>(() => {
+    const recommendationTone: MarketplaceCockpitCardTone =
+      recommendedAction.tone === 'blue'
+        ? 'primary'
+        : recommendedAction.tone === 'amber'
+          ? 'amber'
+          : recommendedAction.tone === 'green'
+            ? 'green'
+            : 'slate'
+
+    return [
+      {
+        key: 'mainline',
+        title: '系统结论',
+        description: `${recommendedAction.title} · ${recommendedAction.description}`,
+        href: marketplaceWorkspaceHref,
+        cta: selectedTask ? '打开当前工作台' : '查看系统建议',
+        tone: recommendationTone,
+      },
+      {
+        key: 'queue',
+        title: '当前队列',
+        description: focusedTaskQueue
+          ? taskQueueGuide?.title || taskQueueBannerCopy || '系统已定位到当前队列。'
+          : selectedTask
+            ? `当前焦点任务：${selectedTask.title}`
+            : `当前处于${role === 'worker' ? '行脚人' : '发榜人'}视角，可见 ${visibleTasks.length} 条任务。`,
+        href: selectedTask ? marketplaceWorkspaceHref : marketplaceQueueHref,
+        cta: selectedTask ? '查看任务状态' : '查看当前队列',
+        tone: focusedTaskQueue || selectedTask ? 'amber' : 'slate',
+      },
+      {
+        key: 'diagnostics',
+        title: '托管与一致性',
+        description: selectedTaskDiagnostic
+          ? `当前任务异常：${selectedTaskDiagnostic.issue}`
+          : diagnosticsIssueCount > 0
+            ? `diagnostics 共发现 ${diagnosticsIssueCount} 个异常样本，建议优先核对托管与生命周期字段。`
+            : selectedTask?.escrow_id
+              ? '当前任务托管已建立，系统未发现必须立即接管的一致性阻塞。'
+              : '当前没有强制接管信号，可继续观察黑箱流转。',
+        href: selectedTask ? marketplaceWorkspaceHref : '/wallet?focus=notifications&source=marketplace-observer',
+        cta: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? '查看异常上下文' : '查看账房飞剑',
+        tone: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? 'amber' : selectedTask?.escrow_id ? 'green' : 'slate',
+      },
+      {
+        key: 'assets',
+        title: '成长沉淀',
+        description: marketTab === 'skills'
+          ? '当前已切到法卷坊，可以直接运营卷面资产与公开能力。'
+          : selectedTask?.status === 'completed'
+            ? '当前任务已结案，建议回洞府或法卷坊查看法卷、模板与获赠资产。'
+            : '真实闭环完成后，系统会把成功经验沉淀为法卷、模板或获赠资产。',
+        href: marketTab === 'skills' ? '/marketplace?tab=skills' : '/profile?tab=assets',
+        cta: marketTab === 'skills' ? '留在法卷坊' : '查看成长资产',
+        tone: marketTab === 'skills' || selectedTask?.status === 'completed' ? 'green' : 'primary',
+      },
+    ]
+  }, [
+    diagnosticsIssueCount,
+    focusedTaskQueue,
+    marketTab,
+    marketplaceQueueHref,
+    marketplaceWorkspaceHref,
+    recommendedAction.description,
+    recommendedAction.title,
+    recommendedAction.tone,
+    role,
+    selectedTask,
+    selectedTaskDiagnostic,
+    taskQueueBannerCopy,
+    taskQueueGuide?.title,
+    visibleTasks.length,
+  ])
   const marketplaceTabs = useMemo(
     () => [
       { key: 'tasks', label: '历练榜', badge: visibleTasks.length || tasksQuery.data?.length || 0 },
@@ -1096,6 +1213,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     [currentSession, skillsQuery.data?.length],
   )
   const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
+  const taskWorkspacePhaseCards = useMemo(
+    () => buildTaskWorkspacePhaseCards(selectedTask, currentApplications, visibleTaskOutcome),
+    [currentApplications, selectedTask, visibleTaskOutcome],
+  )
 
   const refetchTaskWorkspace = async () => {
     await Promise.all([
@@ -1462,150 +1583,183 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <InfoCard icon={<Star className="h-4 w-4" />} label="托管" value={selectedTask.escrow_id || '未创建'} />
           </div>
 
-          <TaskPipeline task={selectedTask} applications={currentApplications} />
-          <TaskLifecycleStageCard stageGuide={stageGuide} />
-          <RecommendedActionCard
-            recommendedAction={recommendedAction}
-            onOpenProfile={openProfileWithContext}
-            onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
-            onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-            onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-          />
-          <TaskStateGuide task={selectedTask} />
-          <TaskSettlementLinks task={selectedTask} />
-          {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
-
-          {taskWorkspaceOverview && (
-            <div className="space-y-3">
-              <SectionHint title="当前工作区摘要">
-                <div className="space-y-2">
-                  {taskWorkspaceOverview.summaryLines.map((line) => (
-                    <div key={line}>{line}</div>
-                  ))}
-                </div>
-              </SectionHint>
+          <TaskWorkspaceStageSection
+            eyebrow="黑箱阶段总盘"
+            title="当前任务推进面板"
+            description="先看阶段，再看建议动作和阻塞。人类不需要把每个内部动作都展开理解。"
+          >
+            <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {taskWorkspaceOverview.quickFacts.map((fact) => (
-                  <div key={fact.label} className={`rounded-xl border px-4 py-4 ${fact.tone}`}>
-                    <div className="text-xs uppercase tracking-wide opacity-75">{fact.label}</div>
-                    <div className="mt-2 text-sm font-medium">{fact.value}</div>
-                  </div>
+                {taskWorkspacePhaseCards.map((card) => (
+                  <TaskWorkspacePhaseCard key={card.key} card={card} />
                 ))}
               </div>
-            </div>
-          )}
-
-          {taskWorkspaceOverview?.assignedApplication && !assignedApplicationCopy && (
-            <SectionHint title="已分配申请记录">
-              <div>{taskWorkspaceOverview.assignedApplication.applicant_aid}</div>
-            </SectionHint>
-          )}
-
-          {assignedApplicationCopy && (
-            <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
-              <div className="space-y-2">
-                <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
-                <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
-                {assignedApplicationCopy.badge && (
-                  <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">{assignedApplicationCopy.badge}</span>
-                )}
-                <div>{assignedApplicationCopy.body}</div>
-              </div>
-            </SectionHint>
-          )}
-
-          {selectedTaskDiagnostic && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-              <div className="font-medium">当前选中任务在 diagnostics 中被标记为异常</div>
-              <div className="mt-1">{selectedTaskDiagnostic.issue}</div>
-            </div>
-          )}
-
-          <div className="space-y-3 border-t border-gray-100 pt-4">
-            <div className="flex items-center gap-2">
-              <h4 className="font-medium">接榜玉简</h4>
-              {applicationsQuery.isFetching && <span className="text-xs text-gray-400">刷新中...</span>}
-            </div>
-            <RoleSummaryBanner message={applicationsInsights.coverage} />
-            <RoleSummaryBanner message={applicationsInsights.priority} />
-            {applicationsQuery.isLoading && <div className="text-gray-500">{getApplicationsLoadingCopy(selectedTask)}</div>}
-            {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">接榜玉简加载失败，请稍后重试。</div>}
-            {!applicationsQuery.isLoading && !applicationsQuery.isError && currentApplications.length === 0 && <div className="text-gray-500">{getApplicationsEmptyCopy(selectedTask, currentApplications)}</div>}
-            {currentApplications.map((application) => {
-              const assignDisabledReason = getTaskActionDisabledReason('assign', selectedTask, employerSession, workerSession, application.applicant_aid)
-
-              return (
-                <ApplicantCard
-                  key={application.id}
-                  application={application}
-                  task={selectedTask}
-                  assignDisabledReason={assignDisabledReason}
-                  isAssignPending={assignTask.isPending}
-                  onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
-                />
-              )
-            })}
-          </div>
-
-          <div className="space-y-3 border-t border-gray-100 pt-4">
-            <h4 className="font-medium">行脚人操作</h4>
-            {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
-            <form onSubmit={submitApplication} className="space-y-3">
-              <textarea
-                value={applicationProposal}
-                onChange={(e) => setApplicationProposal(e.target.value)}
-                placeholder={getTaskProposalPlaceholder(selectedTask)}
-                rows={3}
-                className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+              <TaskPipeline task={selectedTask} applications={currentApplications} />
+              <TaskLifecycleStageCard stageGuide={stageGuide} />
+              <RecommendedActionCard
+                recommendedAction={recommendedAction}
+                onOpenProfile={openProfileWithContext}
+                onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
+                onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+                onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
               />
-              <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
-              <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
-                {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
-              </button>
-              {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
-            </form>
-            <button
-              type="button"
-              onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-              disabled={!canCompleteSelectedTask || completeTask.isPending}
-              className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
-            </button>
-            {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
-          </div>
+              <TaskStateGuide task={selectedTask} />
+              {taskWorkspaceOverview && (
+                <div className="space-y-3">
+                  <SectionHint title="当前工作区摘要">
+                    <div className="space-y-2">
+                      {taskWorkspaceOverview.summaryLines.map((line) => (
+                        <div key={line}>{line}</div>
+                      ))}
+                    </div>
+                  </SectionHint>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {taskWorkspaceOverview.quickFacts.map((fact) => (
+                      <div key={fact.label} className={`rounded-xl border px-4 py-4 ${fact.tone}`}>
+                        <div className="text-xs uppercase tracking-wide opacity-75">{fact.label}</div>
+                        <div className="mt-2 text-sm font-medium">{fact.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {selectedTaskDiagnostic && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                  <div className="font-medium">当前选中任务在 diagnostics 中被标记为异常</div>
+                  <div className="mt-1">{selectedTaskDiagnostic.issue}</div>
+                </div>
+              )}
+            </div>
+          </TaskWorkspaceStageSection>
 
-          <div className="border-t border-gray-100 pt-4">
-            <h4 className="mb-3 font-medium">发榜人操作</h4>
-            <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
-            <button
-              type="button"
-              onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-              disabled={!canAcceptSelectedTask || acceptTask.isPending}
-              className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
-            </button>
-            {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
-            <button
-              type="button"
-              onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
-              disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
-              className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
-            </button>
-            {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
-            <button
-              type="button"
-              onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
-              disabled={!canCancelSelectedTask || cancelTask.isPending}
-              className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-            >
-              {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
-            </button>
-            {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
-          </div>
+          <TaskWorkspaceStageSection
+            eyebrow="阶段一"
+            title="招贤与点将"
+            description="这一段只关心接榜玉简质量、申请覆盖度，以及是否已经锁定执行者。"
+          >
+            <div className="space-y-3">
+              {taskWorkspaceOverview?.assignedApplication && !assignedApplicationCopy && (
+                <SectionHint title="已分配申请记录">
+                  <div>{taskWorkspaceOverview.assignedApplication.applicant_aid}</div>
+                </SectionHint>
+              )}
+
+              {assignedApplicationCopy && (
+                <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
+                  <div className="space-y-2">
+                    <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
+                    <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
+                    {assignedApplicationCopy.badge && (
+                      <span className="inline-flex rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-800">{assignedApplicationCopy.badge}</span>
+                    )}
+                    <div>{assignedApplicationCopy.body}</div>
+                  </div>
+                </SectionHint>
+              )}
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-medium">接榜玉简</h4>
+                  {applicationsQuery.isFetching && <span className="text-xs text-gray-400">刷新中...</span>}
+                </div>
+                <RoleSummaryBanner message={applicationsInsights.coverage} />
+                <RoleSummaryBanner message={applicationsInsights.priority} />
+                {applicationsQuery.isLoading && <div className="text-gray-500">{getApplicationsLoadingCopy(selectedTask)}</div>}
+                {applicationsQuery.isError && <div className="rounded-xl bg-red-50 p-3 text-red-700">接榜玉简加载失败，请稍后重试。</div>}
+                {!applicationsQuery.isLoading && !applicationsQuery.isError && currentApplications.length === 0 && <div className="text-gray-500">{getApplicationsEmptyCopy(selectedTask, currentApplications)}</div>}
+                {currentApplications.map((application) => {
+                  const assignDisabledReason = getTaskActionDisabledReason('assign', selectedTask, employerSession, workerSession, application.applicant_aid)
+
+                  return (
+                    <ApplicantCard
+                      key={application.id}
+                      application={application}
+                      task={selectedTask}
+                      assignDisabledReason={assignDisabledReason}
+                      isAssignPending={assignTask.isPending}
+                      onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          </TaskWorkspaceStageSection>
+
+          <TaskWorkspaceStageSection
+            eyebrow="阶段二"
+            title="行脚执行"
+            description="这一段只关心执行者是否已经接榜、是否进入托管执行、以及何时交卷候验。"
+          >
+            <div className="space-y-3">
+              <h4 className="font-medium">行脚人操作</h4>
+              {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
+              <form onSubmit={submitApplication} className="space-y-3">
+                <textarea
+                  value={applicationProposal}
+                  onChange={(e) => setApplicationProposal(e.target.value)}
+                  placeholder={getTaskProposalPlaceholder(selectedTask)}
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+                />
+                <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
+                <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
+                  {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
+                </button>
+                {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
+              </form>
+              <button
+                type="button"
+                onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+                disabled={!canCompleteSelectedTask || completeTask.isPending}
+                className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+              >
+                {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
+              </button>
+              {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
+            </div>
+          </TaskWorkspaceStageSection>
+
+          <TaskWorkspaceStageSection
+            eyebrow="阶段三"
+            title="发榜人验卷 / 结案"
+            description="这一段只关心发榜人是否验卷放款、是否打回重修，以及结案后沉淀出了什么。"
+          >
+            <div className="space-y-4">
+              <div>
+                <h4 className="mb-3 font-medium">发榜人操作</h4>
+                <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
+                <button
+                  type="button"
+                  onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+                  disabled={!canAcceptSelectedTask || acceptTask.isPending}
+                  className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
+                </button>
+                {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
+                <button
+                  type="button"
+                  onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
+                  disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
+                  className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
+                </button>
+                {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
+                <button
+                  type="button"
+                  onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
+                  disabled={!canCancelSelectedTask || cancelTask.isPending}
+                  className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                >
+                  {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
+                </button>
+                {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
+              </div>
+              <TaskSettlementLinks task={selectedTask} />
+              {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
+            </div>
+          </TaskWorkspaceStageSection>
         </div>
       ) : (
         <p className="text-sm text-gray-500">
@@ -1699,9 +1853,26 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     <div className="space-y-6">
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">万象楼 · 历练悬赏 / 法卷坊</h1>
-            <p className="mt-2 text-sm text-gray-600">人类在这里主要负责观察主线是否顺畅、必要时介入；OpenClaw 的大部分流转细节由系统在黑箱里继续推进。</p>
+          <div className="max-w-3xl">
+            <h1 className="text-3xl font-bold">万象楼 · 黑箱历练 / 法卷坊</h1>
+            <p className="mt-2 text-sm text-gray-600">这里不是给人类慢慢点按钮的任务页，而是 OpenClaw 的黑箱工作台。人类优先看系统结论、当前队列、托管告警和资产沉淀，再决定是否介入。</p>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm">
+              <Link to={marketplaceWorkspaceHref} className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+                继续当前工作台
+              </Link>
+              <Link
+                to={role === 'employer' ? '/marketplace?tab=tasks&focus=create-task' : '/marketplace?tab=tasks&queue=open'}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
+              >
+                {role === 'employer' ? '发布真实悬赏' : '查看可接悬赏'}
+              </Link>
+              <Link to="/wallet?focus=notifications&source=marketplace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
+                去账房飞剑
+              </Link>
+              <Link to="/profile?tab=assets" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
+                去看成长资产
+              </Link>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="发榜人视角" aid={employerSession?.aid} />
@@ -1736,13 +1907,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
         <div className={`mt-4 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
+            <div className="max-w-2xl">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="text-sm font-medium text-slate-900">观察者模式</div>
+                <div className="text-sm font-medium text-slate-900">黑箱观察结论</div>
                 <span className={`rounded-full px-3 py-1 text-sm font-medium ${observerTone.badge}`}>{observerStatus.title}</span>
               </div>
+              <div className="mt-2 text-lg font-semibold text-slate-900">{recommendedAction.title}</div>
               <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
-              <div className="mt-3 text-sm text-slate-600">系统建议：{recommendedAction.title}</div>
+              <div className="mt-3 text-sm text-slate-600">当前系统建议：{recommendedAction.description}</div>
             </div>
             <div className="grid gap-2 sm:grid-cols-3">
               {observerActions.map((action) => (
@@ -1755,6 +1927,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <MarketplaceObserverSignalCard key={signal.label} signal={signal} />
             ))}
           </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {marketplaceCockpitCards.map((card) => (
+            <MarketplaceCockpitLinkCard key={card.key} card={card} />
+          ))}
         </div>
       </div>
 
@@ -2216,6 +2394,169 @@ function TaskLifecycleStageCard({ stageGuide }: { stageGuide: TaskStageGuide }) 
         </div>
       )}
     </div>
+  )
+}
+
+function buildTaskWorkspacePhaseCards(
+  task: MarketplaceTask | null,
+  applications: TaskApplication[],
+  outcome: RecentTaskOutcome | null,
+): TaskWorkspacePhaseCardDescriptor[] {
+  if (!task) {
+    return [
+      {
+        key: 'recruit',
+        title: '招贤与点将',
+        summary: '先选择一道悬赏后再看当前阶段。',
+        cta: '等待选择悬赏',
+        tone: 'slate',
+        current: false,
+      },
+      {
+        key: 'execution',
+        title: '托管与执行',
+        summary: '执行阶段会在点将与托管建立后出现。',
+        cta: '等待进入执行',
+        tone: 'slate',
+        current: false,
+      },
+      {
+        key: 'review',
+        title: '验卷与结案',
+        summary: '交卷后，系统会把焦点切到验卷与放款。',
+        cta: '等待交卷',
+        tone: 'slate',
+        current: false,
+      },
+      {
+        key: 'asset',
+        title: '结果与沉淀',
+        summary: '结案后会在这里观察法卷、模板和赠送资产。',
+        cta: '等待沉淀结果',
+        tone: 'slate',
+        current: false,
+      },
+    ]
+  }
+
+  const isRecruitStage = task.status === 'open'
+  const isExecutionStage = task.status === 'assigned' || task.status === 'in_progress'
+  const isReviewStage = task.status === 'submitted'
+  const isAssetStage = task.status === 'completed' || task.status === 'cancelled'
+  const assignedApplicant = applications.find((application) => application.applicant_aid === task.worker_aid)
+
+  return [
+    {
+      key: 'recruit',
+      title: '招贤与点将',
+      summary: task.status === 'open'
+        ? applications.length > 0
+          ? `当前已有 ${applications.length} 份接榜玉简，发榜人可以直接点将。`
+          : '当前还没有接榜玉简，OpenClaw 可先自行投递或等待申请进入。'
+        : task.worker_aid
+          ? `已锁定执行者 ${task.worker_aid}${assignedApplicant ? '，招贤阶段已完成。' : '，不再继续公开招贤。'}`
+          : '当前不处于公开招贤阶段。',
+      cta: task.status === 'open'
+        ? applications.length > 0
+          ? '待发榜人点将'
+          : '等待接榜玉简'
+        : '招贤已结束',
+      tone: isRecruitStage ? (applications.length > 0 ? 'amber' : 'primary') : task.worker_aid ? 'green' : 'slate',
+      current: isRecruitStage,
+    },
+    {
+      key: 'execution',
+      title: '托管与执行',
+      summary: isExecutionStage
+        ? task.escrow_id
+          ? `托管 ${task.escrow_id} 已建立，当前重点是推进执行与交卷节奏。`
+          : '当前已进入执行，但 escrow 信息缺失，建议优先核对托管状态。'
+        : isReviewStage || isAssetStage
+          ? '执行阶段已经结束，系统焦点已转到验卷、结算或沉淀。'
+          : '点将并建立托管后，这里会进入执行阶段。',
+      cta: isExecutionStage ? '推进执行' : isReviewStage || isAssetStage ? '执行已完成' : '等待进入执行',
+      tone: isExecutionStage ? (task.escrow_id ? 'amber' : 'primary') : isReviewStage || isAssetStage ? 'green' : 'slate',
+      current: isExecutionStage,
+    },
+    {
+      key: 'review',
+      title: '验卷与结案',
+      summary: isReviewStage
+        ? '行脚人已交卷，当前由发榜人决定验卷放款或打回重修。'
+        : task.status === 'completed'
+          ? '验卷放款已经完成，当前任务已进入结案态。'
+          : task.status === 'cancelled'
+            ? '任务已终止，不再进入验卷环节。'
+            : '交卷后，这里会接管验卷、放款和结案判断。',
+      cta: isReviewStage ? '待发榜人验卷' : task.status === 'completed' ? '已结案' : task.status === 'cancelled' ? '已终止' : '等待交卷',
+      tone: isReviewStage ? 'amber' : task.status === 'completed' ? 'green' : task.status === 'cancelled' ? 'slate' : 'slate',
+      current: isReviewStage,
+    },
+    {
+      key: 'asset',
+      title: '结果与沉淀',
+      summary: outcome
+        ? getTaskOutcomeTitle(outcome)
+        : task.status === 'completed'
+          ? '当前任务已经完成，建议立即回洞府、法卷坊和账房核对沉淀结果。'
+          : task.status === 'cancelled'
+            ? '当前任务已终止，重点转为核对退款和冻结回落。'
+            : '验卷完成后，系统会自动尝试沉淀法卷、模板与赠送资产。',
+      cta: outcome
+        ? '查看沉淀结果'
+        : task.status === 'completed'
+          ? '查看结案结果'
+          : task.status === 'cancelled'
+            ? '查看退款结果'
+            : '等待沉淀触发',
+      tone: outcome || task.status === 'completed' ? 'green' : task.status === 'cancelled' ? 'slate' : 'slate',
+      current: isAssetStage,
+    },
+  ]
+}
+
+function TaskWorkspacePhaseCard({ card }: { card: TaskWorkspacePhaseCardDescriptor }) {
+  const toneClass =
+    card.tone === 'green'
+      ? 'border-green-200 bg-green-50 text-green-900'
+      : card.tone === 'amber'
+        ? 'border-amber-200 bg-amber-50 text-amber-900'
+        : card.tone === 'primary'
+          ? 'border-primary-200 bg-primary-50 text-primary-900'
+          : 'border-slate-200 bg-slate-50 text-slate-900'
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClass} ${card.current ? 'ring-2 ring-offset-0 ring-current/20' : ''}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-medium">{card.title}</div>
+        {card.current && <span className="rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium">当前阶段</span>}
+      </div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.summary}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </div>
+  )
+}
+
+function TaskWorkspaceStageSection({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  description: string
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+      <div className="mb-4">
+        <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{eyebrow}</div>
+        <div className="mt-1 text-base font-semibold text-slate-900">{title}</div>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      </div>
+      {children}
+    </section>
   )
 }
 

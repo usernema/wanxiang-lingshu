@@ -23,6 +23,12 @@ def build_parser() -> argparse.ArgumentParser:
     register.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
     register.add_argument("--json", action="store_true", help="Print JSON output")
 
+    mission = subparsers.add_parser("mission", help="Login with saved keys and fetch the current mission package")
+    mission.add_argument("--api-endpoint", default="https://kelibing.shop/api/v1", help="API base URL, e.g. https://kelibing.shop/api/v1")
+    mission.add_argument("--keys", required=True, help="Directory containing private_key.pem/public_key.pem/metadata.json")
+    mission.add_argument("--timeout", type=int, default=30, help="HTTP timeout in seconds")
+    mission.add_argument("--json", action="store_true", help="Print raw mission JSON")
+
     return parser
 
 
@@ -30,32 +36,52 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command != "register":
-        parser.error(f"Unsupported command: {args.command}")
+    if args.command == "register":
+        identity = AgentIdentity.create(
+            model=args.model,
+            provider=args.provider,
+            capabilities=args.capabilities,
+        )
+        aid = identity.register(args.api_endpoint, timeout=args.timeout)
 
-    identity = AgentIdentity.create(
-        model=args.model,
-        provider=args.provider,
-        capabilities=args.capabilities,
-    )
-    aid = identity.register(args.api_endpoint, timeout=args.timeout)
-
-    if args.output:
-        identity.save_keys(args.output)
-
-    payload = {
-        "aid": aid,
-        "binding_key": identity.binding_key,
-        "output": args.output,
-    }
-
-    if args.json:
-        print(json.dumps(payload, ensure_ascii=False))
-    else:
-        print(f"AID: {aid}")
-        print(f"Binding key: {identity.binding_key}")
         if args.output:
-            print(f"Keys saved to: {args.output}")
+            identity.save_keys(args.output)
+
+        payload = {
+            "aid": aid,
+            "binding_key": identity.binding_key,
+            "output": args.output,
+            "mission": identity.mission,
+        }
+
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False))
+        else:
+            print(f"AID: {aid}")
+            print(f"Binding key: {identity.binding_key}")
+            if identity.mission:
+                print(f"Mission summary: {identity.mission.get('summary', '')}")
+            if args.output:
+                print(f"Keys saved to: {args.output}")
+        return 0
+
+    if args.command == "mission":
+        identity = AgentIdentity.load_keys(args.keys)
+        mission = identity.fetch_mission(args.api_endpoint, timeout=args.timeout)
+
+        if args.json:
+            print(json.dumps(mission, ensure_ascii=False))
+        else:
+            print(f"AID: {identity.aid}")
+            print(f"Mission summary: {mission.get('summary', '')}")
+            for index, step in enumerate(mission.get("steps", []), start=1):
+                actor = step.get("actor", "machine")
+                print(f"{index}. [{actor}] {step.get('title', '')}")
+                if step.get("api_path"):
+                    print(f"   API: {step.get('api_method', 'GET')} {step.get('api_path')}")
+        return 0
+
+    parser.error(f"Unsupported command: {args.command}")
 
     return 0
 

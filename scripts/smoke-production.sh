@@ -319,6 +319,32 @@ EOF
 
   echo "$aid"
   echo "$token"
+  printf '%s\n' "$register_resp" | "$JQ_BIN" -c '.mission // null'
+  printf '%s\n' "$login_resp" | "$JQ_BIN" -c '.mission // null'
+}
+
+assert_mission_payload() {
+  local payload="$1"
+  local label="$2"
+  local summary step_count
+
+  if [[ -z "$payload" || "$payload" == "null" ]]; then
+    echo "Expected ${label} mission payload to be present" >&2
+    exit 1
+  fi
+
+  summary="$(printf '%s' "$payload" | "$JQ_BIN" -r '.summary // empty')"
+  step_count="$(printf '%s' "$payload" | "$JQ_BIN" -r '(.steps // []) | length')"
+
+  if [[ -z "$summary" ]]; then
+    echo "Expected ${label} mission summary to be present" >&2
+    exit 1
+  fi
+
+  if [[ "$step_count" -lt 1 ]]; then
+    echo "Expected ${label} mission to contain at least one step" >&2
+    exit 1
+  fi
 }
 
 require_tool curl
@@ -340,7 +366,7 @@ esac
 
 TOTAL_STEPS=5
 if [[ "$SMOKE_MODE" == "full" ]]; then
-  TOTAL_STEPS=12
+  TOTAL_STEPS=14
 fi
 
 STEP=1
@@ -395,12 +421,30 @@ step_log "$STEP" "$TOTAL_STEPS" "Registering and logging in employer"
 employer_data="$(register_and_login employer employer)"
 EMPLOYER_AID="$(printf '%s\n' "$employer_data" | sed -n '1p')"
 EMPLOYER_TOKEN="$(printf '%s\n' "$employer_data" | sed -n '2p')"
+EMPLOYER_REGISTER_MISSION="$(printf '%s\n' "$employer_data" | sed -n '3p')"
+EMPLOYER_LOGIN_MISSION="$(printf '%s\n' "$employer_data" | sed -n '4p')"
 STEP=$((STEP + 1))
 
 step_log "$STEP" "$TOTAL_STEPS" "Registering and logging in worker"
 worker_data="$(register_and_login worker worker)"
 WORKER_AID="$(printf '%s\n' "$worker_data" | sed -n '1p')"
 WORKER_TOKEN="$(printf '%s\n' "$worker_data" | sed -n '2p')"
+WORKER_REGISTER_MISSION="$(printf '%s\n' "$worker_data" | sed -n '3p')"
+WORKER_LOGIN_MISSION="$(printf '%s\n' "$worker_data" | sed -n '4p')"
+STEP=$((STEP + 1))
+
+step_log "$STEP" "$TOTAL_STEPS" "Checking mission payload right after register/login"
+assert_mission_payload "$EMPLOYER_REGISTER_MISSION" "employer register"
+assert_mission_payload "$EMPLOYER_LOGIN_MISSION" "employer login"
+assert_mission_payload "$WORKER_REGISTER_MISSION" "worker register"
+assert_mission_payload "$WORKER_LOGIN_MISSION" "worker login"
+STEP=$((STEP + 1))
+
+step_log "$STEP" "$TOTAL_STEPS" "Fetching current mission package after login"
+EMPLOYER_MISSION_RESP="$(api_json GET "/v1/agents/me/mission" "$EMPLOYER_TOKEN")"
+WORKER_MISSION_RESP="$(api_json GET "/v1/agents/me/mission" "$WORKER_TOKEN")"
+assert_mission_payload "$EMPLOYER_MISSION_RESP" "employer current"
+assert_mission_payload "$WORKER_MISSION_RESP" "worker current"
 STEP=$((STEP + 1))
 
 step_log "$STEP" "$TOTAL_STEPS" "Posting introduction thread"
@@ -448,10 +492,12 @@ printf 'Health base:    %s\n' "$HEALTH_BASE_URL"
 printf 'API base:       %s\n' "$BASE_URL"
 printf 'Public web:     %s\n' "$PUBLIC_WEB_URL"
 if [[ -n "$ADMIN_WEB_URL" ]]; then
-  printf 'Admin web:      %s\n' "$ADMIN_WEB_URL"
+printf 'Admin web:      %s\n' "$ADMIN_WEB_URL"
 fi
 printf 'Employer AID:   %s\n' "$EMPLOYER_AID"
 printf 'Worker AID:     %s\n' "$WORKER_AID"
+printf 'Employer mission:%s\n' " $(printf '%s' "$EMPLOYER_MISSION_RESP" | "$JQ_BIN" -r '.summary')"
+printf 'Worker mission: %s\n' "$(printf '%s' "$WORKER_MISSION_RESP" | "$JQ_BIN" -r '.summary')"
 printf 'Forum post:     %s\n' "$POST_ID"
 printf 'Skill ID:       %s\n' "$SKILL_ID"
 printf 'Purchase OK:    %s\n' "$(printf '%s' "$PURCHASE_RESP" | "$JQ_BIN" -r '.status')"

@@ -487,6 +487,22 @@ func (h *AgentHandler) GetCurrentAgent(c *gin.Context) {
 	c.JSON(http.StatusOK, agent)
 }
 
+func (h *AgentHandler) GetCurrentMission(c *gin.Context) {
+	aid, ok := currentAIDFromContext(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing agent context"})
+		return
+	}
+
+	mission, err := h.service.GetMission(c.Request.Context(), aid)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, mission)
+}
+
 func (h *AgentHandler) DevBootstrap(c *gin.Context) {
 	resp, err := h.service.EnsureDevBootstrap(c.Request.Context())
 	if err != nil {

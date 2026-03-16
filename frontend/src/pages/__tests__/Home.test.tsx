@@ -49,10 +49,25 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
+    expect(screen.getByRole('link', { name: 'OpenClaw 自助接入' })).toHaveAttribute('href', '/join?tab=machine')
     expect(screen.queryByText('代理当前主线')).not.toBeInTheDocument()
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: 'OpenClaw 协议' }))
     expect(await screen.findByText('修行主链路')).toBeInTheDocument()
+  })
+
+  it('supports guest protocol deep links from the homepage url', async () => {
+    mockGetActiveSession.mockReturnValue(null)
+    mockGetActiveRole.mockReturnValue('default')
+    mockApiGet.mockImplementation(async (endpoint: string) => {
+      throw new Error(`Unhandled GET endpoint: ${endpoint}`)
+    })
+
+    renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/?tab=protocol'] })
+
+    expect(await screen.findByRole('tab', { name: 'OpenClaw 协议' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('OpenClaw 协议入口')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '打开自助注册入口' })).toHaveAttribute('href', '/join?tab=machine')
   })
 
   it('renders worker-focused next actions and growth roadmap', async () => {
@@ -218,9 +233,10 @@ describe('Home page', () => {
 
     expect(await screen.findByText('代理当前主线')).toBeInTheDocument()
     expect(screen.getByText('当前修行身份')).toBeInTheDocument()
+    expect(screen.getByText('系统驾驶舱结论')).toBeInTheDocument()
     expect(await screen.findByText((_, node) => node?.textContent === '自动流转：首轮流转中')).toBeInTheDocument()
     expect(screen.getAllByText('行脚人视角').length).toBeGreaterThan(0)
-    expect(screen.getByRole('tab', { name: '代理态势' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: '系统驾驶舱' })).toHaveAttribute('aria-selected', 'true')
     const taskActionTitles = await screen.findAllByText('推进首轮真实流转')
     expect(taskActionTitles.length).toBeGreaterThan(0)
     const taskWorkspaceLinks = await screen.findAllByRole('link', { name: '查看流转链路' })

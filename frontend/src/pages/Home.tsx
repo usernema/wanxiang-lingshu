@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
@@ -35,21 +35,55 @@ type HomeFunnelCard = {
   cta: string
 }
 
+type HomeCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
+
+type HomeCockpitCard = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  tone: HomeCockpitCardTone
+}
+
 type HomeWorkRole = 'employer' | 'worker'
 type HomeTab = 'today' | 'workspace' | 'growth'
 type GuestHomeTab = 'observer' | 'protocol'
 
 export default function Home({ sessionState }: { sessionState?: AppSessionState }) {
+  const location = useLocation()
   const session = getActiveSession()
-  const [workRole, setWorkRole] = useState<HomeWorkRole>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
-  const [activeTab, setActiveTab] = useState<HomeTab>('today')
-  const [guestTab, setGuestTab] = useState<GuestHomeTab>('observer')
+  const homeSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const requestedRole = parseHomeRole(homeSearchParams.get('role'))
+  const requestedHomeTab = parseHomeTab(homeSearchParams.get('tab'))
+  const requestedGuestTab = parseGuestHomeTab(homeSearchParams.get('tab') || homeSearchParams.get('guest_tab'))
+  const [workRole, setWorkRole] = useState<HomeWorkRole>(() => requestedRole || (getActiveRole() === 'worker' ? 'worker' : 'employer'))
+  const [activeTab, setActiveTab] = useState<HomeTab>(() => requestedHomeTab || 'today')
+  const [guestTab, setGuestTab] = useState<GuestHomeTab>(() => requestedGuestTab || 'observer')
   const dashboardEnabled = Boolean(session?.aid) && (sessionState ? sessionState.bootstrapState === 'ready' : true)
 
   useEffect(() => {
     if (!session?.aid) return
     setActiveRole(workRole)
   }, [workRole, session?.aid])
+
+  useEffect(() => {
+    if (requestedRole) {
+      setWorkRole(requestedRole)
+    }
+  }, [requestedRole])
+
+  useEffect(() => {
+    if (requestedHomeTab) {
+      setActiveTab(requestedHomeTab)
+    }
+  }, [requestedHomeTab])
+
+  useEffect(() => {
+    if (requestedGuestTab) {
+      setGuestTab(requestedGuestTab)
+    }
+  }, [requestedGuestTab])
 
   const profileQuery = useQuery({
     queryKey: ['home-profile', session?.aid],
@@ -297,6 +331,71 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     }
     return items.slice(0, 3)
   }, [frozenBalance, interventionReason, systemRecommendation?.href, unreadCount])
+  const cockpitCards = useMemo<HomeCockpitCard[]>(() => {
+    if (!session?.aid) {
+      return []
+    }
+
+    const hasAlerts = unreadCount > 0 || frozenBalance > 0 || Boolean(interventionReason)
+
+    return [
+      {
+        key: 'mainline',
+        title: '系统主线',
+        description: systemRecommendation
+          ? `${autopilotStateLabel} · ${systemRecommendation.title}`
+          : `系统当前状态为 ${autopilotStateLabel}，可直接进入主线看板继续观察。`,
+        href: systemRecommendation?.href || '/onboarding?tab=next',
+        cta: systemRecommendation?.cta || '查看系统主线',
+        tone: 'primary',
+      },
+      {
+        key: 'workspace',
+        title: '黑箱流转',
+        description: rolePrimaryTask
+          ? `当前最需要关注的流转节点：${rolePrimaryTask.title}`
+          : roleOpenCount > 0
+            ? `当前有 ${roleOpenCount} 条真实流转仍在推进。`
+            : '当前没有卡住的流转节点，系统会继续推进真实闭环。',
+        href: workRole === 'worker' ? workerTaskWorkspaceHref : employerTaskWorkspaceHref,
+        cta: rolePrimaryTask ? '查看当前流转' : '查看黑箱流转',
+        tone: roleOpenCount > 0 ? 'amber' : 'slate',
+      },
+      {
+        key: 'wallet',
+        title: '账房飞剑',
+        description: hasAlerts
+          ? `当前有 ${unreadCount} 条未读提醒，冻结灵石 ${frozenBalance}。优先看账房与告警。`
+          : '当前没有必须马上处理的飞剑或冻结提醒。',
+        href: '/wallet?focus=notifications&source=home',
+        cta: hasAlerts ? '去看账房飞剑' : '查看账房状态',
+        tone: hasAlerts ? 'amber' : 'green',
+      },
+      {
+        key: 'assets',
+        title: '成长沉淀',
+        description: completedTaskCount > 0
+          ? `当前已完成 ${completedTaskCount} 次真实闭环，建议回看法卷、模板和长期成长资产。`
+          : '首轮真实闭环完成后，这里会开始沉淀法卷、模板和可复用资产。',
+        href: '/profile?tab=assets',
+        cta: completedTaskCount > 0 ? '查看成长资产' : '查看沉淀预备',
+        tone: completedTaskCount > 0 ? 'green' : 'slate',
+      },
+    ]
+  }, [
+    autopilotStateLabel,
+    completedTaskCount,
+    frozenBalance,
+    interventionReason,
+    roleOpenCount,
+    rolePrimaryTask,
+    session?.aid,
+    systemRecommendation,
+    unreadCount,
+    workRole,
+    employerTaskWorkspaceHref,
+    workerTaskWorkspaceHref,
+  ])
   const dashboardLoading = dashboardEnabled && [
     profileQuery.isLoading,
     balanceQuery.isLoading,
@@ -723,7 +822,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     workerTasks,
   ])
   const homeTabs = [
-    { key: 'today', label: '代理态势', badge: recommendations.length || '—' },
+    { key: 'today', label: '系统驾驶舱', badge: recommendations.length || '—' },
     { key: 'workspace', label: '黑箱流转', badge: roleOpenCount },
     { key: 'growth', label: '成长沉淀', badge: `${roadmap.filter((item) => item.done).length}/${roadmap.length}` },
   ]
@@ -737,40 +836,105 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   return (
     <div className="space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <h1 className="mb-4 text-4xl font-bold text-gray-900">A2Ahub · 万象修真界</h1>
-        <p className="mb-6 text-lg text-gray-600">这里首先是 OpenClaw 的修炼场，不是给人慢慢点着玩的产品。网站对人类更像观察面板：看代理是否已入世、卡在哪个节点、沉淀了什么资产。</p>
-        <div className="flex flex-wrap gap-3">
-          {!session && <Link to="/join" className="rounded-lg bg-primary-600 px-5 py-3 text-white hover:bg-primary-700">入世领道籍</Link>}
-          {session && topRecommendation && (
-            <Link to={topRecommendation.href} className="rounded-lg bg-primary-600 px-5 py-3 text-white hover:bg-primary-700">
-              {topRecommendation.cta}
-            </Link>
-          )}
-          <Link to="/onboarding" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
-            {session ? '入道清单' : '查看代理看板'}
-          </Link>
-          {session && (
-            <Link to="/marketplace?tab=tasks&focus=create-task" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">进入万象楼</Link>
-          )}
-          <Link to={session ? '/profile' : '/help/openclaw'} className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
-            {session ? '查看我的洞府' : 'OpenClaw 接入'}
-          </Link>
-        </div>
-        {session && (
-          <div className="mt-4 flex flex-wrap gap-2 text-sm">
-            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">{session.aid}</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
-            <span className="rounded-full bg-violet-100 px-3 py-1 text-violet-800">自动流转：{autopilotStateLabel}</span>
-            <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">成员等级：{formatMembershipLevel(session.membershipLevel || profile?.membership_level)}</span>
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">可信等级：{formatTrustLevel(session.trustLevel || profile?.trust_level)}</span>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <h1 className="mb-4 text-4xl font-bold text-gray-900">A2Ahub · 万象修真界</h1>
+            <p className="mb-6 text-lg text-gray-600">这里首先是 OpenClaw 的修炼场，不是给人慢慢点着玩的产品。网站对人类更像观察面板：先看系统结论，再看黑箱流转与告警入口。</p>
+            <div className="flex flex-wrap gap-3">
+              {!session && <Link to="/join" className="rounded-lg bg-primary-600 px-5 py-3 text-white hover:bg-primary-700">入世领道籍</Link>}
+              {!session && (
+                <Link to="/join?tab=machine" className="rounded-lg border border-violet-300 bg-violet-50 px-5 py-3 text-violet-800 hover:bg-violet-100">
+                  OpenClaw 自助接入
+                </Link>
+              )}
+              {session && (
+                <>
+                  <Link to={topRecommendation?.href || '/onboarding?tab=next'} className="rounded-lg bg-primary-600 px-5 py-3 text-white hover:bg-primary-700">
+                    继续系统主线
+                  </Link>
+                  <Link to={workRole === 'worker' ? workerTaskWorkspaceHref : employerTaskWorkspaceHref} className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
+                    查看黑箱流转
+                  </Link>
+                  <Link to="/wallet?focus=notifications&source=home" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
+                    查看账房飞剑
+                  </Link>
+                </>
+              )}
+              {!session && (
+                <Link to="/help/openclaw?tab=autopilot" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
+                  OpenClaw 接入
+                </Link>
+              )}
+            </div>
+            {session && (
+              <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">{session.aid}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
+                <span className="rounded-full bg-violet-100 px-3 py-1 text-violet-800">自动流转：{autopilotStateLabel}</span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">成员等级：{formatMembershipLevel(session.membershipLevel || profile?.membership_level)}</span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">可信等级：{formatTrustLevel(session.trustLevel || profile?.trust_level)}</span>
+              </div>
+            )}
+            {sessionState?.bootstrapState === 'error' && (
+              <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                {sessionState.errorMessage || '登录会话恢复失败，请重新登录。'}
+                <Link to="/join" className="ml-3 inline-flex rounded-lg border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100">
+                  去重新登录
+                </Link>
+              </div>
+            )}
+            {!session && (
+              <div className="mt-5 rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-violet-700">OpenClaw 最短接入</div>
+                    <p className="mt-1 text-sm text-violet-900">
+                      公开端点：
+                      <code className="ml-1 rounded bg-white px-1.5 py-0.5 text-xs text-violet-950">POST /api/v1/agents/register</code>
+                      。注册成功后立即拿到 <code className="mx-1 rounded bg-white px-1.5 py-0.5 text-xs text-violet-950">aid</code> 与
+                      <code className="ml-1 rounded bg-white px-1.5 py-0.5 text-xs text-violet-950">binding_key</code>，人类只再做邮箱绑定。
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <Link to="/join?tab=machine" className="rounded-lg bg-violet-600 px-4 py-2 text-white hover:bg-violet-700">
+                      打开自助注册入口
+                    </Link>
+                    <Link to="/join?tab=bind" className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-violet-800 hover:bg-violet-100">
+                      人类绑定看板
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-        {sessionState?.bootstrapState === 'error' && (
-          <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {sessionState.errorMessage || '登录会话恢复失败，请重新登录。'}
-            <Link to="/join" className="ml-3 inline-flex rounded-lg border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100">
-              去重新登录
-            </Link>
+
+          {session && (
+            <div className={`w-full max-w-md rounded-2xl border p-5 ${observerTone.panel}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium text-slate-700">系统驾驶舱结论</div>
+                <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
+              </div>
+              <div className="mt-2 text-xl font-semibold text-slate-900">{topRecommendation?.title || '继续观察当前主线'}</div>
+              <p className="mt-2 text-sm leading-6 text-slate-700">{observerStatus.summary}</p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {observerSignals.map((item) => (
+                  <HomeSignalCard
+                    key={item.label}
+                    label={item.label}
+                    value={String(item.value)}
+                    tone={item.label === '系统结论' ? 'green' : item.label === '当前阶段' ? 'primary' : 'amber'}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {session && (
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {cockpitCards.map((card) => (
+              <HomeCockpitLinkCard key={card.key} card={card} />
+            ))}
           </div>
         )}
       </section>
@@ -1125,7 +1289,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               </section>
 
               <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
-                <Link to="/join" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
+                <Link to="/join?tab=bind" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
                   <h2 className="text-xl font-semibold">绑定观察权限</h2>
                   <p className="mt-2 text-gray-600">填写邮箱和绑定码，开通这个 OpenClaw 的观察看板。</p>
                 </Link>
@@ -1158,10 +1322,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <h2 className="text-xl font-semibold">OpenClaw 协议入口</h2>
                 <p className="mt-2 text-sm leading-6 text-gray-600">如果你是 OpenClaw 或集成方，请直接走公开注册接口；网页只负责给人类绑定和观察，不负责替 Agent 生成绑定码。</p>
                 <div className="mt-4 space-y-3">
-                  <Link to="/join" className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
-                    <div className="font-medium text-gray-900">查看自助注册入口</div>
-                    <p className="mt-2 text-sm leading-6 text-gray-600">在绑定页直接查看公开端点、示例请求、响应体与本地命令。</p>
-                  </Link>
+                <Link to="/join?tab=machine" className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
+                  <div className="font-medium text-gray-900">查看自助注册入口</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">在绑定页直接查看公开端点、示例请求、响应体与本地命令。</p>
+                </Link>
                   <Link to="/help/openclaw" className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
                     <div className="font-medium text-gray-900">查看完整接入文档</div>
                     <p className="mt-2 text-sm leading-6 text-gray-600">包括 A2A 接入流程、注册接口、绑定流程与常见故障排查。</p>
@@ -1198,6 +1362,47 @@ function HomeGuestPanel({
       className={isActive ? 'space-y-6' : 'hidden'}
     >
       {isActive ? children : null}
+    </div>
+  )
+}
+
+function HomeCockpitLinkCard({ card }: { card: HomeCockpitCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  )
+}
+
+function HomeSignalCard({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: string
+  tone: HomeCockpitCardTone
+}) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-800',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    slate: 'border-slate-200 bg-white text-slate-700',
+  }[tone]
+
+  return (
+    <div className={`rounded-2xl border p-4 ${toneClassName}`}>
+      <div className="text-xs font-semibold uppercase tracking-[0.18em]">{label}</div>
+      <div className="mt-2 text-sm leading-6">{value}</div>
     </div>
   )
 }
@@ -1402,4 +1607,28 @@ function formatTrustLevel(level?: string | null) {
     default:
       return level || '未定'
   }
+}
+
+function parseHomeRole(value?: string | null): HomeWorkRole | null {
+  if (value === 'employer' || value === 'worker') {
+    return value
+  }
+
+  return null
+}
+
+function parseHomeTab(value?: string | null): HomeTab | null {
+  if (value === 'today' || value === 'workspace' || value === 'growth') {
+    return value
+  }
+
+  return null
+}
+
+function parseGuestHomeTab(value?: string | null): GuestHomeTab | null {
+  if (value === 'observer' || value === 'protocol') {
+    return value
+  }
+
+  return null
 }

@@ -91,6 +91,37 @@ export type AgentGrowthProfileResponse = {
   pools: AgentGrowthPool[];
 };
 
+export type AgentMissionStep = {
+  key: string;
+  actor: "machine" | "human" | "observer" | string;
+  title: string;
+  description: string;
+  href?: string;
+  cta?: string;
+  api_method?: string;
+  api_path?: string;
+};
+
+export type AgentMissionDojoContext = {
+  school_key: string;
+  stage: string;
+  suggested_next_action: string;
+  coach_aid?: string;
+  diagnostic_set_id?: string;
+};
+
+export type AgentMissionResponse = {
+  aid: string;
+  generated_at: string;
+  summary: string;
+  autopilot_state?: string;
+  observer_hint?: string;
+  growth_summary?: string;
+  next_action?: AgentGrowthNextAction | null;
+  steps: AgentMissionStep[];
+  dojo?: AgentMissionDojoContext | null;
+};
+
 export type DojoCoachProfile = {
   coach_aid: string;
   coach_type: string;
@@ -391,6 +422,7 @@ export type RegisterAgentResponse = {
   created_at: string;
   initial_credits: number;
   agent?: AgentProfile;
+  mission?: AgentMissionResponse;
 };
 
 export type EmailCodeDispatchResponse = {
@@ -662,6 +694,11 @@ export async function fetchCurrentAgent() {
 export async function fetchCurrentAgentGrowth() {
   const response = await api.get("/v1/agents/me/growth");
   return response.data as AgentGrowthProfileResponse;
+}
+
+export async function fetchCurrentAgentMission() {
+  const response = await api.get("/v1/agents/me/mission");
+  return response.data as AgentMissionResponse;
 }
 
 export async function fetchCurrentDojoOverview() {

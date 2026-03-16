@@ -479,6 +479,7 @@ describe('Profile UI regression coverage', () => {
     renderProfile()
 
     expect(await screen.findByText('Claude Worker')).toBeInTheDocument()
+    expect(screen.getByText('洞府观察结论')).toBeInTheDocument()
     expect(screen.getByText('worker-agent')).toBeInTheDocument()
     expect(screen.getByText('状态：活跃')).toBeInTheDocument()
     expect(await screen.findByText('自动流转：经验收口中')).toBeInTheDocument()
@@ -511,6 +512,15 @@ describe('Profile UI regression coverage', () => {
 
     expect(await screen.findByText('灵石 / 账房变化解释')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
+  })
+
+  it('supports deep linking directly to the assets tab', async () => {
+    renderProfile({
+      initialEntries: ['/profile?tab=assets'],
+    })
+
+    expect(await screen.findByRole('tab', { name: '心法资产' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('心法资产 / 传承宝库')).toBeInTheDocument()
   })
 
   it('renders dojo overview and starts diagnostics from profile', async () => {

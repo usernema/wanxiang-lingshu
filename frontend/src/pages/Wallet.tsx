@@ -27,6 +27,17 @@ const NOTIFICATION_TYPE_OPTIONS = [
   { value: 'escrow_refunded', label: '托管退款', group: 'wallet' },
 ] as const
 
+type WalletCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
+
+type WalletCockpitCard = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  tone: WalletCockpitCardTone
+}
+
 export default function Wallet({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
   const location = useLocation()
@@ -110,6 +121,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   const hasNextNotificationPage = notificationOffset + notifications.length < filteredNotificationTotal
   const flowSummary = useMemo(() => summarizeTransactions(transactions, session?.aid), [transactions, session?.aid])
   const frozenBalance = toNumber(balanceQuery.data?.frozen_balance)
+  const recentTaskHref = useMemo(() => findRecentTaskHref(notifications, transactions), [notifications, transactions])
+  const recentSkillHref = useMemo(() => findRecentSkillHref(notifications, transactions), [notifications, transactions])
   const walletInterventionReason = useMemo(
     () => buildWalletInterventionReason({ unreadNotificationCount, frozenBalance, notifications, transactions }),
     [frozenBalance, notifications, transactions, unreadNotificationCount],
@@ -154,11 +167,77 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
     () => buildWalletRecommendedActions({
       unreadNotificationCount,
       frozenBalance,
-      notifications,
       transactions,
+      taskHref: recentTaskHref,
+      skillHref: recentSkillHref,
     }),
-    [frozenBalance, notifications, transactions, unreadNotificationCount],
+    [frozenBalance, recentSkillHref, recentTaskHref, transactions, unreadNotificationCount],
   )
+  const walletCockpitCards = useMemo<WalletCockpitCard[]>(() => {
+    const observerCardTone: WalletCockpitCardTone =
+      observerStatus.level === 'action' ? 'amber' : observerStatus.level === 'watch' ? 'primary' : 'green'
+
+    const latestFlowSummary = transactions[0]
+      ? `${formatTransactionType(transactions[0].type)} · ${
+          getDirection(transactions[0], session?.aid) === 'incoming'
+            ? '入账中'
+            : getDirection(transactions[0], session?.aid) === 'outgoing'
+              ? '出账中'
+              : '内部流转'
+        }`
+      : notifications[0]?.title
+        ? `飞剑：${notifications[0].title}`
+        : '尚未形成首轮闭环'
+
+    return [
+      {
+        key: 'summary',
+        title: '系统结论',
+        description: observerStatus.summary,
+        href:
+          unreadNotificationCount > 0
+            ? '/wallet?focus=notifications&source=wallet-cockpit-summary'
+            : transactions.length > 0
+              ? '/wallet?focus=transactions&source=wallet-cockpit-summary'
+              : '/marketplace?tab=tasks&focus=create-task&source=wallet-cockpit-summary',
+        cta: unreadNotificationCount > 0 ? '先看飞剑告警' : transactions.length > 0 ? '查看最近流水' : '去形成首轮闭环',
+        tone: observerCardTone,
+      },
+      {
+        key: 'notifications',
+        title: '飞剑与告警',
+        description:
+          unreadNotificationCount > 0
+            ? `当前有 ${unreadNotificationCount} 封未读飞剑，建议先处理静默中的托管、审核或状态变化。`
+            : notifications[0]?.title
+              ? `最近一封飞剑是「${notifications[0].title}」，当前没有未读积压。`
+              : '当前没有新的飞剑提醒，通知面保持平稳。',
+        href: '/wallet?focus=notifications&source=wallet-cockpit-notifications',
+        cta: '查看飞剑传书',
+        tone: unreadNotificationCount > 0 ? 'primary' : 'green',
+      },
+      {
+        key: 'escrow',
+        title: '托管与冻结',
+        description: frozenBalance > 0
+          ? `${frozenBalance} 灵石仍在冻结，通常对应托管、待验卷或待结算任务，建议优先核对。`
+          : recentTaskHref
+            ? '当前没有冻结积压，但最近任务仍可继续在工作台里推进。'
+            : '当前没有冻结灵石，账房托管没有明显人工阻塞。',
+        href: recentTaskHref || '/wallet?focus=notifications&source=wallet-cockpit-escrow',
+        cta: recentTaskHref ? '回到最近任务' : '查看托管提醒',
+        tone: frozenBalance > 0 ? 'amber' : recentTaskHref ? 'primary' : 'green',
+      },
+      {
+        key: 'flow',
+        title: '最近流转',
+        description: recentSkillHref ? `${latestFlowSummary}，相关法卷或成长资产入口已可继续回看。` : latestFlowSummary,
+        href: recentTaskHref || recentSkillHref || '/wallet?focus=transactions&source=wallet-cockpit-flow',
+        cta: recentTaskHref ? '查看任务流水' : recentSkillHref ? '回看相关法卷' : '查看账簿流水',
+        tone: transactions[0] ? 'slate' : recentSkillHref ? 'primary' : 'slate',
+      },
+    ]
+  }, [notifications, observerStatus.level, observerStatus.summary, recentSkillHref, recentTaskHref, session?.aid, transactions, unreadNotificationCount, frozenBalance])
 
   useEffect(() => {
     setActiveTabOverride(null)
@@ -167,22 +246,54 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">灵石钱庄 / 账房</h1>
-            <p className="mt-3 text-gray-600">这里不讲复杂账务细节，只告诉观察者：资金流转是否正常、哪里需要你介入，以及该去哪个入口。</p>
+            <h1 className="text-3xl font-bold">灵石钱庄 · 黑箱账房</h1>
+            <p className="mt-3 max-w-3xl text-gray-600">这里不是给人类逐笔对账的后台，而是 OpenClaw 真实流转的结算观察台。人类优先看系统结论、冻结托管、飞剑告警和最近流水，再决定是否介入。</p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                to={unreadNotificationCount > 0 ? '/wallet?focus=notifications&source=wallet-header-primary' : '/wallet?focus=transactions&source=wallet-header-primary'}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                {unreadNotificationCount > 0 ? '先看飞剑告警' : '继续账房观察'}
+              </Link>
+              <Link
+                to={recentTaskHref || '/marketplace?tab=tasks&source=wallet-header-task'}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {recentTaskHref ? '回到最近任务' : '去万象楼任务台'}
+              </Link>
+              <Link
+                to={recentSkillHref || '/marketplace?tab=skills&source=wallet-header-skill'}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                {recentSkillHref ? '回看相关法卷' : '去看法卷资产'}
+              </Link>
+              <Link
+                to="/profile?tab=assets&source=wallet-header-assets"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                去看成长资产
+              </Link>
+            </div>
           </div>
           <span className={`inline-flex w-fit rounded-full px-3 py-1 text-sm font-medium ${observerTone.badge}`}>{observerStatus.title}</span>
         </div>
 
         <div className={`mt-5 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
-          <div className="text-sm font-medium text-slate-900">账房观察结论</div>
+          <div className="text-sm font-medium text-slate-900">账房黑箱结论</div>
           <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {observerSignals.map((signal) => (
               <ObserverSignalCard key={signal.label} signal={signal} />
             ))}
           </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {walletCockpitCards.map((card) => (
+            <WalletCockpitLinkCard key={card.key} card={card} />
+          ))}
         </div>
       </section>
 
@@ -519,6 +630,23 @@ function ObserverSignalCard({
   )
 }
 
+function WalletCockpitLinkCard({ card }: { card: WalletCockpitCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  )
+}
+
 function WalletPreviewCard({
   title,
   description,
@@ -638,17 +766,17 @@ function toNumber(value: string | number | undefined) {
 function buildWalletRecommendedActions({
   unreadNotificationCount,
   frozenBalance,
-  notifications,
   transactions,
+  taskHref,
+  skillHref,
 }: {
   unreadNotificationCount: number
   frozenBalance: number
-  notifications: Notification[]
   transactions: CreditTransaction[]
+  taskHref: string
+  skillHref: string
 }) {
   const actions: WalletRecommendation[] = []
-  const taskHref = findRecentTaskHref(notifications, transactions)
-  const skillHref = findRecentSkillHref(notifications, transactions)
 
   if (unreadNotificationCount > 0) {
     actions.push({

@@ -175,6 +175,8 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(await screen.findByText('一致性诊断')).toBeInTheDocument()
+    expect(screen.getByText('黑箱观察结论')).toBeInTheDocument()
+    expect(screen.getByText('系统结论')).toBeInTheDocument()
     expect(await screen.findByText('发现 2 个一致性问题')).toBeInTheDocument()
     expect(await screen.findByText('当前选中任务在 diagnostics 中被标记为异常')).toBeInTheDocument()
     expect(screen.getAllByText('open task unexpectedly contains lifecycle timestamps')).toHaveLength(2)
@@ -385,7 +387,7 @@ describe('Marketplace UI regression coverage', () => {
     await user.click(await screen.findByRole('button', { name: '以行脚人身份交卷候验' }))
 
     expect((await screen.findAllByText('悬赏已交卷候验，等待发榜人确认。')).length).toBeGreaterThan(0)
-    expect(await screen.findByText('悬赏已交卷候验，等待成长资产在验卷后落地')).toBeInTheDocument()
+    expect((await screen.findAllByText('悬赏已交卷候验，等待成长资产在验卷后落地')).length).toBeGreaterThan(0)
     expect(
       screen.getAllByRole('link', { name: '去账房盯飞剑' }).some((link) => (
         link.getAttribute('href') === '/wallet?focus=notifications&source=marketplace-submitted'
@@ -432,7 +434,7 @@ describe('Marketplace UI regression coverage', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '以发榜人身份验卷并放款' }))
 
-    expect(await screen.findByText('验卷完成，法卷已自动发布并赠送给发榜人')).toBeInTheDocument()
+    expect((await screen.findAllByText('验卷完成，法卷已自动发布并赠送给发榜人')).length).toBeGreaterThan(0)
     expect(screen.getByText('draft_growth_1')).toBeInTheDocument()
     expect(screen.getByText('tmpl_growth_1')).toBeInTheDocument()
     expect(screen.getByText('grant_growth_1')).toBeInTheDocument()
@@ -786,7 +788,7 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(await screen.findByRole('button', { name: /已完成交付任务/i })).toBeInTheDocument()
-    expect(await screen.findByText('历练结案后要把经验沉淀成资产')).toBeInTheDocument()
+    expect((await screen.findAllByText('历练结案后要把经验沉淀成资产')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('当前 completed 队列里有 1 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。').length).toBeGreaterThan(0)
     expect(screen.getByRole('link', { name: '去上架法卷' })).toHaveAttribute(
       'href',

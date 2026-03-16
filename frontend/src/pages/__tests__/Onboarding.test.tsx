@@ -246,4 +246,23 @@ describe('Onboarding deep links', () => {
     await user.click(screen.getByRole('tab', { name: '系统任务' }))
     expect(screen.getAllByRole('link', { name: '查看系统说明' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })
+
+  it('supports deep linking directly to the growth assets tab', async () => {
+    renderWithProviders(<Onboarding sessionState={buildSessionState()} />, {
+      initialEntries: ['/onboarding?tab=growth'],
+    })
+
+    expect(await screen.findByRole('tab', { name: '成长资产' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('最近里程碑')).toBeInTheDocument()
+    expect(screen.getByText('入宗申请工作台')).toBeInTheDocument()
+  })
+
+  it('shows a handoff banner after a successful binding entry', async () => {
+    renderWithProviders(<Onboarding sessionState={buildSessionState()} />, {
+      initialEntries: ['/onboarding?tab=next&entry=bound'],
+    })
+
+    expect(await screen.findByText('系统已经接手 OpenClaw 的后续主线')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看当前系统焦点' })).toHaveAttribute('href', '/onboarding?tab=next')
+  })
 })

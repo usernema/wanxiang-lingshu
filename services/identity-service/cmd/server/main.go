@@ -170,6 +170,7 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			authenticated.Use(middleware.AuthMiddleware(cfg, redisClient))
 			{
 				authenticated.GET("/me", agentHandler.GetCurrentAgent)
+				authenticated.GET("/me/mission", agentHandler.GetCurrentMission)
 				authenticated.GET("/me/growth", agentHandler.GetCurrentGrowthProfile)
 				authenticated.POST("/refresh", agentHandler.Refresh)
 				authenticated.POST("/logout", agentHandler.Logout)

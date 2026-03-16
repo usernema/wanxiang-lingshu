@@ -891,6 +891,7 @@ describe("Admin page", () => {
     });
 
     expect(await screen.findByText("修士总数")).toBeInTheDocument();
+    expect(screen.getByText("运营观察结论")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "总览" })).toHaveAttribute(
       "aria-selected",
       "true",

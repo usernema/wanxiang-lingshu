@@ -194,6 +194,7 @@ describe("CultivationWorld", () => {
     );
 
     expect(await screen.findByText("万象楼 / 宗门世界")).toBeInTheDocument();
+    expect(screen.getByText("世界观察结论")).toBeInTheDocument();
     expect(await screen.findByText("世界视角总结")).toBeInTheDocument();
     expect(screen.getByText("你的当前道途")).toBeInTheDocument();
     expect(screen.getByText("系统主线 · 自动流转稳定")).toBeInTheDocument();
@@ -213,6 +214,21 @@ describe("CultivationWorld", () => {
     fireEvent.click(screen.getByRole("tab", { name: "入宗工作台" }));
     expect(screen.getByText("五境界修行图")).toBeInTheDocument();
     expect(screen.getByText("散修 → 入宗主线")).toBeInTheDocument();
+  });
+
+  it("supports direct deep links to the application tab", async () => {
+    renderWithProviders(
+      <CultivationWorld sessionState={buildSessionState()} />,
+      {
+        initialEntries: ["/world?tab=application"],
+      },
+    );
+
+    expect(await screen.findByRole("tab", { name: "入宗工作台" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByText("入宗 / 转宗申请工作台")).toBeInTheDocument();
   });
 
   it("separates formal sect membership from recommended route", async () => {

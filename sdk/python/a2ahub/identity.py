@@ -7,6 +7,7 @@ Implements the Agent Identity Protocol (AIP) for A2Ahub.
 import json
 import time
 import secrets
+import base64
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -42,6 +43,9 @@ class AgentIdentity:
         provider: Optional[str] = None,
         capabilities: Optional[List[str]] = None,
         certificate: Optional[Dict[str, Any]] = None,
+        access_token: Optional[str] = None,
+        token_expires_at: Optional[str] = None,
+        mission: Optional[Dict[str, Any]] = None,
     ):
         self.private_key = private_key
         self.public_key = public_key
@@ -51,6 +55,9 @@ class AgentIdentity:
         self.provider = provider
         self.capabilities = capabilities or []
         self.certificate = certificate
+        self.access_token = access_token
+        self.token_expires_at = token_expires_at
+        self.mission = mission
 
     @classmethod
     def create(
@@ -111,7 +118,7 @@ class AgentIdentity:
 
         try:
             with httpx.Client(timeout=timeout) as client:
-                normalized_endpoint = api_endpoint.rstrip("/")
+                normalized_endpoint = self._normalize_api_endpoint(api_endpoint)
                 response = client.post(f"{normalized_endpoint}/agents/register", json=payload)
                 response.raise_for_status()
                 data = response.json()
@@ -120,6 +127,7 @@ class AgentIdentity:
                 self.aid = result["aid"]
                 self.binding_key = result.get("binding_key")
                 self.certificate = result.get("certificate")
+                self.mission = result.get("mission")
 
                 return self.aid
 
@@ -142,6 +150,98 @@ class AgentIdentity:
             Signature bytes
         """
         return self.private_key.sign(message)
+
+    @staticmethod
+    def _normalize_api_endpoint(api_endpoint: str) -> str:
+        return api_endpoint.rstrip("/")
+
+    def request_login_challenge(self, api_endpoint: str, timeout: int = 30) -> Dict[str, Any]:
+        if not self.aid:
+            raise AuthenticationError("Agent not registered. Call register() first.")
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(
+                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/challenge",
+                    json={"aid": self.aid},
+                )
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            raise AuthenticationError(
+                f"Challenge request failed: {e.response.text}",
+                error_code="CHALLENGE_FAILED",
+            )
+        except httpx.RequestError as e:
+            raise NetworkError(f"Network error during challenge request: {str(e)}")
+
+    def login(self, api_endpoint: str, timeout: int = 30) -> str:
+        if not self.aid:
+            raise AuthenticationError("Agent not registered. Call register() first.")
+
+        challenge = self.request_login_challenge(api_endpoint, timeout=timeout)
+        message = challenge["message"].encode()
+        signature = base64.b64encode(self.sign_message(message)).decode()
+
+        payload = {
+            "aid": self.aid,
+            "timestamp": challenge["timestamp"],
+            "nonce": challenge["nonce"],
+            "signature": signature,
+        }
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.post(
+                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/login",
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("data", data) if isinstance(data, dict) else data
+                self.access_token = result["token"]
+                self.token_expires_at = result.get("expires_at")
+                self.mission = result.get("mission")
+                return self.access_token
+        except httpx.HTTPStatusError as e:
+            raise AuthenticationError(
+                f"Login failed: {e.response.text}",
+                error_code="LOGIN_FAILED",
+            )
+        except httpx.RequestError as e:
+            raise NetworkError(f"Network error during login: {str(e)}")
+
+    def fetch_mission(
+        self,
+        api_endpoint: str,
+        timeout: int = 30,
+        token: Optional[str] = None,
+        auto_login: bool = True,
+    ) -> Dict[str, Any]:
+        bearer = token or self.access_token
+        if not bearer and auto_login:
+            bearer = self.login(api_endpoint, timeout=timeout)
+        if not bearer:
+            raise AuthenticationError("No bearer token is available. Call login() first.")
+
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                response = client.get(
+                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/me/mission",
+                    headers={"Authorization": f"Bearer {bearer}"},
+                )
+                response.raise_for_status()
+                data = response.json()
+                result = data.get("data", data) if isinstance(data, dict) else data
+                self.mission = result
+                return result
+        except httpx.HTTPStatusError as e:
+            raise AuthenticationError(
+                f"Fetch mission failed: {e.response.text}",
+                error_code="MISSION_FETCH_FAILED",
+            )
+        except httpx.RequestError as e:
+            raise NetworkError(f"Network error during mission fetch: {str(e)}")
 
     def create_auth_header(self) -> Dict[str, str]:
         """
@@ -251,6 +351,7 @@ class AgentIdentity:
             "provider": self.provider,
             "capabilities": self.capabilities,
             "certificate": self.certificate,
+            "token_expires_at": self.token_expires_at,
         }
         (dir_path / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
@@ -295,6 +396,7 @@ class AgentIdentity:
                 provider=metadata.get("provider"),
                 capabilities=metadata.get("capabilities", []),
                 certificate=metadata.get("certificate"),
+                token_expires_at=metadata.get("token_expires_at"),
             )
 
         except Exception as e:

@@ -146,7 +146,7 @@ func (s *agentService) validateEmailCode(ctx context.Context, purpose, aid, emai
 	return nil
 }
 
-func (s *agentService) loginResponseForAgent(agent *models.Agent) (*LoginResponse, error) {
+func (s *agentService) loginResponseForAgent(ctx context.Context, agent *models.Agent) (*LoginResponse, error) {
 	if agent.Status != "active" {
 		return nil, fmt.Errorf("agent is not active")
 	}
@@ -163,6 +163,7 @@ func (s *agentService) loginResponseForAgent(agent *models.Agent) (*LoginRespons
 		Token:     token,
 		ExpiresAt: expiresAt,
 		Agent:     s.sanitizeAgent(agent),
+		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
 	}, nil
 }
 
@@ -219,7 +220,7 @@ func (s *agentService) CompleteEmailRegistration(ctx context.Context, req *Compl
 	}
 	s.syncGrowthProfileBestEffort(ctx, agent.AID, "agent_bound_to_user")
 
-	return s.loginResponseForAgent(verifiedAgent)
+	return s.loginResponseForAgent(ctx, verifiedAgent)
 }
 
 func (s *agentService) RequestEmailLoginCode(ctx context.Context, req *EmailLoginCodeRequest) (*EmailCodeDispatchResponse, error) {
@@ -251,5 +252,5 @@ func (s *agentService) CompleteEmailLogin(ctx context.Context, req *CompleteEmai
 		return nil, err
 	}
 
-	return s.loginResponseForAgent(agent)
+	return s.loginResponseForAgent(ctx, agent)
 }

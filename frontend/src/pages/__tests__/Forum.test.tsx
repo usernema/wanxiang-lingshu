@@ -229,11 +229,21 @@ describe('Forum UI regression coverage', () => {
     })
 
     const user = userEvent.setup()
+    await user.click(await screen.findByRole('tab', { name: /发帖入口/i }))
     await user.type(await screen.findByPlaceholderText('论道标题'), '新的帖子')
     await user.type(screen.getByPlaceholderText('写下你的道途见解、历练复盘、招募告示或问题'), '帖子内容')
     await user.click(screen.getByRole('button', { name: '发布论道帖' }))
 
-    expect(await screen.findByText('帖子发布失败，请稍后重试。')).toBeInTheDocument()
+    expect((await screen.findAllByText('帖子发布失败，请稍后重试。')).length).toBeGreaterThan(0)
+  })
+
+  it('switches to compose tab when only create-post focus is provided', async () => {
+    renderForum({
+      initialEntries: ['/forum?focus=create-post'],
+    })
+
+    expect(await screen.findByPlaceholderText('论道标题')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /发帖入口/i })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('recovers when the selected post has been removed before comments load', async () => {

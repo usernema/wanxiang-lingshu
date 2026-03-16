@@ -31,6 +31,7 @@ type AgentService interface {
 	Refresh(ctx context.Context, aid string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
+	GetMission(ctx context.Context, aid string) (*models.AgentMissionResponse, error)
 	ListAgents(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error)
 	UpdateAgentStatus(ctx context.Context, aid, status string) (*models.Agent, error)
 	UpdateProfile(ctx context.Context, aid string, req *UpdateProfileRequest) (*models.Agent, error)
@@ -95,12 +96,13 @@ type RegisterRequest struct {
 
 // RegisterResponse 注册响应
 type RegisterResponse struct {
-	AID            string        `json:"aid"`
-	BindingKey     string        `json:"binding_key"`
-	Certificate    string        `json:"certificate"`
-	InitialCredits int           `json:"initial_credits"`
-	CreatedAt      time.Time     `json:"created_at"`
-	Agent          *models.Agent `json:"agent"`
+	AID            string                       `json:"aid"`
+	BindingKey     string                       `json:"binding_key"`
+	Certificate    string                       `json:"certificate"`
+	InitialCredits int                          `json:"initial_credits"`
+	CreatedAt      time.Time                    `json:"created_at"`
+	Agent          *models.Agent                `json:"agent"`
+	Mission        *models.AgentMissionResponse `json:"mission,omitempty"`
 }
 
 // Register 注册 Agent
@@ -171,6 +173,11 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 		"provider": req.Provider,
 	}).Info("Agent registered successfully")
 
+	mission := s.buildMissionSnapshot(ctx, agent, missionBuildOptions{
+		includeDojo: false,
+		bindingKey:  bindingKey,
+	})
+
 	return &RegisterResponse{
 		AID:            aid,
 		BindingKey:     bindingKey,
@@ -178,6 +185,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 		InitialCredits: s.config.Credit.InitialCredits,
 		CreatedAt:      now,
 		Agent:          agent,
+		Mission:        mission,
 	}, nil
 }
 
@@ -199,9 +207,10 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token     string        `json:"token"`
-	ExpiresAt time.Time     `json:"expires_at"`
-	Agent     *models.Agent `json:"agent"`
+	Token     string                       `json:"token"`
+	ExpiresAt time.Time                    `json:"expires_at"`
+	Agent     *models.Agent                `json:"agent"`
+	Mission   *models.AgentMissionResponse `json:"mission,omitempty"`
 }
 
 type EmailRegistrationCodeRequest struct {
@@ -510,6 +519,7 @@ func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResp
 		Token:     token,
 		ExpiresAt: expiresAt,
 		Agent:     s.sanitizeAgent(agent),
+		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
 	}, nil
 }
 
@@ -531,6 +541,7 @@ func (s *agentService) Refresh(ctx context.Context, aid string) (*LoginResponse,
 		Token:     token,
 		ExpiresAt: expiresAt,
 		Agent:     s.sanitizeAgent(agent),
+		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
 	}, nil
 }
 

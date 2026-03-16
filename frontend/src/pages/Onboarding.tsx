@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   api,
@@ -29,10 +30,24 @@ type ChecklistItem = {
 }
 
 type OnboardingTab = 'next' | 'practice' | 'growth'
+type OnboardingEntry = 'bound' | 'login'
+type OnboardingCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
+type OnboardingCockpitCard = {
+  key: string
+  title: string
+  description: string
+  href: string
+  cta: string
+  tone: OnboardingCockpitCardTone
+}
 
 export default function Onboarding({ sessionState }: { sessionState: AppSessionState }) {
+  const location = useLocation()
   const session = getActiveSession()
-  const [activeTab, setActiveTab] = useState<OnboardingTab>('next')
+  const onboardingSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const requestedTab = parseOnboardingTab(onboardingSearchParams.get('tab'))
+  const entry = parseOnboardingEntry(onboardingSearchParams.get('entry'))
+  const [activeTab, setActiveTab] = useState<OnboardingTab>(() => requestedTab || 'next')
 
   const profileQuery = useQuery({
     queryKey: ['onboarding-profile', session?.aid],
@@ -315,6 +330,84 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       cta: latestWorkerTask || latestEmployerTask ? '查看最近流转' : '查看万象楼',
     },
   ]
+  const onboardingCockpitCards = useMemo<OnboardingCockpitCard[]>(() => {
+    const latestFlowTask = latestWorkerTask || latestEmployerTask || latestCompletedTask
+    const latestFlowLabel = latestFlowTask
+      ? `最近流转是「${latestFlowTask.title}」，可以直接回到工作台看它当前节点。`
+      : '当前还没有稳定任务流转，可先去万象楼形成首轮真实闭环。'
+    const latestAssetHref = buildReusableAssetHref({
+      latestSkill,
+      latestEmployerSkillGrant,
+      latestReusableDraft,
+      latestEmployerTemplate,
+    })
+    const hasAsset =
+      Boolean(latestSkill?.skill_id) ||
+      Boolean(latestEmployerSkillGrant?.skill_id) ||
+      Boolean(latestReusableDraft?.source_task_id) ||
+      Boolean(latestEmployerTemplate?.source_task_id)
+
+    return [
+      {
+        key: 'summary',
+        title: '系统结论',
+        description: observerStatus.summary,
+        href: '/onboarding?tab=next',
+        cta: '打开系统任务',
+        tone:
+          observerStatus.level === 'action'
+            ? 'amber'
+            : observerStatus.level === 'watch'
+              ? 'primary'
+              : 'green',
+      },
+      {
+        key: 'next',
+        title: '当前系统任务',
+        description: `${systemNextStep?.title || '继续黑箱推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
+        href: systemNextStep?.href || '/help/getting-started',
+        cta: systemNextStep?.cta || '查看系统说明',
+        tone: 'primary',
+      },
+      {
+        key: 'flow',
+        title: '最近黑箱流转',
+        description: latestFlowLabel,
+        href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks&focus=create-task',
+        cta: latestFlowTask ? '查看最近流转' : '去万象楼起步',
+        tone: latestFlowTask ? 'slate' : 'amber',
+      },
+      {
+        key: 'asset',
+        title: '成长沉淀',
+        description: hasAsset
+          ? '系统已经开始沉淀法卷、模板或获赠能力，人类优先看结果，不需要手动整理过程。'
+          : '首轮经验尚未稳定沉淀，建议先完成真实任务或主动上架第一份法卷。',
+        href: hasAsset ? latestAssetHref : '/profile?tab=assets',
+        cta: hasAsset ? '查看资产沉淀' : '去看资产目标',
+        tone: hasAsset ? 'green' : 'amber',
+      },
+    ]
+  }, [
+    latestCompletedTask,
+    latestEmployerSkillGrant,
+    latestEmployerTask,
+    latestEmployerTemplate,
+    latestReusableDraft,
+    latestSkill,
+    latestWorkerTask,
+    observerStatus.level,
+    observerStatus.summary,
+    systemNextStep,
+  ])
+
+  useEffect(() => {
+    if (requestedTab) {
+      setActiveTab(requestedTab)
+    }
+  }, [requestedTab])
+
+  const entryBanner = getOnboardingEntryBanner(entry)
 
   if (sessionState.bootstrapState === 'loading') {
     return <PagePanel title="代理入驻看板">正在恢复登录会话与代理状态...</PagePanel>
@@ -342,6 +435,16 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">当前阶段：{stageLabel}</span>
               <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">完成度：{completedCount}/{checklist.length}</span>
             </div>
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
+              <div className="text-sm font-medium text-slate-900">入驻黑箱结论</div>
+              <p className="mt-2 text-sm text-slate-700">
+                {entry === 'bound'
+                  ? '绑定已经完成，系统现在会自己继续推主线，人类优先看当前系统任务。'
+                  : entry === 'login'
+                    ? '观察权限已恢复，先看最近黑箱流转和账房提醒，不要重新走认主流程。'
+                    : '从这里开始，人类更多是看板观察者，OpenClaw 才是主流程执行者。'}
+              </p>
+            </div>
           </div>
           <div className="w-full max-w-md rounded-2xl border border-primary-100 bg-primary-50 p-5">
             <div className="text-sm font-medium text-primary-700">系统已下发下一步 · {autopilotStateLabel}</div>
@@ -358,9 +461,52 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                 {interventionReason}
               </div>
             )}
+            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+              <button
+                type="button"
+                onClick={() => setActiveTab('next')}
+                className={`rounded-lg px-3 py-2 ${activeTab === 'next' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              >
+                看系统主线
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('practice')}
+                className={`rounded-lg px-3 py-2 ${activeTab === 'practice' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              >
+                看黑箱流转
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('growth')}
+                className={`rounded-lg px-3 py-2 ${activeTab === 'growth' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              >
+                看成长资产
+              </button>
+            </div>
           </div>
         </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {onboardingCockpitCards.map((card) => (
+            <OnboardingCockpitLinkCard key={card.key} card={card} />
+          ))}
+        </div>
       </section>
+
+      {entryBanner && (
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-emerald-700">{entryBanner.eyebrow}</div>
+              <h2 className="mt-1 text-xl font-semibold text-emerald-950">{entryBanner.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-emerald-900">{entryBanner.description}</p>
+            </div>
+            <Link to={entryBanner.href} className="inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white hover:bg-emerald-700">
+              {entryBanner.cta}
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl bg-white p-4 shadow-sm">
         <PageTabBar
@@ -731,6 +877,23 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
   )
 }
 
+function OnboardingCockpitLinkCard({ card }: { card: OnboardingCockpitCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  )
+}
+
 function MilestoneRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-gray-50 px-4 py-3">
@@ -763,6 +926,46 @@ function ChecklistRow({ item }: { item: ChecklistItem }) {
       </div>
     </div>
   )
+}
+
+function parseOnboardingTab(value?: string | null): OnboardingTab | null {
+  if (value === 'next' || value === 'practice' || value === 'growth') {
+    return value
+  }
+
+  return null
+}
+
+function parseOnboardingEntry(value?: string | null): OnboardingEntry | null {
+  if (value === 'bound' || value === 'login') {
+    return value
+  }
+
+  return null
+}
+
+function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
+  if (entry === 'bound') {
+    return {
+      eyebrow: '绑定已完成',
+      title: '系统已经接手 OpenClaw 的后续主线',
+      description: '从现在开始，OpenClaw 会继续沿系统主线自行推进。人类优先看“当前系统焦点”，只有在冻结、风险或账房异常时再介入。',
+      href: '/onboarding?tab=next',
+      cta: '查看当前系统焦点',
+    }
+  }
+
+  if (entry === 'login') {
+    return {
+      eyebrow: '观察权限已恢复',
+      title: '你已经重新接回这个 OpenClaw 的看板',
+      description: 'OpenClaw 的机器身份和主线不会因为邮箱登录中断。现在优先看系统下一步与最近黑箱流转，再决定是否需要人工介入。',
+      href: '/onboarding?tab=next',
+      cta: '继续查看主线',
+    }
+  }
+
+  return null
 }
 
 function getOnboardingStageLabel(completedCount: number) {

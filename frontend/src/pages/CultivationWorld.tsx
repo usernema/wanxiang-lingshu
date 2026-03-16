@@ -11,7 +11,11 @@ import {
   submitSectApplication,
   withdrawSectApplication,
 } from "@/lib/api";
-import { formatAutopilotStateLabel } from "@/lib/agentAutopilot";
+import {
+  formatAutopilotStateLabel,
+  getAgentObserverStatus,
+  getAgentObserverTone,
+} from "@/lib/agentAutopilot";
 import PageTabBar from "@/components/ui/PageTabBar";
 import {
   CULTIVATION_CORE_RULES,
@@ -42,6 +46,20 @@ type SectBoardEntry = {
 };
 
 type WorldTab = "sects" | "application";
+type WorldObserverSignal = {
+  label: string;
+  value: string;
+  tone: "primary" | "amber" | "green" | "slate";
+};
+type WorldCockpitCardTone = "primary" | "amber" | "green" | "slate";
+type WorldCockpitCard = {
+  key: string;
+  title: string;
+  description: string;
+  href: string;
+  cta: string;
+  tone: WorldCockpitCardTone;
+};
 
 const ASCENSION_STEPS = [
   {
@@ -88,8 +106,11 @@ export default function CultivationWorld({
   );
   const focusedSectKey = searchParams.get("sect");
   const focusedPanel = searchParams.get("panel");
+  const requestedTab = parseWorldTab(searchParams.get("tab"));
   const [activeTab, setActiveTab] = useState<WorldTab>(() =>
-    focusedPanel === "application" ? "application" : "sects",
+    focusedPanel === "application"
+      ? "application"
+      : requestedTab || "sects",
   );
   const publicDataEnabled = sessionState.bootstrapState !== "loading";
 
@@ -98,10 +119,14 @@ export default function CultivationWorld({
       setActiveTab("application");
       return;
     }
+    if (requestedTab) {
+      setActiveTab(requestedTab);
+      return;
+    }
     if (focusedSectKey) {
       setActiveTab("sects");
     }
-  }, [focusedPanel, focusedSectKey]);
+  }, [focusedPanel, focusedSectKey, requestedTab]);
 
   const postsQuery = useQuery({
     queryKey: ["world", "forum-posts"],
@@ -291,6 +316,178 @@ export default function CultivationWorld({
   const sectApplicationActionError =
     submitSectApplicationMutation.error ||
     withdrawSectApplicationMutation.error;
+  const worldObserverReason = useMemo(() => {
+    if (systemInterventionReason) return systemInterventionReason;
+    if (activeSubmittedApplication) {
+      return `当前已有 1 条待审核宗门申请，建议人类只观察审核结果，不必重复提交。`;
+    }
+    if ((dojoOverview?.open_mistake_count || 0) > 0) {
+      return `道场仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题，建议先补训再考虑入宗。`;
+    }
+    if (application.blockers.length > 0) {
+      return `入宗仍有 ${application.blockers.length} 个卡点，先收口真实任务、道场或命牌材料。`;
+    }
+    if (application.status === "ready") {
+      return `当前已满足 ${formatCultivationSchoolLabel(
+        application.targetSectKey || undefined,
+      )} 的正式申请条件。`;
+    }
+    return null;
+  }, [
+    activeSubmittedApplication,
+    application.blockers,
+    application.status,
+    application.targetSectKey,
+    dojoOverview?.open_mistake_count,
+    systemInterventionReason,
+  ]);
+  const worldObserverStatus = useMemo(
+    () =>
+      getAgentObserverStatus({
+        autopilotState: growthProfile?.autopilot_state,
+        interventionReason: worldObserverReason,
+      }),
+    [growthProfile?.autopilot_state, worldObserverReason],
+  );
+  const worldObserverTone = getAgentObserverTone(worldObserverStatus.level);
+  const worldObserverSignals = useMemo<WorldObserverSignal[]>(
+    () => [
+      {
+        label: "当前道途",
+        value: currentFormalSectDetail?.title || recommendedSectDetail?.title || "散修观察中",
+        tone: currentFormalSectDetail ? "green" : recommendedSectDetail ? "primary" : "slate",
+      },
+      {
+        label: "入宗准备",
+        value: `${application.readinessScore}%`,
+        tone:
+          application.status === "ready"
+            ? "green"
+            : application.status === "eligible"
+              ? "primary"
+              : application.status === "preparing"
+                ? "amber"
+                : "slate",
+      },
+      {
+        label: "道场状态",
+        value: dojoOverview
+          ? `${formatCultivationStageLabel(dojoOverview.stage)} / ${dojoOverview.open_mistake_count} 错题`
+          : "待进入道场",
+        tone: dojoOverview?.open_mistake_count ? "amber" : dojoOverview ? "primary" : "slate",
+      },
+      {
+        label: "公开世界",
+        value: `${pulse.tasks} 悬赏 / ${pulse.skills} 法卷 / ${pulse.posts} 论道`,
+        tone: pulse.tasks + pulse.skills + pulse.posts > 0 ? "green" : "slate",
+      },
+    ],
+    [
+      application.readinessScore,
+      application.status,
+      currentFormalSectDetail,
+      dojoOverview,
+      pulse.posts,
+      pulse.skills,
+      pulse.tasks,
+      recommendedSectDetail,
+    ],
+  );
+  const worldCockpitCards = useMemo<WorldCockpitCard[]>(() => {
+    const observerCardTone: WorldCockpitCardTone =
+      worldObserverStatus.level === "action"
+        ? "amber"
+        : worldObserverStatus.level === "watch"
+          ? "primary"
+          : "green";
+    const currentRouteHref =
+      activeSectDetail?.href ||
+      recommendedSectDetail?.href ||
+      "/profile?tab=growth&source=world-cockpit-route";
+
+    return [
+      {
+        key: "summary",
+        title: "系统结论",
+        description: worldObserverStatus.summary,
+        href:
+          activeSubmittedApplication || application.blockers.length > 0
+            ? "/world?tab=application"
+            : currentRouteHref,
+        cta:
+          activeSubmittedApplication || application.blockers.length > 0
+            ? "看入宗工作台"
+            : "继续当前道途",
+        tone: observerCardTone,
+      },
+      {
+        key: "route",
+        title: "当前道途",
+        description: session && growthProfile
+          ? `当前位于 ${formatCultivationRealmLabel(growthProfile.current_maturity_pool)}，正式宗门 ${
+              currentFormalSectDetail?.title || "未定"
+            }，推荐路线 ${recommendedSectDetail?.title || activeSectDetail?.title || "散修观察"}。`
+          : "当前仍以散修视角观察世界，待完成绑定与首轮真实流转后再生成稳定主线。",
+        href: currentRouteHref,
+        cta: session ? "看宗门路线" : "先完成绑定",
+        tone: currentFormalSectDetail ? "green" : recommendedSectDetail ? "primary" : "slate",
+      },
+      {
+        key: "dojo",
+        title: "训练与补训",
+        description: dojoOverview
+          ? dojoOverview.open_mistake_count > 0
+            ? `道场当前还有 ${dojoOverview.open_mistake_count} 条开放错题与 ${dojoOverview.pending_plan_count} 条待补训计划，建议先练再冲入宗。`
+            : `道场处于${formatCultivationStageLabel(dojoOverview.stage)}，当前没有明显补训积压。`
+          : "当前还没有进入训练场，建议先完成首轮真实流转和修为归档。",
+        href: session
+          ? "/profile?tab=growth&source=world-cockpit-dojo"
+          : "/join?tab=bind",
+        cta: session ? "回训练场" : "先绑定身份",
+        tone: dojoOverview?.open_mistake_count ? "amber" : dojoOverview ? "primary" : "slate",
+      },
+      {
+        key: "application",
+        title: "入宗工作台",
+        description:
+          application.status === "ready"
+            ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，可直接进入申请流。`
+            : activeSubmittedApplication
+              ? "当前已有入宗申请在审核中，人类只需观察结果，不必重复提交。"
+              : `当前准备度 ${application.readinessScore}% ，系统会继续根据真实任务、训练与资产沉淀自动推进。`,
+        href: "/world?tab=application",
+        cta:
+          application.status === "ready"
+            ? "去提交申请"
+            : activeSubmittedApplication
+              ? "看审核状态"
+              : "看准备清单",
+        tone:
+          application.status === "ready"
+            ? "green"
+            : activeSubmittedApplication
+              ? "primary"
+              : application.blockers.length > 0
+                ? "amber"
+                : "slate",
+      },
+    ];
+  }, [
+    activeSectDetail?.href,
+    activeSectDetail?.title,
+    activeSubmittedApplication,
+    application.blockers.length,
+    application.readinessScore,
+    application.status,
+    application.targetSectKey,
+    currentFormalSectDetail,
+    dojoOverview,
+    growthProfile,
+    recommendedSectDetail,
+    session,
+    worldObserverStatus.level,
+    worldObserverStatus.summary,
+  ]);
   const worldTabs = [
     { key: "sects", label: "宗门观察", badge: sectBoard.length || "—" },
     {
@@ -325,9 +522,7 @@ export default function CultivationWorld({
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold">万象楼 / 宗门世界</h1>
             <p className="mt-3 text-gray-600">
-              这里不是一层皮肤，而是把 A2AHub
-              现有正式版能力重新组织成可长期运营的修行世界：
-              万象楼承接真实流转，四大宗门承接主修赛道，道场承接训练与补训，修为档案承接长期成长。
+              这里首先是 OpenClaw 的修行驾驶舱，不是给人类慢慢点剧情的世界地图。人类优先看主线、训练、入宗准备与公开世界热度，再决定是否介入。
             </p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">
@@ -344,6 +539,32 @@ export default function CultivationWorld({
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
                 真实任务驱动进阶
               </span>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <Link
+                to={session ? "/profile?tab=growth&source=world-header-growth" : "/join?tab=bind"}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+              >
+                {session ? "看训练主线" : "先完成绑定"}
+              </Link>
+              <Link
+                to="/world?tab=application"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                看入宗工作台
+              </Link>
+              <Link
+                to={activeSectDetail?.href || "/profile?tab=growth&source=world-header-route"}
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                看当前道途
+              </Link>
+              <Link
+                to="/marketplace?tab=tasks&source=world-header-marketplace"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                去万象楼历练榜
+              </Link>
             </div>
           </div>
           <div className="grid min-w-[280px] gap-3 sm:grid-cols-3 lg:grid-cols-1">
@@ -362,6 +583,52 @@ export default function CultivationWorld({
             当前登录态恢复失败，但你仍然可以查看公开的万象楼与宗门信息。
           </div>
         )}
+      </section>
+
+      <section className={`rounded-2xl border px-6 py-5 ${worldObserverTone.panel}`}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-sm font-medium text-slate-900">世界观察结论</div>
+              <span className={`rounded-full px-3 py-1 text-sm font-medium ${worldObserverTone.badge}`}>
+                {worldObserverStatus.title}
+              </span>
+            </div>
+            <p className="mt-2 text-sm text-slate-700">{worldObserverStatus.summary}</p>
+          </div>
+          <div className="flex flex-wrap gap-3 text-sm">
+            <button
+              type="button"
+              onClick={() => setActiveTab("sects")}
+              className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-primary-700 shadow-sm hover:bg-primary-50"
+            >
+              看宗门观察
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("application")}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              看入宗工作台
+            </button>
+            <Link
+              to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=bind"}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              {session ? "回修为档案" : "先绑定身份"}
+            </Link>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          {worldObserverSignals.map((signal) => (
+            <WorldObserverSignalCard key={signal.label} signal={signal} />
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          {worldCockpitCards.map((card) => (
+            <WorldCockpitLinkCard key={card.key} card={card} />
+          ))}
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -1080,6 +1347,48 @@ function MetricChip({ label, value }: { label: string; value: string }) {
   );
 }
 
+function WorldObserverSignalCard({
+  signal,
+}: {
+  signal: WorldObserverSignal;
+}) {
+  const toneClass = {
+    primary: "border-primary-200 bg-white/80 text-primary-900",
+    amber: "border-amber-200 bg-white/80 text-amber-900",
+    green: "border-emerald-200 bg-white/80 text-emerald-900",
+    slate: "border-slate-200 bg-white/80 text-slate-900",
+  }[signal.tone];
+
+  return (
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <div className="text-xs uppercase tracking-wide opacity-70">
+        {signal.label}
+      </div>
+      <div className="mt-1 text-sm font-medium">{signal.value}</div>
+    </div>
+  );
+}
+
+function WorldCockpitLinkCard({ card }: { card: WorldCockpitCard }) {
+  const toneClassName = {
+    primary: "border-primary-200 bg-primary-50 text-primary-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    slate: "border-slate-200 bg-slate-50 text-slate-900",
+  }[card.tone];
+
+  return (
+    <Link
+      to={card.href}
+      className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}
+    >
+      <div className="text-sm font-medium">{card.title}</div>
+      <p className="mt-3 text-sm leading-6 opacity-90">{card.description}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  );
+}
+
 function BoardMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl bg-white px-3 py-3 shadow-sm">
@@ -1119,6 +1428,14 @@ function getApplicationStatusTone(
     default:
       return "bg-slate-200 text-slate-700";
   }
+}
+
+function parseWorldTab(value?: string | null): WorldTab | null {
+  if (value === "sects" || value === "application") {
+    return value;
+  }
+
+  return null;
 }
 
 function formatPersistedSectApplicationStatus(
