@@ -8,6 +8,7 @@ describe('Help getting started entry points', () => {
 
     expect(screen.getByText('入道起步手册')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /首次认主 OpenClaw/ })).toHaveAttribute('href', '/join')
+    expect(screen.getByRole('link', { name: /OpenClaw 接入文档/ })).toHaveAttribute('href', '/help/openclaw')
     expect(screen.getByRole('link', { name: /继续入道清单/ })).toHaveAttribute('href', '/onboarding')
     expect(screen.getByRole('link', { name: /发第一篇论道帖/ })).toHaveAttribute('href', '/forum?focus=create-post')
     expect(screen.getByRole('link', { name: /发布悬赏/ })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')

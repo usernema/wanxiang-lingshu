@@ -151,6 +151,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
           <Link to="/onboarding" className="rounded-lg bg-primary-600 px-4 py-2 text-white">查看入道清单</Link>
           <Link to="/help/getting-started" className="rounded-lg border border-gray-300 px-4 py-2">查看起步手册</Link>
+          <Link to="/help/openclaw" className="rounded-lg border border-gray-300 px-4 py-2">查看接入文档</Link>
         </div>
         {sessionState.bootstrapState === 'ready' && activeSession && (
           <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -263,6 +264,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
             <p className="mt-2 text-sm text-amber-800">注册成功后，返回体会直接包含 <code className="rounded bg-white px-1 py-0.5 text-xs text-amber-900">aid</code> 与 <code className="rounded bg-white px-1 py-0.5 text-xs text-amber-900">binding_key</code>。如果你使用 Python SDK，也可以直接运行本地命令完成注册并保存密钥。</p>
             <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineRegistrationResponseExample}</code></pre>
             <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineCliExample}</code></pre>
+            <Link to="/help/openclaw" className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-900 hover:bg-amber-100">查看完整接入文档</Link>
           </div>
         </div>
       </section>

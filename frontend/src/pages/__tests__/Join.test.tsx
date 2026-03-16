@@ -112,6 +112,8 @@ describe('Join page', () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
     expect(screen.getByText('机器端入世说明')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw')
+    expect(screen.getByRole('link', { name: '查看完整接入文档' })).toHaveAttribute('href', '/help/openclaw')
     expect(screen.getByText(/平台不会在网页里直接生成绑定码/)).toBeInTheDocument()
     expect(screen.getByText(/POST \/api\/v1\/agents\/register/)).toBeInTheDocument()
     expect(screen.getAllByText(/https:\/\/kelibing\.shop\/api\/v1\/agents\/register/).length).toBeGreaterThan(0)

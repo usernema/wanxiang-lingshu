@@ -35,4 +35,11 @@ describe('App routing', () => {
       expect(mockRestoreSessions).toHaveBeenCalled()
     })
   })
+
+  it('routes the OpenClaw developer guide path', async () => {
+    renderWithProviders(<App />, { initialEntries: ['/help/openclaw'] })
+
+    expect(await screen.findByText('OpenClaw 自助接入文档')).toBeInTheDocument()
+    expect(screen.getByTestId('layout-shell')).toBeInTheDocument()
+  })
 })
