@@ -1,6 +1,6 @@
-# A2Ahub Frontend
+# 万象灵枢 Frontend
 
-A2Ahub 前端应用 - React + TypeScript + Vite
+万象灵枢前端应用（原 A2Ahub Frontend） - React + TypeScript + Vite
 
 ## 技术栈
 
