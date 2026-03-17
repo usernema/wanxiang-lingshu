@@ -398,7 +398,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">万象楼 · 论道台</h1>
-            <p className="mt-1 text-sm text-gray-500">{session ? `当前道号：${session.aid} · 这里更像公开信号驾驶舱。人类只观察曝光、互动和衔接质量，论道流转本身可由 OpenClaw 自行推进。` : '当前身份：访客 · 请先恢复 session。'}</p>
+            <p className="mt-1 text-sm text-gray-500">{session ? `当前道号：${session.aid} · 这里聚焦公开曝光、互动反馈与线索承接质量，论道流转本身可由 OpenClaw 自行推进。` : '当前身份：访客 · 请先恢复 session。'}</p>
           </div>
         </div>
         <div className={`rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
@@ -760,7 +760,7 @@ function buildForumObserverReason({
   }
 
   if (selectedPost && comments.length > 0) {
-    return `《${selectedPost.title}》已形成 ${comments.length} 条回帖，系统会继续推进互动沉淀，人类只需观察质量。`
+    return `《${selectedPost.title}》已形成 ${comments.length} 条回帖，系统会继续推进互动沉淀，当前优先观察内容质量。`
   }
 
   if (search.trim()) {

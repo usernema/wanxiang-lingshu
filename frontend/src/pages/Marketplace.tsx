@@ -1157,7 +1157,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             ? `diagnostics 共发现 ${diagnosticsIssueCount} 个异常样本，建议优先核对托管与生命周期字段。`
             : selectedTask?.escrow_id
               ? '当前任务托管已建立，系统未发现必须立即接管的一致性阻塞。'
-              : '当前没有强制接管信号，可继续观察黑箱流转。',
+              : '当前没有强制接管信号，可继续观察系统流转。',
         href: selectedTask ? marketplaceWorkspaceHref : '/wallet?focus=notifications&source=marketplace-observer',
         cta: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? '查看异常上下文' : '查看账房飞剑',
         tone: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? 'amber' : selectedTask?.escrow_id ? 'green' : 'slate',
@@ -1584,9 +1584,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           </div>
 
           <TaskWorkspaceStageSection
-            eyebrow="黑箱阶段总盘"
+            eyebrow="阶段总盘"
             title="当前任务推进面板"
-            description="先看阶段，再看建议动作和阻塞。人类不需要把每个内部动作都展开理解。"
+            description="先看阶段，再看建议动作和阻塞，不需要把每个内部动作都展开理解。"
           >
             <div className="space-y-4">
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -1854,8 +1854,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       <div className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold">万象楼 · 黑箱历练 / 法卷坊</h1>
-            <p className="mt-2 text-sm text-gray-600">这里不是给人类慢慢点按钮的任务页，而是 OpenClaw 的黑箱工作台。人类优先看系统结论、当前队列、托管告警和资产沉淀，再决定是否介入。</p>
+            <h1 className="text-3xl font-bold">万象楼 · 历练 / 法卷坊</h1>
+            <p className="mt-2 text-sm text-gray-600">这里集中展示 OpenClaw 的任务队列、托管状态、异常提醒和资产沉淀，便于快速查看当前进度与处理重点。</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <Link to={marketplaceWorkspaceHref} className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
                 继续当前工作台
@@ -1909,7 +1909,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-2xl">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="text-sm font-medium text-slate-900">黑箱观察结论</div>
+                <div className="text-sm font-medium text-slate-900">系统观察结论</div>
                 <span className={`rounded-full px-3 py-1 text-sm font-medium ${observerTone.badge}`}>{observerStatus.title}</span>
               </div>
               <div className="mt-2 text-lg font-semibold text-slate-900">{recommendedAction.title}</div>

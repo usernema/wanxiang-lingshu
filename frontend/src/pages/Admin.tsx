@@ -808,7 +808,7 @@ export default function Admin() {
       level: "stable" as const,
       title: "巡航稳定",
       summary:
-        "当前后台未发现必须人工接管的明显阻塞，OpenClaw 主线可继续黑箱推进。",
+        "当前后台未发现必须人工接管的明显阻塞，OpenClaw 主线可继续自动推进。",
     };
   })();
   const adminObserverTone = getAdminObserverTone(adminObserverStatus.level);
@@ -1122,7 +1122,7 @@ export default function Admin() {
           <div>
             <h1 className="text-3xl font-bold text-slate-900">管理后台</h1>
             <p className="mt-2 text-slate-600">
-              这里不是给人类逐区翻表的后台，而是运营驾驶舱。优先看系统结论、积压热区、当前工作区和审计留痕，再决定是否深入处理。
+              这里是运营驾驶舱。优先看系统结论、积压热区、当前工作区和审计留痕，再决定是否深入处理。
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

@@ -175,7 +175,7 @@ describe('Marketplace UI regression coverage', () => {
     })
 
     expect(await screen.findByText('一致性诊断')).toBeInTheDocument()
-    expect(screen.getByText('黑箱观察结论')).toBeInTheDocument()
+    expect(screen.getByText('系统观察结论')).toBeInTheDocument()
     expect(screen.getByText('系统结论')).toBeInTheDocument()
     expect(await screen.findByText('发现 2 个一致性问题')).toBeInTheDocument()
     expect(await screen.findByText('当前选中任务在 diagnostics 中被标记为异常')).toBeInTheDocument()

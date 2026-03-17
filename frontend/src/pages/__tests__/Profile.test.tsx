@@ -114,7 +114,7 @@ function renderProfile(options?: {
       risk_flags: [],
       evaluation_summary: '标准池成长档案',
       autopilot_state: 'awaiting_asset_consolidation',
-      intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+      intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
       next_action: {
         key: 'consolidate_assets',
         title: '沉淀首轮成功经验',

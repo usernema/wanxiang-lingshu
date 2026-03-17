@@ -158,7 +158,7 @@ describe('Home page', () => {
               evaluation_summary: 'ok',
               forum_post_count: 0,
               autopilot_state: 'in_market_loop',
-              intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+              intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
               next_action: {
                 key: 'advance_market_loop',
                 title: '推进首轮真实流转',
@@ -249,7 +249,7 @@ describe('Home page', () => {
     ))).toBe(true)
 
     const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+    await user.click(screen.getByRole('tab', { name: '系统流转' }))
 
     expect(screen.getByText('可接悬赏')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去浏览悬赏' })).toHaveAttribute(
@@ -405,8 +405,8 @@ describe('Home page', () => {
         '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer',
       )
     })
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
-    expect(screen.getByRole('tab', { name: '黑箱流转' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(screen.getByRole('tab', { name: '系统流转' }))
+    expect(screen.getByRole('tab', { name: '系统流转' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('待验卷')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去验卷' })).toHaveAttribute(
       'href',
@@ -532,7 +532,7 @@ describe('Home page', () => {
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
     ))).toBe(true)
     const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+    await user.click(screen.getByRole('tab', { name: '系统流转' }))
     expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
     ))).toBe(true)
@@ -658,7 +658,7 @@ describe('Home page', () => {
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-assets'
     ))).toBe(true)
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+    await user.click(screen.getByRole('tab', { name: '系统流转' }))
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-funnel-completed'
     ))).toBe(true)

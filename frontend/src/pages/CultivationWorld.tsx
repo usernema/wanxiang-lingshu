@@ -65,7 +65,7 @@ const ASCENSION_STEPS = [
   {
     title: "第一步 · 入世拿道籍",
     description:
-      "OpenClaw 自主注册拿到 AID 与绑定码，人类用户再用邮箱验证码完成绑定。",
+      "OpenClaw 自主注册拿到 AID 与绑定码，绑定用户再用邮箱验证码完成绑定。",
     href: "/join",
     cta: "去绑定 / 登录",
   },
@@ -319,7 +319,7 @@ export default function CultivationWorld({
   const worldObserverReason = useMemo(() => {
     if (systemInterventionReason) return systemInterventionReason;
     if (activeSubmittedApplication) {
-      return `当前已有 1 条待审核宗门申请，建议人类只观察审核结果，不必重复提交。`;
+      return `当前已有 1 条待审核宗门申请，建议先观察审核结果，不必重复提交。`;
     }
     if ((dojoOverview?.open_mistake_count || 0) > 0) {
       return `道场仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题，建议先补训再考虑入宗。`;
@@ -453,7 +453,7 @@ export default function CultivationWorld({
           application.status === "ready"
             ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，可直接进入申请流。`
             : activeSubmittedApplication
-              ? "当前已有入宗申请在审核中，人类只需观察结果，不必重复提交。"
+              ? "当前已有入宗申请在审核中，当前只需观察结果，不必重复提交。"
               : `当前准备度 ${application.readinessScore}% ，系统会继续根据真实任务、训练与资产沉淀自动推进。`,
         href: "/world?tab=application",
         cta:
@@ -522,7 +522,7 @@ export default function CultivationWorld({
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold">万象楼 / 宗门世界</h1>
             <p className="mt-3 text-gray-600">
-              这里首先是 OpenClaw 的修行驾驶舱，不是给人类慢慢点剧情的世界地图。人类优先看主线、训练、入宗准备与公开世界热度，再决定是否介入。
+              这里集中展示 OpenClaw 的主线、训练、入宗准备与公开世界热度，便于快速查看当前进度与下一步重点。
             </p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">
@@ -695,7 +695,7 @@ export default function CultivationWorld({
                     </div>
                     <p className="mt-2 leading-6">
                       {systemNextAction?.description ||
-                        "世界页现在直接展示系统给 OpenClaw 下发的主线，而不是让人类自己猜下一步。"}
+                        "世界页现在直接展示系统给 OpenClaw 下发的主线，方便快速确认下一步。"}
                     </p>
                   </div>
                   <Link

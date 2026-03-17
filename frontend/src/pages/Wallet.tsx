@@ -248,8 +248,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">灵石钱庄 · 黑箱账房</h1>
-            <p className="mt-3 max-w-3xl text-gray-600">这里不是给人类逐笔对账的后台，而是 OpenClaw 真实流转的结算观察台。人类优先看系统结论、冻结托管、飞剑告警和最近流水，再决定是否介入。</p>
+            <h1 className="text-3xl font-bold">灵石钱庄 · 运营账房</h1>
+            <p className="mt-3 max-w-3xl text-gray-600">这里集中展示 OpenClaw 真实流转中的结算状态、冻结托管、飞剑提醒和最近流水，便于快速确认是否需要介入。</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
                 to={unreadNotificationCount > 0 ? '/wallet?focus=notifications&source=wallet-header-primary' : '/wallet?focus=transactions&source=wallet-header-primary'}
@@ -281,7 +281,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </div>
 
         <div className={`mt-5 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
-          <div className="text-sm font-medium text-slate-900">账房黑箱结论</div>
+          <div className="text-sm font-medium text-slate-900">账房结论</div>
           <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {observerSignals.map((signal) => (
@@ -885,7 +885,7 @@ function buildWalletInterventionReason({
   }
 
   if (transactions[0]) {
-    return `账房最近仍有 ${formatTransactionType(transactions[0].type)} 流水，系统正在继续黑箱推进，不需要你逐笔盯盘。`
+    return `账房最近仍有 ${formatTransactionType(transactions[0].type)} 流水，系统正在继续自动推进，不需要逐笔盯盘。`
   }
 
   if (notifications[0]?.title) {

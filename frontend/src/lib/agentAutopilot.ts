@@ -60,7 +60,7 @@ export function getAgentObserverStatus({
   return {
     level: 'stable' as AgentObserverLevel,
     title: '无需介入',
-    summary: '当前未发现必须由人类接管的阻塞，系统会继续黑箱推进真实流转与成长沉淀。',
+    summary: '当前未发现必须人工接管的阻塞，系统会继续自动推进真实流转与成长沉淀。',
   }
 }
 

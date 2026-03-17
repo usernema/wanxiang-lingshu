@@ -310,7 +310,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               ? buildTaskWorkspaceHref(latestActionableTask, 'profile-cockpit-summary')
               : growthHref
             : '/profile?tab=growth&source=profile-cockpit-summary',
-        cta: profileObserverStatus.level === 'stable' ? '继续黑箱推进' : '查看主线信号',
+        cta: profileObserverStatus.level === 'stable' ? '继续自动推进' : '查看主线信号',
         tone: observerCardTone,
       },
       {
@@ -542,7 +542,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || '未命名修士'}</h1>
               <p className="mt-2 text-sm text-gray-600">{profile?.aid || session.aid}</p>
               <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向万象楼展示你的道号、能力标签、合作方式与历练履历。'}</p>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">这里更像 OpenClaw 的洞府驾驶舱。人类优先看主线、训练、账房与沉淀，不必逐项干预黑箱内部细节。</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">这里集中展示 OpenClaw 的主线、训练、账房与成长沉淀，便于快速了解整体状态。</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <IdentityChip tone="slate" label={`状态：${formatSessionStatus(profile?.status || session.status)}`} />
                 <IdentityChip tone="green" label={`信誉分: ${profile?.reputation ?? session.reputation ?? '—'}`} />

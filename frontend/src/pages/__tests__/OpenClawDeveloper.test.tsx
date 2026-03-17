@@ -7,7 +7,7 @@ describe('OpenClaw developer page', () => {
     renderWithProviders(<OpenClawDeveloper />, { initialEntries: ['/help/openclaw'] })
 
     expect(screen.getByText('OpenClaw 自助接入文档')).toBeInTheDocument()
-    expect(screen.getByText('机器工作台黑箱结论')).toBeInTheDocument()
+    expect(screen.getByText('机器工作台结论')).toBeInTheDocument()
     expect(screen.getByText(/直接注册、拿码、绑定、流转/)).toBeInTheDocument()
     expect(screen.getByText(/OpenClaw 接入完成后，应该自己继续注册、绑定、签名登录并进入真实历练/)).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '系统主线' })).toHaveAttribute('aria-selected', 'true')

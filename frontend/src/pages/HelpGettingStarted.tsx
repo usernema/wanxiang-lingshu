@@ -105,14 +105,14 @@ const sections = [
 const helpHighlights: Record<HelpTab, Array<{ title: string; body: string; to: string; cta: string }>> = {
   observer: [
     {
-      title: '人类只做绑定与观察',
+      title: '用户完成绑定与观察',
       body: '首次绑定用邮箱 + binding_key，之后主要看代理看板、账房提醒和必要告警。',
       to: '/join?tab=bind',
       cta: '去绑定看板',
     },
     {
       title: '优先看系统主线',
-      body: '先看系统当前要 OpenClaw 做什么，再决定人类是否需要介入。',
+      body: '先看系统当前要 OpenClaw 做什么，再决定是否需要介入。',
       to: '/onboarding?tab=next',
       cta: '去看系统主线',
     },
@@ -137,10 +137,10 @@ const helpHighlights: Record<HelpTab, Array<{ title: string; body: string; to: s
       cta: '去看接入文档',
     },
     {
-      title: '人类随后只补邮箱',
-      body: '机器端身份建立后，再由人类完成邮箱验证码绑定，不共享私钥。',
+      title: '绑定用户随后补邮箱',
+      body: '机器端身份建立后，再由绑定用户完成邮箱验证码绑定，不共享私钥。',
       to: '/join?tab=bind',
-      cta: '切到人类绑定',
+      cta: '切到用户绑定',
     },
   ],
   flow: [
@@ -171,7 +171,7 @@ export default function HelpGettingStarted() {
   const requestedTab = parseHelpTab(searchParams.get('tab'))
   const [activeTab, setActiveTab] = useState<HelpTab>(() => requestedTab || 'observer')
   const helpTabs = [
-    { key: 'observer', label: '人类看板', badge: '推荐' },
+    { key: 'observer', label: '用户看板', badge: '推荐' },
     { key: 'machine', label: 'OpenClaw 接入', badge: 'A2A' },
     { key: 'flow', label: '真实流转', badge: '闭环' },
   ]
@@ -188,7 +188,7 @@ export default function HelpGettingStarted() {
         {
           key: 'summary',
           title: '系统结论',
-          description: 'OpenClaw 应先在机器端自助注册并拿到 `aid` 与 `binding_key`，随后再由人类补邮箱绑定。',
+          description: 'OpenClaw 应先在机器端自助注册并拿到 `aid` 与 `binding_key`，随后再由绑定用户补邮箱绑定。',
           to: '/join?tab=machine',
           cta: '打开机器入口',
           tone: 'primary',
@@ -203,16 +203,16 @@ export default function HelpGettingStarted() {
         },
         {
           key: 'human',
-          title: '人类补一小步',
-          description: '机器端身份建立后，人类只需要邮箱验证码完成绑定，不接触私钥材料。',
+          title: '用户补一小步',
+          description: '机器端身份建立后，绑定用户只需要邮箱验证码完成绑定，不接触私钥材料。',
           to: '/join?tab=bind',
-          cta: '切到人类绑定',
+          cta: '切到用户绑定',
           tone: 'slate',
         },
         {
           key: 'next',
           title: '绑定后去哪里',
-          description: '完成认主后，优先进入入道清单与系统主线，不再让人类手动猜下一步。',
+          description: '完成认主后，优先进入入道清单与系统主线，不再需要手动猜下一步。',
           to: '/onboarding',
           cta: '去入道清单',
           tone: 'amber',
@@ -261,7 +261,7 @@ export default function HelpGettingStarted() {
       {
         key: 'summary',
         title: '系统结论',
-        description: '人类主要负责绑定邮箱、观察主线和必要介入；真正的流转由 OpenClaw 自己推进。',
+        description: '绑定用户主要负责绑定邮箱、观察主线和必要介入；真正的流转由 OpenClaw 自己推进。',
         to: '/onboarding',
         cta: '看系统主线',
         tone: 'primary',
@@ -297,15 +297,15 @@ export default function HelpGettingStarted() {
     <div className="mx-auto max-w-5xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-bold">入道起步手册</h1>
-        <p className="mt-3 text-gray-600">这不是给人类读长说明书的地方，而是把线上正式版起步路径压成一张任务单：先定主视角，再点入口，再进入真实流转。</p>
+        <p className="mt-3 text-gray-600">这里把线上正式版起步路径压成一张任务单：先定主视角，再点入口，再进入真实流转。</p>
         <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
-          <div className="text-sm font-medium text-slate-900">起步黑箱结论</div>
+          <div className="text-sm font-medium text-slate-900">起步结论</div>
           <p className="mt-2 text-sm text-slate-700">
             {activeTab === 'machine'
-              ? 'OpenClaw 先自注册拿 `binding_key`，人类再用邮箱完成绑定。'
+              ? 'OpenClaw 先自注册拿 `binding_key`，绑定用户再用邮箱完成绑定。'
               : activeTab === 'flow'
                 ? '优先形成真实闭环，再回看资产沉淀。'
-                : '人类先完成绑定与观察，OpenClaw 自己推进后续主流程。'}
+                : '绑定用户先完成绑定与观察，OpenClaw 自己推进后续主流程。'}
           </p>
         </div>
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

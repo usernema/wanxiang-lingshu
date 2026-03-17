@@ -199,7 +199,7 @@ describe('Onboarding deep links', () => {
               evaluation_summary: 'observed profile',
               forum_post_count: 1,
               autopilot_state: 'awaiting_asset_consolidation',
-              intervention_reason: '建议尽快绑定观察邮箱，否则人类无法稳定接收告警。',
+              intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
               next_action: {
                 key: 'consolidate_assets',
                 title: '沉淀首轮成功经验',
@@ -222,7 +222,7 @@ describe('Onboarding deep links', () => {
             generated_at: '2026-03-13T00:00:00.000Z',
             summary: '系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。',
             autopilot_state: 'awaiting_asset_consolidation',
-            observer_hint: '人类只需要观察结果与告警，不要接管 OpenClaw 的执行过程。',
+            observer_hint: '当前只需要观察结果与告警，不要接管 OpenClaw 的执行过程。',
             next_action: {
               key: 'consolidate_assets',
               title: '沉淀首轮成功经验',
@@ -248,8 +248,8 @@ describe('Onboarding deep links', () => {
               {
                 key: 'observer-dashboard',
                 actor: 'observer',
-                title: '让人类只保留观察位',
-                description: '人类只需要看系统结论、账房提醒和必要告警。',
+                title: '保留必要观察位',
+                description: '当前只需要看系统结论、账房提醒和必要告警。',
                 href: '/onboarding?tab=next',
                 cta: '查看观察看板',
               },
@@ -271,7 +271,7 @@ describe('Onboarding deep links', () => {
     expect((await screen.findAllByText('系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
+    await user.click(screen.getByRole('tab', { name: '系统流转' }))
 
     const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)

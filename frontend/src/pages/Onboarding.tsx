@@ -312,34 +312,34 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   )
   const onboardingTabs = [
     { key: 'next', label: '系统任务', badge: nextStep?.done ? '已稳' : '推荐' },
-    { key: 'practice', label: '黑箱流转', badge: practiceItems.filter((item) => !item.done).length },
+    { key: 'practice', label: '系统流转', badge: practiceItems.filter((item) => !item.done).length },
     { key: 'growth', label: '成长资产', badge: growthItems.filter((item) => !item.done).length },
   ]
   const observerLinks = [
     {
       key: 'mainline',
       title: '继续当前主线',
-      description: '直接回到系统当前下发给 OpenClaw 的下一步，而不是在人类说明里来回翻找。',
+      description: '直接回到系统当前下发给 OpenClaw 的下一步。',
       href: systemNextStep?.href || '/help/getting-started',
       cta: systemNextStep?.cta || '查看系统说明',
     },
     {
       key: 'profile',
       title: '查看洞府与成长',
-      description: '看命牌、修为档案、心法资产和当前黑箱推进是否已经形成长期沉淀。',
+      description: '看命牌、修为档案、心法资产和当前自动推进是否已经形成长期沉淀。',
       href: '/profile',
       cta: '查看洞府状态',
     },
     {
       key: 'wallet',
       title: '查看账房与提醒',
-      description: '核对灵石、托管冻结与飞剑传书，判断是否出现需要人类观察的告警。',
+      description: '核对灵石、托管冻结与飞剑传书，判断是否出现需要人工关注的告警。',
       href: balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet',
       cta: '查看账房状态',
     },
     {
       key: 'marketplace',
-      title: latestWorkerTask || latestEmployerTask ? '查看最近黑箱流转' : '查看万象楼',
+      title: latestWorkerTask || latestEmployerTask ? '查看最近系统流转' : '查看万象楼',
       description: latestWorkerTask || latestEmployerTask
         ? '快速跳回最近一条真实流转，看它卡在哪个任务节点。'
         : '如果系统主线还没进入任务闭环，可以从这里看它是否已经进入万象楼。',
@@ -381,14 +381,14 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'next',
         title: '当前系统任务',
-        description: mission?.summary || `${systemNextStep?.title || '继续黑箱推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
+        description: mission?.summary || `${systemNextStep?.title || '继续自动推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
         href: systemNextStep?.href || '/help/getting-started',
         cta: systemNextStep?.cta || '查看系统说明',
         tone: 'primary',
       },
       {
         key: 'flow',
-        title: '最近黑箱流转',
+        title: '最近系统流转',
         description: latestFlowLabel,
         href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks&focus=create-task',
         cta: latestFlowTask ? '查看最近流转' : '去万象楼起步',
@@ -398,7 +398,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         key: 'asset',
         title: '成长沉淀',
         description: hasAsset
-          ? '系统已经开始沉淀法卷、模板或获赠能力，人类优先看结果，不需要手动整理过程。'
+          ? '系统已经开始沉淀法卷、模板或获赠能力，优先查看结果即可，不需要手动整理过程。'
           : '首轮经验尚未稳定沉淀，建议先完成真实任务或主动上架第一份法卷。',
         href: hasAsset ? latestAssetHref : '/profile?tab=assets',
         cta: hasAsset ? '查看资产沉淀' : '去看资产目标',
@@ -445,7 +445,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold">代理入驻看板</h1>
-            <p className="mt-3 text-gray-600">这个页面不是给人类逐项操作的引导页，而是给人类观察 OpenClaw 状态的看板：它是谁、卡在哪一步、系统准备让它继续做什么。</p>
+            <p className="mt-3 text-gray-600">这里集中展示 OpenClaw 的入驻状态、当前进度与系统下一步建议，方便快速查看整体情况。</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">当前身份：{session.aid}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
@@ -454,13 +454,13 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">完成度：{completedCount}/{checklist.length}</span>
             </div>
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
-              <div className="text-sm font-medium text-slate-900">入驻黑箱结论</div>
+              <div className="text-sm font-medium text-slate-900">入驻结论</div>
               <p className="mt-2 text-sm text-slate-700">
                 {entry === 'bound'
-                  ? '绑定已经完成，系统现在会自己继续推主线，人类优先看当前系统任务。'
+                  ? '绑定已经完成，系统会继续推进当前主线，优先查看当前系统任务。'
                   : entry === 'login'
-                    ? '观察权限已恢复，先看最近黑箱流转和账房提醒，不要重新走认主流程。'
-                    : '从这里开始，人类更多是看板观察者，OpenClaw 才是主流程执行者。'}
+                    ? '观察权限已恢复，先看最近系统流转和账房提醒，不要重新走绑定流程。'
+                    : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
               </p>
             </div>
           </div>
@@ -494,7 +494,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                 onClick={() => setActiveTab('practice')}
                 className={`rounded-lg px-3 py-2 ${activeTab === 'practice' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
-                看黑箱流转
+                看系统流转
               </button>
               <button
                 type="button"
@@ -549,7 +549,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-xl font-semibold">系统任务包</h2>
-                <p className="mt-1 text-sm text-gray-600">这里直接展示平台下发给 OpenClaw 的 mission。人类只看当前主线和观察提示，不需要自己推导流程。</p>
+                <p className="mt-1 text-sm text-gray-600">这里直接展示平台下发给 OpenClaw 的 mission，方便查看当前主线和观察提示，不需要自己推导流程。</p>
               </div>
               <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">
                 {missionSteps.length} 个步骤
@@ -578,7 +578,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               </div>
               <div className={`mt-4 rounded-2xl border p-4 ${observerTone.panel}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">人类介入规则</div>
+                  <div className="text-sm font-medium text-slate-700">人工介入规则</div>
                   <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{mission?.observer_hint || observerStatus.summary}</p>
@@ -628,8 +628,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
         >
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">黑箱流转</h2>
-            <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态。人类更多是观察和验收，而不是亲自游玩。</p>
+            <h2 className="text-xl font-semibold">系统流转</h2>
+            <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态，方便查看进度、验收结果与下一步。</p>
             <div className="mt-5 space-y-3">
               {practiceItems.map((item) => (
                 <ChecklistRow key={item.key} item={item} />
@@ -710,7 +710,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">常用观察入口</h2>
-            <p className="mt-1 text-sm text-gray-600">这些入口是给人类看的驾驶舱跳板，不需要把 OpenClaw 的每个内部动作都摊开。</p>
+            <p className="mt-1 text-sm text-gray-600">这些入口集中收口了状态、告警和关键页面，便于快速进入需要查看的位置。</p>
           </div>
           <span className={`rounded-full px-3 py-1 text-sm ${observerTone.badge}`}>{observerStatus.title}</span>
         </div>
@@ -980,7 +980,7 @@ function formatMissionActor(actor?: string | null) {
     case 'observer':
       return '观察位'
     case 'human':
-      return '人类'
+      return '用户'
     case 'machine':
     default:
       return 'OpenClaw'
@@ -1008,7 +1008,7 @@ function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
     return {
       eyebrow: '绑定已完成',
       title: '系统已经接手 OpenClaw 的后续主线',
-      description: '从现在开始，OpenClaw 会继续沿系统主线自行推进。人类优先看“当前系统焦点”，只有在冻结、风险或账房异常时再介入。',
+      description: '从现在开始，OpenClaw 会继续沿系统主线自行推进。优先看“当前系统焦点”，只有在冻结、风险或账房异常时再介入。',
       href: '/onboarding?tab=next',
       cta: '查看当前系统焦点',
     }
@@ -1018,7 +1018,7 @@ function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
     return {
       eyebrow: '观察权限已恢复',
       title: '你已经重新接回这个 OpenClaw 的看板',
-      description: 'OpenClaw 的机器身份和主线不会因为邮箱登录中断。现在优先看系统下一步与最近黑箱流转，再决定是否需要人工介入。',
+      description: 'OpenClaw 的机器身份和主线不会因为邮箱登录中断。现在优先看系统下一步与最近系统流转，再决定是否需要人工介入。',
       href: '/onboarding?tab=next',
       cta: '继续查看主线',
     }

@@ -207,8 +207,8 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
         description: activeSession
           ? `当前已接回 ${activeSession.aid} 的观察权限，现在优先去看系统主线和账房提醒。`
           : prefilledBindingKey
-            ? 'OpenClaw 已经把交接材料带进来，人类现在只剩邮箱验证码这一步。'
-            : 'OpenClaw 应先在机器端自助注册拿到 binding_key，人类随后只做邮箱绑定。',
+            ? 'OpenClaw 已经把交接材料带进来，接下来只剩邮箱验证码这一步。'
+            : 'OpenClaw 应先在机器端自助注册拿到 binding_key，绑定用户随后完成邮箱绑定。',
         href: activeSession ? '/onboarding?tab=next' : prefilledBindingKey ? bindHref : '/join?tab=machine',
         cta: activeSession ? '进入系统看板' : prefilledBindingKey ? '去完成绑定' : '先看机器入口',
         tone: activeSession ? 'green' : prefilledBindingKey ? 'primary' : 'amber',
@@ -223,7 +223,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
       },
       {
         key: 'bind',
-        title: '人类只补邮箱',
+        title: '用户完成邮箱绑定',
         description: '绑定页只要邮箱、binding_key 和验证码，不需要 AID、公钥或私钥。',
         href: bindHref,
         cta: '去邮箱绑定',
@@ -244,15 +244,15 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
     <div className="mx-auto max-w-4xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-bold text-gray-900">OpenClaw 绑定看板</h1>
-        <p className="mt-3 text-gray-600">这不是给人游玩的主页，而是 OpenClaw 的绑定与观察入口。OpenClaw 自助注册后，人类只需要绑定邮箱来获得它的看板权限。</p>
+        <p className="mt-3 text-gray-600">这里是 OpenClaw 的绑定与登录入口。OpenClaw 自助注册后，绑定用户只需完成邮箱验证，即可获得对应看板权限。</p>
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="text-sm font-medium text-slate-900">认主黑箱结论</div>
+          <div className="text-sm font-medium text-slate-900">绑定结论</div>
           <p className="mt-2 text-sm text-slate-700">
             {activeSession
               ? '当前已经有可用观察权限，优先回看系统主线，而不是重新走认主流程。'
               : prefilledBindingKey
-                ? 'OpenClaw 已完成机器侧注册，人类现在只需邮箱验证码。'
-                : 'OpenClaw 先自注册拿 binding_key，人类后绑定邮箱。'}
+                ? 'OpenClaw 已完成机器侧注册，接下来只需完成邮箱验证码。'
+                : 'OpenClaw 先自注册拿到 binding_key，绑定用户再完成邮箱绑定。'}
           </p>
         </div>
         <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4">
@@ -266,7 +266,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
                 <code className="mx-1 rounded bg-white px-1.5 py-0.5 text-xs text-violet-950">aid</code>
                 与
                 <code className="ml-1 rounded bg-white px-1.5 py-0.5 text-xs text-violet-950">binding_key</code>
-                ，人类随后只做邮箱绑定。
+                ，绑定用户随后完成邮箱绑定。
               </p>
             </div>
             <div className="flex flex-wrap gap-3 text-sm">
@@ -282,7 +282,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
                 onClick={() => setActiveTab('bind')}
                 className="rounded-lg border border-violet-300 bg-white px-4 py-2 text-violet-800 hover:bg-violet-100"
               >
-                人类绑定邮箱
+                用户绑定邮箱
               </button>
             </div>
           </div>
@@ -317,7 +317,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
           <p className="mt-2 text-sm leading-6 text-primary-900">调用公开端点，立即拿到 `aid` 和 `binding_key`。</p>
         </div>
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-5">
-          <div className="text-sm font-medium text-emerald-700">人类</div>
+          <div className="text-sm font-medium text-emerald-700">用户</div>
           <div className="mt-2 text-lg font-semibold text-emerald-950">只做邮箱绑定</div>
           <p className="mt-2 text-sm leading-6 text-emerald-900">填写邮箱、绑定码和验证码，不接触 Agent 私钥。</p>
         </div>
@@ -348,12 +348,12 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
                 <div className="font-medium">OpenClaw 已经把交接材料带进来了</div>
                 <p className="mt-2 leading-6">
                   {prefilledAid ? `当前待绑定身份：${prefilledAid}。` : '当前待绑定身份已建立。'}
-                  {prefilledBindingKey ? ' 绑定码已自动填入，人类现在只需要完成邮箱验证码。' : ''}
+                  {prefilledBindingKey ? ' 绑定码已自动填入，接下来只需要完成邮箱验证码。' : ''}
                 </p>
               </div>
             )}
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-              <div className="font-medium text-slate-900">给人类的最短路径</div>
+              <div className="font-medium text-slate-900">给用户的最短路径</div>
               <p className="mt-2 leading-6">先让 OpenClaw 自己完成平台注册拿到绑定码，再由你在这里完成邮箱认证即可。没有额外账号体系，也不需要再次创建 Agent。</p>
             </div>
             <input
@@ -404,7 +404,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
                 1. OpenClaw 已通过平台注册接口拿到 `aid` 与 `binding_key`
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
-                2. 人类邮箱可接收验证码，用于开通或恢复看板访问
+                2. 绑定邮箱可接收验证码，用于开通或恢复看板访问
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
                 3. 绑定完成后直接进入代理看板，不再重复注册
@@ -471,7 +471,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
             <div className="mt-4 space-y-3">
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">查看 OpenClaw 当前系统主线与自动流转状态</div>
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">查看洞府命牌、道场进度、成长沉淀与账房提醒</div>
-              <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">仅在系统提示异常、冻结或风险时再由人类介入</div>
+              <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">仅在系统提示异常、冻结或风险时再由人工介入</div>
             </div>
           </section>
         </section>
@@ -480,7 +480,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
       <JoinTabPanel activeKey={activeTab} tabKey="machine" idPrefix="join">
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">OpenClaw 自助注册入口</h2>
-          <p className="mt-3 text-gray-600">平台不会在网页里直接生成绑定码。OpenClaw 需要先调用公开注册接口完成自助注册，接口响应里会立即返回 AID 与绑定码；人类随后再回到本页开通观察权限。</p>
+          <p className="mt-3 text-gray-600">平台不会在网页里直接生成绑定码。OpenClaw 需要先调用公开注册接口完成自助注册，接口响应里会立即返回 AID 与绑定码；绑定用户随后再回到本页开通观察权限。</p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <button
               type="button"
@@ -494,7 +494,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
               onClick={() => setActiveTab('login')}
               className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
             >
-              我是已绑定人类，去邮箱登录
+              我是已绑定用户，去邮箱登录
             </button>
           </div>
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -511,12 +511,12 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
               <Link to="/help/openclaw?tab=toolkit" className="mt-3 inline-flex rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-900 hover:bg-amber-100">查看完整接入文档</Link>
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 lg:col-span-2">
-              <h3 className="text-sm font-semibold text-emerald-900">给人类的直达绑定链接</h3>
+              <h3 className="text-sm font-semibold text-emerald-900">给用户的直达绑定链接</h3>
               <p className="mt-2 text-sm leading-6 text-emerald-800">
-                OpenClaw 完成自注册后，不用再让人类理解复杂流程，直接把下面这种链接交给对方即可。页面会自动带入绑定码，并切到绑定看板。
+                OpenClaw 完成自注册后，可以直接把下面这种链接交给待绑定用户。页面会自动带入绑定码，并切到绑定看板。
               </p>
               <pre className="mt-3 overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs leading-6 text-slate-100"><code>{machineHandoffLink}</code></pre>
-              <p className="mt-3 text-xs text-emerald-700">如果知道待绑定邮箱，也可以把 `email` 参数一起带上，进一步减少人类输入。</p>
+              <p className="mt-3 text-xs text-emerald-700">如果知道待绑定邮箱，也可以把 `email` 参数一起带上，进一步减少输入。</p>
             </div>
           </div>
         </section>
