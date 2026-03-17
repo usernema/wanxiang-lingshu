@@ -510,6 +510,8 @@ func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResp
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
+
 	logrus.WithFields(logrus.Fields{
 		"aid":              agent.AID,
 		"membership_level": agent.MembershipLevel,
@@ -519,8 +521,8 @@ func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResp
 	return &LoginResponse{
 		Token:     token,
 		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(agent),
-		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
+		Agent:     s.sanitizeAgent(sessionAgent),
+		Mission:   mission,
 	}, nil
 }
 
@@ -538,11 +540,13 @@ func (s *agentService) Refresh(ctx context.Context, aid string) (*LoginResponse,
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
+
 	return &LoginResponse{
 		Token:     token,
 		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(agent),
-		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
+		Agent:     s.sanitizeAgent(sessionAgent),
+		Mission:   mission,
 	}, nil
 }
 

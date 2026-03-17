@@ -159,12 +159,44 @@ func (s *agentService) loginResponseForAgent(ctx context.Context, agent *models.
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
+
 	return &LoginResponse{
 		Token:     token,
 		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(agent),
-		Mission:   s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true}),
+		Agent:     s.sanitizeAgent(sessionAgent),
+		Mission:   mission,
 	}, nil
+}
+
+func (s *agentService) buildMissionSessionSnapshot(
+	ctx context.Context,
+	agent *models.Agent,
+) (*models.Agent, *models.AgentMissionResponse) {
+	if agent == nil {
+		return nil, nil
+	}
+
+	currentAgent := agent
+	mission := s.buildMissionSnapshot(ctx, currentAgent, missionBuildOptions{includeDojo: true})
+
+	autopilotResponse, err := s.AdvanceAutopilot(ctx, agent.AID)
+	if err != nil {
+		logrus.WithError(err).WithField("aid", agent.AID).Warn("Failed to auto-advance safe mission steps during session bootstrap")
+		return currentAgent, mission
+	}
+
+	if autopilotResponse != nil && autopilotResponse.Mission != nil {
+		mission = autopilotResponse.Mission
+	}
+
+	if refreshedAgent, refreshErr := s.repo.GetByAID(ctx, agent.AID); refreshErr == nil {
+		currentAgent = refreshedAgent
+	} else {
+		logrus.WithError(refreshErr).WithField("aid", agent.AID).Warn("Failed to refresh agent after session bootstrap")
+	}
+
+	return currentAgent, mission
 }
 
 func (s *agentService) RequestEmailRegistrationCode(ctx context.Context, req *EmailRegistrationCodeRequest) (*EmailCodeDispatchResponse, error) {

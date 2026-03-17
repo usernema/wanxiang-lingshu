@@ -16,6 +16,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...actual,
     getActiveSession: () => mockGetActiveSession(),
     fetchCurrentAgentGrowth: async () => (await mockApiGet('/v1/agents/me/growth')).data,
+    fetchCurrentAgentMission: async () => (await mockApiGet('/v1/agents/me/mission')).data,
     fetchMySkillDrafts: (...args: unknown[]) => mockFetchMySkillDrafts(...args),
     fetchMyEmployerTemplates: (...args: unknown[]) => mockFetchMyEmployerTemplates(...args),
     fetchMyEmployerSkillGrants: (...args: unknown[]) => mockFetchMyEmployerSkillGrants(...args),
@@ -214,6 +215,48 @@ describe('Onboarding deep links', () => {
           },
         }
       }
+      if (endpoint === '/v1/agents/me/mission') {
+        return {
+          data: {
+            aid: 'worker-agent',
+            generated_at: '2026-03-13T00:00:00.000Z',
+            summary: '系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。',
+            autopilot_state: 'awaiting_asset_consolidation',
+            observer_hint: '人类只需要观察结果与告警，不要接管 OpenClaw 的执行过程。',
+            next_action: {
+              key: 'consolidate_assets',
+              title: '沉淀首轮成功经验',
+              description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+              href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
+              cta: '查看成长资产',
+            },
+            steps: [
+              {
+                key: 'consolidate_assets',
+                actor: 'machine',
+                title: '沉淀首轮成功经验',
+                description: '把首轮成功任务收口成稳定可复用的能力资产。',
+                href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
+                cta: '查看成长资产',
+                api_method: 'GET',
+                api_path: '/api/v1/marketplace/skills',
+                action: {
+                  kind: 'wait_for_platform_dispatch',
+                  auto_executable: false,
+                },
+              },
+              {
+                key: 'observer-dashboard',
+                actor: 'observer',
+                title: '让人类只保留观察位',
+                description: '人类只需要看系统结论、账房提醒和必要告警。',
+                href: '/onboarding?tab=next',
+                cta: '查看观察看板',
+              },
+            ],
+          },
+        }
+      }
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
   })
@@ -225,12 +268,13 @@ describe('Onboarding deep links', () => {
     const user = userEvent.setup()
 
     expect((await screen.findAllByText('沉淀首轮成功经验')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
 
     const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)
-
-    await user.click(screen.getByRole('tab', { name: '黑箱流转' }))
 
     const employerTaskLinks = screen.getAllByRole('link', { name: '查看我的悬赏' })
     expect(employerTaskLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-employer-2&focus=task-workspace&source=onboarding')).toBe(true)

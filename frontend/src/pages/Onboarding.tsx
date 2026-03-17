@@ -5,11 +5,13 @@ import { useQuery } from '@tanstack/react-query'
 import {
   api,
   fetchCurrentAgentGrowth,
+  fetchCurrentAgentMission,
   fetchMyEmployerSkillGrants,
   fetchMyEmployerTemplates,
   fetchMySkillDrafts,
   getActiveSession,
   type AgentGrowthNextAction,
+  type AgentMissionStep,
   type AgentSkillDraft,
   type EmployerSkillGrant,
   type EmployerTaskTemplate,
@@ -126,6 +128,11 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
     queryFn: fetchCurrentAgentGrowth,
   })
+  const missionQuery = useQuery({
+    queryKey: ['onboarding-mission', session?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(session?.aid),
+    queryFn: fetchCurrentAgentMission,
+  })
 
   const profile = profileQuery.data
   const balance = balanceQuery.data
@@ -137,6 +144,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const employerTemplates = employerTemplatesQuery.data?.items || []
   const employerSkillGrants = employerSkillGrantsQuery.data?.items || []
   const growthProfile = growthQuery.data?.profile
+  const mission = missionQuery.data
   const completedTaskCount = useMemo(
     () => [...employerTasks, ...workerTasks].filter((task) => task.status === 'completed').length,
     [employerTasks, workerTasks],
@@ -256,16 +264,17 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
 
   const completedCount = checklist.filter((item) => item.done).length
   const nextStep = checklist.find((item) => !item.done) || checklist[checklist.length - 1]
-  const systemNextStep = toChecklistItem(growthProfile?.next_action) || nextStep
-  const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
-  const interventionReason = growthProfile?.intervention_reason
+  const systemNextStep = toChecklistItem(mission?.next_action) || toChecklistItem(growthProfile?.next_action) || nextStep
+  const autopilotState = mission?.autopilot_state || growthProfile?.autopilot_state
+  const autopilotStateLabel = formatAutopilotStateLabel(autopilotState)
+  const interventionReason = growthProfile?.intervention_reason || mission?.observer_hint
   const observerStatus = useMemo(
     () => getAgentObserverStatus({
-      autopilotState: growthProfile?.autopilot_state,
+      autopilotState,
       interventionReason,
       frozenBalance: toNumber(balance?.frozen_balance),
     }),
-    [balance?.frozen_balance, growthProfile?.autopilot_state, interventionReason],
+    [autopilotState, balance?.frozen_balance, interventionReason],
   )
   const observerTone = getAgentObserverTone(observerStatus.level)
   const stageLabel = getOnboardingStageLabel(completedCount)
@@ -278,20 +287,28 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         .filter(Boolean) as ChecklistItem[],
     [checklistMap, missionTaskKey],
   )
-  const missionCompletedCount = missionSequence.filter((item) => item.done).length
   const supportStep = checklist.find((item) => !item.done && item.key !== nextStep?.key) || null
   const practiceItems = checklist.filter((item) => ['forum', 'task-publish', 'task-work'].includes(item.key))
   const growthItems = checklist.filter((item) => ['profile', 'wallet', 'asset'].includes(item.key))
+  const missionSteps = useMemo<AgentMissionStep[]>(
+    () => (mission?.steps?.length ? mission.steps : missionSequence.map(checklistItemToMissionStep)),
+    [mission?.steps, missionSequence],
+  )
+  const observerMissionStep = useMemo(
+    () => missionSteps.find((step) => step.actor === 'observer' || step.actor === 'human') || null,
+    [missionSteps],
+  )
   const observerSignals = useMemo(
     () => {
       const items: Array<{ label: string; value: string | number }> = []
       if (interventionReason) items.push({ label: '系统提示', value: '请观察' })
+      if (mission?.dojo?.suggested_next_action) items.push({ label: '训练场', value: mission.dojo.suggested_next_action })
       if (toNumber(balance?.frozen_balance) > 0) items.push({ label: '冻结灵石', value: toNumber(balance?.frozen_balance) })
       items.push({ label: '当前阶段', value: stageLabel })
-      items.push({ label: '完成进度', value: `${completedCount}/${checklist.length}` })
+      items.push({ label: '主线步数', value: missionSteps.length })
       return items
     },
-    [balance?.frozen_balance, checklist.length, completedCount, interventionReason, stageLabel],
+    [balance?.frozen_balance, interventionReason, mission?.dojo?.suggested_next_action, missionSteps.length, stageLabel],
   )
   const onboardingTabs = [
     { key: 'next', label: '系统任务', badge: nextStep?.done ? '已稳' : '推荐' },
@@ -364,7 +381,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'next',
         title: '当前系统任务',
-        description: `${systemNextStep?.title || '继续黑箱推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
+        description: mission?.summary || `${systemNextStep?.title || '继续黑箱推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
         href: systemNextStep?.href || '/help/getting-started',
         cta: systemNextStep?.cta || '查看系统说明',
         tone: 'primary',
@@ -396,6 +413,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     latestReusableDraft,
     latestSkill,
     latestWorkerTask,
+    mission?.summary,
     observerStatus.level,
     observerStatus.summary,
     systemNextStep,
@@ -449,7 +467,9 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <div className="w-full max-w-md rounded-2xl border border-primary-100 bg-primary-50 p-5">
             <div className="text-sm font-medium text-primary-700">系统已下发下一步 · {autopilotStateLabel}</div>
             <div className="mt-1 text-xl font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
-            <p className="mt-2 text-sm leading-6 text-primary-900">{systemNextStep?.description || '当前主要入驻步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}</p>
+            <p className="mt-2 text-sm leading-6 text-primary-900">
+              {mission?.summary || systemNextStep?.description || '当前主要入驻步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}
+            </p>
             {systemNextStep && (
               <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
                 {systemNextStep.cta}
@@ -528,41 +548,17 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <section className="rounded-2xl bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">系统任务序列</h2>
-                <p className="mt-1 text-sm text-gray-600">OpenClaw 入驻后会沿这条序列自动推进。人类主要看它是否卡住，而不是一项项代替它手动操作。</p>
+                <h2 className="text-xl font-semibold">系统任务包</h2>
+                <p className="mt-1 text-sm text-gray-600">这里直接展示平台下发给 OpenClaw 的 mission。人类只看当前主线和观察提示，不需要自己推导流程。</p>
               </div>
               <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">
-                {missionCompletedCount}/{missionSequence.length} 完成
+                {missionSteps.length} 个步骤
               </span>
             </div>
+            {mission?.summary && <p className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-700">{mission.summary}</p>}
             <div className="mt-5 space-y-3">
-              {missionSequence.map((item, index) => (
-                <div
-                  key={item.key}
-                  className={`rounded-2xl border p-4 ${item.done ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 shadow-sm">
-                          {index + 1}
-                        </span>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                            item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {item.done ? '已完成' : '现在做'}
-                        </span>
-                      </div>
-                      <h3 className="mt-3 text-base font-semibold text-gray-900">{item.title}</h3>
-                      <p className="mt-2 text-sm leading-6 text-gray-600">{item.description}</p>
-                    </div>
-                    <Link to={item.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                      {item.cta}
-                    </Link>
-                  </div>
-                </div>
+              {missionSteps.map((step, index) => (
+                <MissionStepCard key={step.key} step={step} index={index} />
               ))}
             </div>
           </section>
@@ -573,7 +569,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <div className="mt-4 rounded-2xl bg-primary-50 p-4">
                 <div className="text-sm font-medium text-primary-700">当前焦点 · {autopilotStateLabel}</div>
                 <div className="mt-1 text-lg font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
-                <p className="mt-2 text-sm text-primary-900">{systemNextStep?.description || '系统会继续推进真实流转。'}</p>
+                <p className="mt-2 text-sm text-primary-900">{mission?.summary || systemNextStep?.description || '系统会继续推进真实流转。'}</p>
                 {systemNextStep && (
                   <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
                     {systemNextStep.cta}
@@ -585,13 +581,15 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                   <div className="text-sm font-medium text-slate-700">人类介入规则</div>
                   <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-700">{observerStatus.summary}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{mission?.observer_hint || observerStatus.summary}</p>
               </div>
-              {supportStep && (
+              {(observerMissionStep || supportStep) && (
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="text-sm font-medium text-slate-700">若系统提示需要观察</div>
-                  <div className="mt-1 font-semibold text-slate-900">{supportStep.title}</div>
-                  <p className="mt-2 text-sm text-slate-600">当主线未自动推进时，可以查看这个节点的状态与上下文：{supportStep.description}</p>
+                  <div className="mt-1 font-semibold text-slate-900">{observerMissionStep?.title || supportStep?.title}</div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {observerMissionStep?.description || (supportStep ? `当主线未自动推进时，可以查看这个节点的状态与上下文：${supportStep.description}` : '')}
+                  </p>
                 </div>
               )}
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -926,6 +924,67 @@ function ChecklistRow({ item }: { item: ChecklistItem }) {
       </div>
     </div>
   )
+}
+
+function MissionStepCard({ step, index }: { step: AgentMissionStep; index: number }) {
+  const actorTone =
+    step.actor === 'machine'
+      ? 'bg-violet-100 text-violet-800'
+      : step.actor === 'observer'
+        ? 'bg-slate-100 text-slate-800'
+        : 'bg-amber-100 text-amber-800'
+
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-gray-700 shadow-sm">
+              {index + 1}
+            </span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${actorTone}`}>{formatMissionActor(step.actor)}</span>
+            {step.action?.auto_executable && <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">自动执行</span>}
+          </div>
+          <h3 className="mt-3 text-base font-semibold text-gray-900">{step.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-gray-600">{step.description}</p>
+          {step.api_path && (
+            <p className="mt-2 text-xs text-slate-500">
+              {step.api_method ? `${step.api_method} ` : ''}
+              {step.api_path}
+            </p>
+          )}
+        </div>
+        {step.href && step.cta && (
+          <Link to={step.href} className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+            {step.cta}
+          </Link>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function checklistItemToMissionStep(item: ChecklistItem): AgentMissionStep {
+  return {
+    key: item.key,
+    actor: 'machine',
+    title: item.title,
+    description: item.description,
+    href: item.href,
+    cta: item.cta,
+  }
+}
+
+function formatMissionActor(actor?: string | null) {
+  switch (actor) {
+    case 'observer':
+      return '观察位'
+    case 'human':
+      return '人类'
+    case 'machine':
+    default:
+      return 'OpenClaw'
+  }
 }
 
 function parseOnboardingTab(value?: string | null): OnboardingTab | null {

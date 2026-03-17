@@ -173,6 +173,7 @@ func TestLoginAcceptsDevBootstrapSignature(t *testing.T) {
 		return agent.AID == profile.AID
 	})).Return(nil).Once()
 	mockRepo.On("GetByAID", mock.Anything, profile.AID).Return(seededAgent, nil).Once()
+	mockRepo.On("GetByAID", mock.Anything, profile.AID).Return(seededAgent, nil)
 
 	resp, err := svc.Login(context.Background(), &LoginRequest{
 		AID:       profile.AID,
@@ -314,14 +315,45 @@ func TestCompleteEmailRegistration(t *testing.T) {
 	mockRepo := new(MockAgentRepository)
 	agent := &models.Agent{
 		AID:        "agent://a2ahub/openclaw-2",
+		Model:      "openclaw",
+		Provider:   "openclaw",
 		Status:     "active",
 		Reputation: 100,
 	}
 	boundAgent := &models.Agent{
 		AID:        agent.AID,
+		Model:      agent.Model,
+		Provider:   agent.Provider,
 		Status:     "active",
 		Reputation: 100,
 		OwnerEmail: "owner@example.com",
+	}
+	updatedAgent := &models.Agent{
+		AID:                agent.AID,
+		Model:              agent.Model,
+		Provider:           agent.Provider,
+		Status:             "active",
+		Reputation:         100,
+		OwnerEmail:         "owner@example.com",
+		Headline:           "OpenClaw 自动流转代理",
+		Bio:                "由 openclaw/openclaw 驱动，已接入 A2Ahub。默认按 mission 自动完成训练场诊断、真实流转与经验沉淀。",
+		AvailabilityStatus: "available",
+		Capabilities:       models.Capabilities{"automation", "planning", "execution"},
+	}
+	growthRepo := &fakeGrowthRepository{
+		profile: &models.AgentGrowthProfile{
+			AID:                agent.AID,
+			Model:              agent.Model,
+			Provider:           agent.Provider,
+			Status:             "active",
+			Reputation:         100,
+			OwnerEmail:         "owner@example.com",
+			AvailabilityStatus: "available",
+			CreatedAt:          time.Now().Add(-time.Hour),
+			UpdatedAt:          time.Now().Add(-time.Hour),
+			LastEvaluatedAt:    time.Now().Add(-time.Hour),
+		},
+		stats: &models.AgentGrowthStats{},
 	}
 
 	cfg := &config.Config{
@@ -335,9 +367,10 @@ func TestCompleteEmailRegistration(t *testing.T) {
 	}
 
 	svc := &agentService{
-		repo:   mockRepo,
-		redis:  &database.RedisClient{Client: redisClient},
-		config: cfg,
+		repo:       mockRepo,
+		growthRepo: growthRepo,
+		redis:      &database.RedisClient{Client: redisClient},
+		config:     cfg,
 	}
 
 	bindingKey := "bind_test_complete_key"
@@ -348,6 +381,17 @@ func TestCompleteEmailRegistration(t *testing.T) {
 	mockRepo.On("GetByBindingKeyHash", mock.Anything, hashBindingKey(bindingKey)).Return(agent, nil).Once()
 	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(nil, fmt.Errorf("agent not found")).Once()
 	mockRepo.On("BindEmail", mock.Anything, agent.AID, email, mock.AnythingOfType("time.Time")).Return(boundAgent, nil).Once()
+	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(boundAgent, nil).Once()
+	mockRepo.On(
+		"UpdateProfile",
+		mock.Anything,
+		agent.AID,
+		"OpenClaw 自动流转代理",
+		"由 openclaw/openclaw 驱动，已接入 A2Ahub。默认按 mission 自动完成训练场诊断、真实流转与经验沉淀。",
+		"available",
+		models.Capabilities{"automation", "planning", "execution"},
+	).Return(updatedAgent, nil).Once()
+	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(updatedAgent, nil)
 	redisMock.ExpectGet(redisKey).SetVal(code)
 	redisMock.ExpectDel(redisKey).SetVal(1)
 
@@ -360,6 +404,11 @@ func TestCompleteEmailRegistration(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, resp.Token)
 	assert.Equal(t, boundAgent.AID, resp.Agent.AID)
+	assert.Equal(t, "OpenClaw 自动流转代理", resp.Agent.Headline)
+	require.NotNil(t, resp.Mission)
+	assert.Equal(t, "publish_first_signal", resp.Mission.NextAction.Key)
+	assert.Nil(t, findMissionStep(resp.Mission.Steps, "complete_profile"))
+	assert.Equal(t, 2, growthRepo.upsertCount)
 	require.NoError(t, redisMock.ExpectationsWereMet())
 	mockRepo.AssertExpectations(t)
 }
@@ -438,6 +487,7 @@ func TestCompleteEmailLogin(t *testing.T) {
 	redisKey := emailCodeKey(emailCodePurposeLogin, agent.AID, email)
 
 	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(agent, nil).Once()
+	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(agent, nil)
 	redisMock.ExpectGet(redisKey).SetVal(code)
 	redisMock.ExpectDel(redisKey).SetVal(1)
 
