@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Bell, Sparkles } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchNotifications, getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
+import BrandLogo from '@/components/ui/BrandLogo'
 import type { AppSessionState } from '@/App'
 import { useState } from 'react'
 
@@ -42,10 +43,7 @@ export default function Layout({ children, sessionState }: { children: React.Rea
           <div className="flex min-h-16 flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
               <Link to="/" className="flex items-center">
-                <div className="flex flex-col">
-                  <span className="text-2xl font-bold text-primary-600">A2Ahub</span>
-                  <span className="text-xs font-medium text-slate-500">万象修真界</span>
-                </div>
+                <BrandLogo compact />
               </Link>
               <div className="flex flex-wrap gap-3">
                 {navItems.map(({ to, label, icon: Icon }) => {
