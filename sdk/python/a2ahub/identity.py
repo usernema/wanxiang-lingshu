@@ -8,7 +8,10 @@ import json
 import time
 import secrets
 import base64
+import random
 from pathlib import Path
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional, List, Dict, Any
 
 from cryptography.hazmat.primitives.asymmetric import ed25519
@@ -58,6 +61,10 @@ class AgentIdentity:
         self.access_token = access_token
         self.token_expires_at = token_expires_at
         self.mission = mission
+
+    _DEFAULT_MAX_ATTEMPTS = 4
+    _DEFAULT_BASE_BACKOFF_SECONDS = 0.5
+    _MAX_BACKOFF_SECONDS = 8.0
 
     @classmethod
     def create(
@@ -117,23 +124,25 @@ class AgentIdentity:
         }
 
         try:
-            with httpx.Client(timeout=timeout) as client:
-                normalized_endpoint = self._normalize_api_endpoint(api_endpoint)
-                response = client.post(f"{normalized_endpoint}/agents/register", json=payload)
-                response.raise_for_status()
-                data = response.json()
-                result = data.get("data", data) if isinstance(data, dict) else data
+            result = self._request_json(
+                "post",
+                api_endpoint,
+                "/agents/register",
+                timeout=timeout,
+                operation="registration",
+                json=payload,
+            )
 
-                self.aid = result["aid"]
-                self.binding_key = result.get("binding_key")
-                self.certificate = result.get("certificate")
-                self.mission = result.get("mission")
+            self.aid = result["aid"]
+            self.binding_key = result.get("binding_key")
+            self.certificate = result.get("certificate")
+            self.mission = result.get("mission")
 
-                return self.aid
+            return self.aid
 
         except httpx.HTTPStatusError as e:
             raise AuthenticationError(
-                f"Registration failed: {e.response.text}",
+                f"Registration failed: {self._response_text(e.response)}",
                 error_code="REGISTRATION_FAILED",
             )
         except httpx.RequestError as e:
@@ -155,21 +164,134 @@ class AgentIdentity:
     def _normalize_api_endpoint(api_endpoint: str) -> str:
         return api_endpoint.rstrip("/")
 
+    @staticmethod
+    def _response_text(response: httpx.Response) -> str:
+        text = getattr(response, "text", "")
+        if text:
+            return text
+        status_code = getattr(response, "status_code", "unknown")
+        return f"HTTP {status_code}"
+
+    @classmethod
+    def _should_retry_status(cls, status_code: int) -> bool:
+        return status_code == 429 or 500 <= status_code < 600
+
+    @classmethod
+    def _retry_delay_from_headers(cls, response: Optional[httpx.Response]) -> Optional[float]:
+        if response is None:
+            return None
+
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(float(retry_after), 0.0)
+            except ValueError:
+                try:
+                    retry_at = parsedate_to_datetime(retry_after)
+                    if retry_at.tzinfo is None:
+                        retry_at = retry_at.replace(tzinfo=timezone.utc)
+                    return max((retry_at - datetime.now(timezone.utc)).total_seconds(), 0.0)
+                except (TypeError, ValueError):
+                    pass
+
+        rate_limit_reset = response.headers.get("RateLimit-Reset") or response.headers.get("X-RateLimit-Reset")
+        if rate_limit_reset:
+            try:
+                reset_value = float(rate_limit_reset)
+                if reset_value > time.time() + 1:
+                    return max(reset_value - time.time(), 0.0)
+                return max(reset_value, 0.0)
+            except ValueError:
+                return None
+
+        return None
+
+    @classmethod
+    def _compute_retry_delay(
+        cls,
+        attempt: int,
+        response: Optional[httpx.Response] = None,
+    ) -> float:
+        header_delay = cls._retry_delay_from_headers(response)
+        if header_delay is not None:
+            return min(header_delay, cls._MAX_BACKOFF_SECONDS)
+
+        exponential = min(
+            cls._DEFAULT_BASE_BACKOFF_SECONDS * (2 ** max(attempt - 1, 0)),
+            cls._MAX_BACKOFF_SECONDS,
+        )
+        jitter = random.uniform(0.0, min(0.25, exponential / 4))
+        return exponential + jitter
+
+    def _request_with_retry(
+        self,
+        method: str,
+        url: str,
+        timeout: int,
+        operation: str,
+        **request_kwargs: Any,
+    ) -> httpx.Response:
+        last_error: Optional[Exception] = None
+
+        for attempt in range(1, self._DEFAULT_MAX_ATTEMPTS + 1):
+            try:
+                with httpx.Client(timeout=timeout) as client:
+                    request_method = getattr(client, method.lower())
+                    response = request_method(url, **request_kwargs)
+                    response.raise_for_status()
+                    return response
+            except httpx.HTTPStatusError as e:
+                last_error = e
+                if attempt >= self._DEFAULT_MAX_ATTEMPTS or not self._should_retry_status(e.response.status_code):
+                    raise
+                time.sleep(self._compute_retry_delay(attempt, e.response))
+            except httpx.RequestError as e:
+                last_error = e
+                if attempt >= self._DEFAULT_MAX_ATTEMPTS:
+                    raise
+                time.sleep(self._compute_retry_delay(attempt))
+
+        if last_error:
+            raise last_error
+
+        raise RuntimeError(f"Unexpected empty retry loop during {operation}")
+
+    def _request_json(
+        self,
+        method: str,
+        api_endpoint: str,
+        path: str,
+        timeout: int,
+        operation: str,
+        **request_kwargs: Any,
+    ) -> Any:
+        normalized_endpoint = self._normalize_api_endpoint(api_endpoint)
+        response = self._request_with_retry(
+            method,
+            f"{normalized_endpoint}{path}",
+            timeout=timeout,
+            operation=operation,
+            **request_kwargs,
+        )
+        data = response.json()
+        return data.get("data", data) if isinstance(data, dict) else data
+
     def request_login_challenge(self, api_endpoint: str, timeout: int = 30) -> Dict[str, Any]:
         if not self.aid:
             raise AuthenticationError("Agent not registered. Call register() first.")
 
         try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(
-                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/challenge",
-                    json={"aid": self.aid},
-                )
-                response.raise_for_status()
-                return response.json()
+            return self._request_json(
+                "post",
+                api_endpoint,
+                "/agents/challenge",
+                timeout=timeout,
+                operation="challenge request",
+                json={"aid": self.aid},
+            )
         except httpx.HTTPStatusError as e:
             raise AuthenticationError(
-                f"Challenge request failed: {e.response.text}",
+                f"Challenge request failed: {self._response_text(e.response)}",
                 error_code="CHALLENGE_FAILED",
             )
         except httpx.RequestError as e:
@@ -191,21 +313,21 @@ class AgentIdentity:
         }
 
         try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(
-                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/login",
-                    json=payload,
-                )
-                response.raise_for_status()
-                data = response.json()
-                result = data.get("data", data) if isinstance(data, dict) else data
-                self.access_token = result["token"]
-                self.token_expires_at = result.get("expires_at")
-                self.mission = result.get("mission")
-                return self.access_token
+            result = self._request_json(
+                "post",
+                api_endpoint,
+                "/agents/login",
+                timeout=timeout,
+                operation="login",
+                json=payload,
+            )
+            self.access_token = result["token"]
+            self.token_expires_at = result.get("expires_at")
+            self.mission = result.get("mission")
+            return self.access_token
         except httpx.HTTPStatusError as e:
             raise AuthenticationError(
-                f"Login failed: {e.response.text}",
+                f"Login failed: {self._response_text(e.response)}",
                 error_code="LOGIN_FAILED",
             )
         except httpx.RequestError as e:
@@ -225,19 +347,19 @@ class AgentIdentity:
             raise AuthenticationError("No bearer token is available. Call login() first.")
 
         try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.get(
-                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/me/mission",
-                    headers={"Authorization": f"Bearer {bearer}"},
-                )
-                response.raise_for_status()
-                data = response.json()
-                result = data.get("data", data) if isinstance(data, dict) else data
-                self.mission = result
-                return result
+            result = self._request_json(
+                "get",
+                api_endpoint,
+                "/agents/me/mission",
+                timeout=timeout,
+                operation="mission fetch",
+                headers={"Authorization": f"Bearer {bearer}"},
+            )
+            self.mission = result
+            return result
         except httpx.HTTPStatusError as e:
             raise AuthenticationError(
-                f"Fetch mission failed: {e.response.text}",
+                f"Fetch mission failed: {self._response_text(e.response)}",
                 error_code="MISSION_FETCH_FAILED",
             )
         except httpx.RequestError as e:
@@ -257,20 +379,20 @@ class AgentIdentity:
             raise AuthenticationError("No bearer token is available. Call login() first.")
 
         try:
-            with httpx.Client(timeout=timeout) as client:
-                response = client.post(
-                    f"{self._normalize_api_endpoint(api_endpoint)}/agents/me/autopilot/advance",
-                    headers={"Authorization": f"Bearer {bearer}"},
-                )
-                response.raise_for_status()
-                data = response.json()
-                result = data.get("data", data) if isinstance(data, dict) else data
-                if isinstance(result, dict) and result.get("mission"):
-                    self.mission = result.get("mission")
-                return result
+            result = self._request_json(
+                "post",
+                api_endpoint,
+                "/agents/me/autopilot/advance",
+                timeout=timeout,
+                operation="autopilot advance",
+                headers={"Authorization": f"Bearer {bearer}"},
+            )
+            if isinstance(result, dict) and result.get("mission"):
+                self.mission = result.get("mission")
+            return result
         except httpx.HTTPStatusError as e:
             raise AuthenticationError(
-                f"Advance autopilot failed: {e.response.text}",
+                f"Advance autopilot failed: {self._response_text(e.response)}",
                 error_code="AUTOPILOT_ADVANCE_FAILED",
             )
         except httpx.RequestError as e:

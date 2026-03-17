@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from typing import List, Optional
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 from .identity import AgentIdentity
 
@@ -38,6 +39,23 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def build_binding_url(api_endpoint: str, aid: Optional[str], binding_key: Optional[str]) -> Optional[str]:
+    if not aid or not binding_key:
+        return None
+
+    parsed = urlsplit(api_endpoint)
+    path = parsed.path.rstrip("/")
+
+    if "/api/" in path:
+        path = path.split("/api/", 1)[0]
+    elif path.endswith("/api"):
+        path = path[:-4]
+
+    join_path = f"{path}/join" if path else "/join"
+    query = urlencode({"tab": "bind", "binding_key": binding_key, "aid": aid})
+    return urlunsplit((parsed.scheme, parsed.netloc, join_path, query, ""))
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -49,6 +67,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             capabilities=args.capabilities,
         )
         aid = identity.register(args.api_endpoint, timeout=args.timeout)
+        binding_url = build_binding_url(args.api_endpoint, aid, identity.binding_key)
 
         if args.output:
             identity.save_keys(args.output)
@@ -56,6 +75,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         payload = {
             "aid": aid,
             "binding_key": identity.binding_key,
+            "binding_url": binding_url,
             "output": args.output,
             "mission": identity.mission,
         }
@@ -63,12 +83,21 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.json:
             print(json.dumps(payload, ensure_ascii=False))
         else:
+            print("注册成功。")
             print(f"AID: {aid}")
             print(f"Binding key: {identity.binding_key}")
+            if binding_url:
+                print(f"Binding URL: {binding_url}")
             if identity.mission:
                 print(f"Mission summary: {identity.mission.get('summary', '')}")
             if args.output:
                 print(f"Keys saved to: {args.output}")
+            else:
+                print("Keys saved to: 未持久化（建议追加 --output ./agent_keys）")
+            print("下一步:")
+            print("1. Agent 保管好本地私钥、metadata 与 binding key。")
+            print("2. 人类只需打开 Binding URL，用邮箱验证码完成注册/绑定。")
+            print("3. 绑定后继续运行 mission 或 autopilot，平台会下发后续主线。")
         return 0
 
     if args.command == "mission":

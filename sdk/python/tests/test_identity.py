@@ -3,6 +3,7 @@ Tests for AgentIdentity
 """
 
 import pytest
+import httpx
 from pathlib import Path
 import tempfile
 from unittest.mock import Mock
@@ -102,6 +103,43 @@ class TestAgentIdentity:
         """Test loading from nonexistent directory."""
         with pytest.raises(ValidationError):
             AgentIdentity.load_keys("/nonexistent/directory")
+
+    def test_register_retries_after_rate_limit(self, monkeypatch):
+        """Test registration retries on 429 responses."""
+        identity = AgentIdentity.create(
+            model="openclaw",
+            provider="openclaw",
+        )
+
+        request = httpx.Request("POST", "https://test.com/api/v1/agents/register")
+        rate_limited = httpx.Response(
+            429,
+            headers={"Retry-After": "0"},
+            request=request,
+            text='{"error":"too_many_requests"}',
+        )
+        success = httpx.Response(
+            200,
+            request=request,
+            json={
+                "aid": "agent://a2ahub/test-retry",
+                "binding_key": "bind_retry_success",
+                "certificate": {"tier": "gold"},
+            },
+        )
+
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=None)
+        mock_client.post = Mock(side_effect=[rate_limited, success])
+
+        monkeypatch.setattr("httpx.Client", lambda *args, **kwargs: mock_client)
+
+        aid = identity.register("https://test.com/api/v1")
+
+        assert aid == "agent://a2ahub/test-retry"
+        assert identity.binding_key == "bind_retry_success"
+        assert mock_client.post.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -234,3 +272,54 @@ class TestAgentIdentityAsync:
         assert payload["applied"][0]["kind"] == "profile_bootstrap"
         assert payload["diagnostic"]["question_set"]["set_id"] == "dojo_automation_ops_diagnostic_v1"
         assert identity.mission["steps"][0]["key"] == "complete-dojo-diagnostic"
+
+    async def test_login_retries_after_network_error(self, monkeypatch):
+        """Test login retries when challenge request hits a transient network error."""
+        identity = AgentIdentity.create(
+            model="openclaw",
+            provider="openclaw",
+        )
+        identity.aid = "agent://a2ahub/test-openclaw"
+
+        challenge_request = httpx.Request("POST", "https://test.com/api/v1/agents/challenge")
+        login_request = httpx.Request("POST", "https://test.com/api/v1/agents/login")
+
+        challenge_response = httpx.Response(
+            200,
+            request=challenge_request,
+            json={
+                "aid": identity.aid,
+                "nonce": "nonce-123",
+                "timestamp": 1742083200,
+                "message": "{\"aid\":\"agent://a2ahub/test-openclaw\",\"nonce\":\"nonce-123\",\"timestamp\":1742083200}",
+            },
+        )
+        login_response = httpx.Response(
+            200,
+            request=login_request,
+            json={
+                "token": "token-retry-ok",
+                "expires_at": "2026-03-16T12:00:00Z",
+                "mission": {"summary": "继续系统主线"},
+            },
+        )
+
+        mock_client = Mock()
+        mock_client.__enter__ = Mock(return_value=mock_client)
+        mock_client.__exit__ = Mock(return_value=None)
+        mock_client.post = Mock(
+            side_effect=[
+                httpx.ConnectError("temporary network issue", request=challenge_request),
+                challenge_response,
+                login_response,
+            ]
+        )
+
+        monkeypatch.setattr("httpx.Client", lambda *args, **kwargs: mock_client)
+        monkeypatch.setattr("a2ahub.identity.time.sleep", lambda *_args, **_kwargs: None)
+
+        token = identity.login("https://test.com/api/v1")
+
+        assert token == "token-retry-ok"
+        assert identity.access_token == "token-retry-ok"
+        assert mock_client.post.call_count == 3
