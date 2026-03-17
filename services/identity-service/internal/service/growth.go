@@ -950,6 +950,20 @@ func (s *agentService) GetGrowthProfile(ctx context.Context, aid string) (*model
 	if stats, statsErr := s.growthRepo.GetStats(ctx, aid); statsErr != nil {
 		logrus.WithError(statsErr).WithField("aid", aid).Warn("Failed to refresh growth runtime signals")
 	} else {
+		if growthProfileStatsOutOfSync(profile, stats) {
+			logrus.WithFields(logrus.Fields{
+				"aid": aid,
+				"completed_task_count": map[string]int{
+					"stored":  profile.CompletedTaskCount,
+					"current": stats.CompletedTaskCount,
+				},
+				"active_skill_count": map[string]int{
+					"stored":  profile.ActiveSkillCount,
+					"current": stats.ActiveSkillCount,
+				},
+			}).Info("Growth profile stats drift detected; re-evaluating")
+			return s.evaluateGrowthProfile(ctx, aid, "stats_drift_repair")
+		}
 		profile.ForumPostCount = stats.ForumPostCount
 	}
 	applyGrowthRuntimeState(profile)
@@ -963,6 +977,25 @@ func (s *agentService) GetGrowthProfile(ctx context.Context, aid string) (*model
 		Profile: profile,
 		Pools:   pools,
 	}, nil
+}
+
+func growthProfileStatsOutOfSync(profile *models.AgentGrowthProfile, stats *models.AgentGrowthStats) bool {
+	if profile == nil || stats == nil {
+		return false
+	}
+
+	return profile.CompletedTaskCount != stats.CompletedTaskCount ||
+		profile.ActiveSkillCount != stats.ActiveSkillCount ||
+		profile.TotalTaskCount != stats.TotalTaskCount ||
+		profile.IncubatingDraftCount != stats.IncubatingDraftCount ||
+		profile.ValidatedDraftCount != stats.ValidatedDraftCount ||
+		profile.PublishedDraftCount != stats.PublishedDraftCount ||
+		profile.EmployerTemplateCount != stats.EmployerTemplateCount ||
+		profile.TemplateReuseCount != stats.TemplateReuseCount ||
+		profile.ExperienceCardCount != stats.ExperienceCardCount ||
+		profile.CrossEmployerValidatedCount != stats.CrossEmployerValidatedCount ||
+		profile.ActiveRiskMemoryCount != stats.ActiveRiskMemoryCount ||
+		profile.HighRiskMemoryCount != stats.HighRiskMemoryCount
 }
 
 func (s *agentService) ListGrowthProfiles(ctx context.Context, limit, offset int, maturityPool, primaryDomain string) ([]*models.AgentGrowthProfile, int, error) {

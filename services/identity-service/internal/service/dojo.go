@@ -670,8 +670,8 @@ func (s *agentService) getAgentWithGrowthProfile(ctx context.Context, aid string
 
 	var growthProfile *models.AgentGrowthProfile
 	if s.growthRepo != nil {
-		if profile, growthErr := s.growthRepo.GetProfile(ctx, aid); growthErr == nil {
-			growthProfile = profile
+		if response, growthErr := s.GetGrowthProfile(ctx, aid); growthErr == nil {
+			growthProfile = response.Profile
 		}
 	}
 

@@ -12,6 +12,7 @@ SKIP_CLEANUP="${SKIP_CLEANUP:-false}"
 AUTH_REQUEST_INTERVAL_SECONDS="${AUTH_REQUEST_INTERVAL_SECONDS:-6}"
 API_REQUEST_INTERVAL_SECONDS="${API_REQUEST_INTERVAL_SECONDS:-0}"
 RATE_LIMIT_MAX_RETRIES="${RATE_LIMIT_MAX_RETRIES:-8}"
+TRANSPORT_MAX_RETRIES="${TRANSPORT_MAX_RETRIES:-3}"
 SSH_HOST="${SSH_HOST:-}"
 SSH_PORT="${SSH_PORT:-22}"
 SSH_USER="${SSH_USER:-root}"
@@ -78,7 +79,7 @@ curl_request() {
   local method="$1"
   local url="$2"
   local bucket="$3"
-  local headers_file body_file status retry_after retry_count=0
+  local headers_file body_file status retry_after retry_count=0 transport_retry_count=0 curl_rc
   shift 3
 
   headers_file="${TMP_DIR}/headers-$(date +%s)-$RANDOM.txt"
@@ -86,7 +87,21 @@ curl_request() {
 
   while true; do
     throttle_bucket "$bucket"
+    set +e
     status="$(curl -sS -D "$headers_file" -o "$body_file" -w '%{http_code}' -X "$method" "$url" "$@")"
+    curl_rc=$?
+    set -e
+
+    if (( curl_rc != 0 )); then
+      transport_retry_count=$(( transport_retry_count + 1 ))
+      if (( transport_retry_count > TRANSPORT_MAX_RETRIES )); then
+        echo "Transport failed for ${method} ${url} after ${TRANSPORT_MAX_RETRIES} retries" >&2
+        return "$curl_rc"
+      fi
+      echo "Transport error on ${method} ${url}, retrying in 2s (${transport_retry_count}/${TRANSPORT_MAX_RETRIES})" >&2
+      sleep 2
+      continue
+    fi
 
     if [[ "$status" == "429" ]]; then
       retry_after="$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {gsub("\r", "", $2); print $2; exit} /^RateLimit-Reset:/ {gsub("\r", "", $2); print $2; exit}' "$headers_file")"
@@ -121,14 +136,28 @@ curl_request_status() {
   local url="$2"
   local bucket="$3"
   local output_file="$4"
-  local headers_file status retry_after retry_count=0
+  local headers_file status retry_after retry_count=0 transport_retry_count=0 curl_rc
   shift 4
 
   headers_file="${TMP_DIR}/headers-status-$(date +%s)-$RANDOM.txt"
 
   while true; do
     throttle_bucket "$bucket"
+    set +e
     status="$(curl -sS -D "$headers_file" -o "$output_file" -w '%{http_code}' -X "$method" "$url" "$@")"
+    curl_rc=$?
+    set -e
+
+    if (( curl_rc != 0 )); then
+      transport_retry_count=$(( transport_retry_count + 1 ))
+      if (( transport_retry_count > TRANSPORT_MAX_RETRIES )); then
+        printf '000'
+        return 0
+      fi
+      echo "Transport error on ${method} ${url}, retrying in 2s (${transport_retry_count}/${TRANSPORT_MAX_RETRIES})" >&2
+      sleep 2
+      continue
+    fi
 
     if [[ "$status" == "429" ]]; then
       retry_after="$(awk 'BEGIN{IGNORECASE=1} /^Retry-After:/ {gsub("\r", "", $2); print $2; exit} /^RateLimit-Reset:/ {gsub("\r", "", $2); print $2; exit}' "$headers_file")"
@@ -795,7 +824,6 @@ if ! printf '%s' "$CROSS_EMPLOYER_CARDS" | "$JQ_BIN" -re --arg title "$TASK1_TIT
   echo "Cross-employer validation flag was expected after task-3" >&2
   exit 1
 fi
-admin_json POST "/v1/admin/agent-growth/evaluate" "{\"aid\":\"${WORKER_GROWTH_AID}\"}" >/dev/null
 WORKER_GROWTH_PROFILE_REFRESHED="$(api_json GET "/v1/agents/me/growth" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
 if ! printf '%s' "$WORKER_GROWTH_PROFILE_REFRESHED" | "$JQ_BIN" -re '.profile.current_maturity_pool | select(. == "observed" or . == "standard" or . == "preferred")' >/dev/null 2>&1; then
   echo "Worker-growth maturity pool was expected to be observed or above before sect application" >&2
