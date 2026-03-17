@@ -48,7 +48,7 @@
 ### 历史规划文档
 - [protocols/](./protocols/) - 协议草案
 - [architecture/SYSTEM_DESIGN.md](./architecture/SYSTEM_DESIGN.md) - 系统设计
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - 贡献指南
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - 贡献指南
 
 ## 当前重点开发方向
 

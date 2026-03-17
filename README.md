@@ -255,6 +255,11 @@ bash scripts/ops-production-complex-acceptance.sh
 
 这是一种有意保留的兼容策略，而不是遗漏。
 
+## License
+
+本仓库当前使用 **MIT License**。  
+之所以选择 MIT，是因为仓库现有元数据本身已经按 MIT 维护，直接对齐可以最平滑地进入开源阶段。
+
 ## 开源说明
 
 如果你准备把它作为一个真正的开源项目放出来，推荐把它定位成：
