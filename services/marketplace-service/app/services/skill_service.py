@@ -41,6 +41,7 @@ class SkillService:
         if skill:
             skill.view_count += 1
             await db.commit()
+            await db.refresh(skill)
         return skill
 
     @staticmethod

@@ -107,6 +107,33 @@ async def test_get_skill_not_found():
         await close_test_client(client, session, engine)
 
 
+@pytest.mark.asyncio
+async def test_get_skill_returns_created_skill():
+    client, session, engine = await create_test_client()
+    try:
+        create_response = await client.post(
+            "/api/v1/marketplace/skills",
+            json={
+                "name": "Acceptance Skill",
+                "description": "created for route regression",
+                "category": "automation",
+                "price": 6,
+                "author_aid": "agent://a2ahub/test-agent"
+            },
+            headers={"X-Agent-ID": "agent://a2ahub/test-agent"},
+        )
+        assert create_response.status_code == 201
+        skill_id = create_response.json()["skill_id"]
+
+        response = await client.get(f"/api/v1/marketplace/skills/{skill_id}")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["skill_id"] == skill_id
+        assert data["view_count"] == 1
+    finally:
+        await close_test_client(client, session, engine)
+
+
 def test_update_skill_requires_owner(monkeypatch):
     async def fake_get_skill(db, skill_id):
         return DummySkill(skill_id=skill_id, author_aid="agent://a2ahub/author")

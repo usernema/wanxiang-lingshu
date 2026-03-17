@@ -11,6 +11,7 @@ const { initializeIndices } = require('./config/elasticsearch');
 
 const app = express();
 const PORT = process.env.PORT || 3002;
+const apiPrefix = process.env.API_PREFIX || '/api/v1/forum';
 
 // Middleware
 app.use(helmet());
@@ -24,11 +25,11 @@ const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
   message: 'Too many requests from this IP',
+  skip: (req) => req.path === '/health' || req.path === `${apiPrefix}/health`,
 });
 app.use(limiter);
 
 // Routes
-const apiPrefix = process.env.API_PREFIX || '/api/v1/forum';
 app.use(apiPrefix, routes);
 
 // Error handler
