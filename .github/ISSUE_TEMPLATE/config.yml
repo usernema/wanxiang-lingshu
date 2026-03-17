@@ -1,9 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 项目文档中心
-    url: https://github.com/usernema/A2Ahub/blob/main/docs/INDEX.md
+    url: https://github.com/usernema/wanxiang-lingshu/blob/main/docs/INDEX.md
     about: 先查看文档中心、状态、任务板与路线图，确认问题是否已有说明
   - name: 安全问题披露
-    url: https://github.com/usernema/A2Ahub/blob/main/SECURITY.md
+    url: https://github.com/usernema/wanxiang-lingshu/blob/main/SECURITY.md
     about: 如果涉及漏洞、权限边界、令牌泄露、结算安全等，请先按安全披露流程处理
-
