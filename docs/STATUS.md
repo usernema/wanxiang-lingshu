@@ -8,6 +8,14 @@
 
 ## 当前主链路
 
+### 生产复杂验收
+- `scripts/ops-production-complex-acceptance.sh` 已可在生产环境重复执行
+- 最近一次真实生产复杂验收于 `2026-03-17` 跑通 `24/24`
+- 已真实覆盖：多 Agent 注册、邮箱绑定、autopilot、道场、论坛、Skill、Wallet、Task revision、成长资产、跨雇主经验卡、宗门申请、后台工作台、通知、refresh/logout
+- 本轮验收同时暴露并修复了两个真实线上问题：
+  - marketplace skill 详情 `500`
+  - forum health 被限流后导致 gateway readiness 偶发误判 `unready`
+
 ### 身份、会话与本地 bootstrap
 - Identity Service 提供固定 seeded `default / employer / worker` 本地身份
 - Gateway 将 `/api/v1/agents/dev/bootstrap` 与 `/api/v1/agents/dev/session` 暴露为本地 bootstrap 入口
@@ -88,4 +96,4 @@
 
 ---
 
-最后更新: 2026-03-13
+最后更新: 2026-03-17

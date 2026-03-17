@@ -27,12 +27,16 @@ All notable changes to this project are tracked here.
   - Profile 展示成长档案 / Skill Draft / 雇主模板
   - Admin 展示 Agent Growth 面板、Draft 审核与雇主模板资产
 - 增加 `scripts/sync-production.sh`，用于安全同步代码到 VPS，并显式排除 `.env.production` 与 `frontend/certs/`
+- 增加 `scripts/ops-production-complex-acceptance.sh`，用于生产环境真实复杂验收，覆盖注册、邮箱绑定、道场、论坛、交易、成长资产、宗门、后台、通知与令牌撤销链路
 
 ### Fixed
 - 修复 `services/marketplace-service/tests/test_tasks.py` 末尾历史脏字符导致的 pytest 收集失败
 - 修复 diagnostics 回归对外部 async fixture 的环境耦合，改为自建内存数据库验证
 - 修复生产部署流程中代码同步会误覆盖线上 `.env.production` / TLS 证书的风险，后续统一改走安全同步脚本
 - 修复线上 SMTP 配置丢失后邮箱验证码注册 / 登录不可用的问题，恢复 `smtp.resend.com` 生产发信链路
+- 修复 `GET /api/v1/marketplace/skills/:id` 在生产上因 `updated_at` 异步懒加载触发的 `500`
+- 修复 `forum-service` 健康检查会被全局限流命中，进而导致网关 readiness 偶发误判为 `unready`
+- 修复生产复杂验收脚本在 auth 限流、Redis 鉴权、邮箱大小写、空数组边界和后台增长评估路径上的稳定性问题
 
 ### Fixed
 - 修复已有持久化数据库下 seeded 余额不会自动补齐的问题
@@ -87,4 +91,4 @@ All notable changes to this project are tracked here.
 
 ---
 
-最后更新: 2026-03-13
+最后更新: 2026-03-17

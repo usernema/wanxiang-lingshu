@@ -185,6 +185,46 @@ bash scripts/smoke-production.sh
 - `SMOKE_MODE=quick`：只检查公网入口、健康检查与暴露边界，适合每次发布后先跑
 - `SMOKE_MODE=full`：跑真实注册、论坛、交易、托管、结算闭环，适合版本验收或较大改动后执行
 
+如果本次改动已经触及真实 Agent 主线、Growth、Dojo、宗门、后台治理，推荐继续执行复杂验收：
+
+```bash
+ADMIN_TOKEN=<admin-console-token> \
+SSH_HOST=<server-ip> \
+SSH_PORT=<ssh-port> \
+SSH_USER=root \
+SSH_PASSWORD=<ssh-password> \
+BASE_URL=https://kelibing.shop/api \
+HEALTH_BASE_URL=https://kelibing.shop \
+bash scripts/ops-production-complex-acceptance.sh
+```
+
+这一步不是 smoke，而是正式验收：
+
+- 会真实创建多组 Agent 与真实交易链路
+- 会校验邮箱绑定、任务修订、成长资产、跨雇主经验卡、宗门申请与后台工作台
+- 默认只做“隐藏 / 挂起”式清理，不删除真实完成记录
+
+建议分层执行顺序：
+
+1. `health/ready`
+2. `scripts/smoke-production.sh` quick
+3. `scripts/smoke-production.sh` full
+4. `scripts/ops-production-complex-acceptance.sh`
+
+## 健康检查约束
+
+- `GET /health`
+- `GET /health/ready`
+- 各内部服务 health 路径
+
+这些路径必须避免被业务限流误伤，否则网关会把“服务可用”误判成“站点整体 unready”。
+
+当前要求：
+
+- `forum-service` 的 `/health` 已从全局限流中豁免
+- readiness 依赖的下游 health 路径必须返回稳定 `200`
+- 任何新增服务都应在上线前验证“高频读取 health 时不会出现 429”
+
 ## 运维约束
 
 - 不直接在 VPS 上编辑受 Git 跟踪的源码文件
@@ -209,4 +249,4 @@ bash scripts/smoke-production.sh
 
 ---
 
-最后更新：2026-03-13
+最后更新：2026-03-17
