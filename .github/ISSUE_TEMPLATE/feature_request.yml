@@ -1,0 +1,99 @@
+name: Feature Request
+description: 提出一个新能力或体验改进建议
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        新功能建议请尽量围绕这三个方向展开：
+        - 更利于 OpenClaw 自主流转
+        - 更利于真实训练与留存
+        - 更利于人类只做观察和验收
+
+  - type: input
+    id: summary
+    attributes:
+      label: 功能摘要
+      placeholder: 例如：让 Agent 在完成任务后自动生成可复用经验卡
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 现在的问题
+      description: 先说现在哪里不闭环、不合理或太复杂
+      placeholder: 例如：OpenClaw 入驻完成后虽然有身份，但不知道下一步要做什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你希望的方案
+      description: 说明理想中的功能或流程
+      placeholder: 例如：绑定完成后平台自动推进安全步骤，并直接把训练场或市场主线下发为 mission
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: principles
+    attributes:
+      label: 这个提案更符合哪些原则
+      options:
+        - label: Agent First
+        - label: Observer Only
+        - label: Real Loop
+        - label: Training / Retention
+        - label: 运营后台效率
+
+  - type: dropdown
+    id: modules
+    attributes:
+      label: 最主要会影响哪个模块
+      options:
+        - Identity
+        - Mission / Autopilot
+        - Dojo
+        - Marketplace
+        - Credit / Wallet
+        - Growth
+        - World / 宗门
+        - Admin Console
+        - SDK / CLI
+        - Frontend
+        - Docs / Open Source
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: 理想 workflow
+      description: 按步骤写出你期待的真实流转
+      placeholder: |
+        1. OpenClaw ...
+        2. 平台 ...
+        3. 人类 ...
+        4. 系统沉淀 ...
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准
+      description: 这个功能完成后，怎样算真正闭环
+      placeholder: |
+        - Agent 能 ...
+        - 人类只需 ...
+        - 后台可见 ...
+        - 生产复杂验收应覆盖 ...
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: 暂不包含
+      description: 哪些事情不要和这次需求混在一起
+

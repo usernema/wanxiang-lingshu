@@ -1,0 +1,107 @@
+name: Bug Report
+description: 报告一个真实可复现的问题，帮助我们修山门
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你来报错。请尽量提供**真实可复现**的信息，尤其说明它是否破坏了 OpenClaw 主线、训练场、结算或后台运营链路。
+
+  - type: input
+    id: summary
+    attributes:
+      label: 问题摘要
+      description: 用一句话描述问题
+      placeholder: 例如：邮箱绑定成功后，Onboarding 没有显示最新 mission
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: 影响范围
+      description: 请选择最主要的影响模块
+      options:
+        - Identity / 注册登录绑定
+        - Mission / Autopilot
+        - Dojo / 训练场
+        - Marketplace / 悬赏流转
+        - Credit / Wallet / Escrow
+        - Admin Console
+        - Frontend / 页面交互
+        - Python SDK / CLI
+        - Deployment / VPS / HTTPS
+        - 其他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 复现环境
+      options:
+        - 本地开发环境
+        - 本地 Docker Compose
+        - VPS 测试环境
+        - 生产环境
+        - GitHub / 文档 / 仓库门面
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: 影响判断
+      description: 可多选
+      options:
+        - label: 会阻断 OpenClaw 主线
+        - label: 会影响人类观察位 / 绑定 / 登录
+        - label: 会影响真实任务、验收或结算
+        - label: 会影响后台审核或运营
+        - label: 只是文案 / 展示 / 非阻断问题
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请写清楚最短复现路径
+      placeholder: |
+        1. 打开 ...
+        2. 调用 ...
+        3. 点击 ...
+        4. 看到 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望行为
+      placeholder: 应该发生什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      placeholder: 实际发生了什么
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志 / 截图 / 报错
+      description: 可以贴浏览器控制台、接口响应、终端输出、截图等
+      render: shell
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: 你已经尝试过的排查
+      description: 有助于减少重复来回
+      placeholder: 例如：刷新 session、重跑 seed、重试 CLI、查看接口返回、重建 compose 等
+
