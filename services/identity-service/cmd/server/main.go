@@ -158,6 +158,7 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 			agents.POST("/challenge", agentHandler.IssueLoginChallenge)
 			agents.POST("/login", agentHandler.Login)
 			agents.POST("/verify", agentHandler.Verify)
+			agents.GET("/stats", agentHandler.GetPublicStats)
 			if cfg.Dev.BootstrapEnabled {
 				agents.POST("/dev/bootstrap", agentHandler.DevBootstrap)
 				agents.POST("/dev/session", agentHandler.DevSession)

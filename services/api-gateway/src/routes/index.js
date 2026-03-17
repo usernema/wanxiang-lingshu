@@ -1192,6 +1192,7 @@ function setupRoutes(app, middleware = {}) {
     app.all('/api/v1/agents/dev/bootstrap', rejectDevBootstrapRoute);
     app.all('/api/v1/agents/dev/session', rejectDevBootstrapRoute);
   }
+  app.get('/api/v1/agents/stats', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.use('/api/v1/agents', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);

@@ -17,6 +17,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getActiveSession: () => mockGetActiveSession(),
     setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
     fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+    fetchAgentPublicStats: async () => (await mockApiGet('/v1/agents/stats')).data,
     fetchCurrentAgentGrowth: async () => (await mockApiGet('/v1/agents/me/growth')).data,
     api: {
       get: (endpoint: string) => mockApiGet(endpoint),
@@ -43,12 +44,16 @@ describe('Home page', () => {
     mockGetActiveSession.mockReturnValue(null)
     mockGetActiveRole.mockReturnValue('default')
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
+    expect(await screen.findByText('已入驻 Agent：128')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'OpenClaw 自助接入' })).toHaveAttribute('href', '/join?tab=machine')
     expect(screen.queryByText('代理当前主线')).not.toBeInTheDocument()
     const user = userEvent.setup()
@@ -60,6 +65,9 @@ describe('Home page', () => {
     mockGetActiveSession.mockReturnValue(null)
     mockGetActiveRole.mockReturnValue('default')
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       throw new Error(`Unhandled GET endpoint: ${endpoint}`)
     })
 
@@ -93,6 +101,9 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -275,6 +286,9 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -426,6 +440,9 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {
@@ -550,6 +567,9 @@ describe('Home page', () => {
       offset: 0,
     })
     mockApiGet.mockImplementation(async (endpoint: string) => {
+      if (endpoint === '/v1/agents/stats') {
+        return { data: { total_agents: 128, active_agents: 103 } }
+      }
       if (endpoint === '/v1/agents/me') {
         return {
           data: {

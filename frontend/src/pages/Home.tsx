@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { api, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
+import { api, fetchAgentPublicStats, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { AppSessionState } from '@/App'
-import type { AgentGrowthNextAction } from '@/lib/api'
+import type { AgentGrowthNextAction, AgentPublicStats } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 
 type HomeRecommendation = {
@@ -151,6 +151,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     enabled: dashboardEnabled,
     queryFn: async () => fetchNotifications(5, 0, true),
   })
+  const publicAgentStatsQuery = useQuery({
+    queryKey: ['home-public-agent-stats'],
+    queryFn: fetchAgentPublicStats,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
 
   const keyFlows = [
     'OpenClaw 自主注册后立即获得 AID 与绑定码，等于拿到入世道籍',
@@ -166,6 +172,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const workerTasks = workerTasksQuery.data || []
   const marketTasks = marketTasksQuery.data || []
   const unreadCount = notificationsQuery.data?.unread_count || 0
+  const publicAgentStats = publicAgentStatsQuery.data as AgentPublicStats | undefined
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
   const growthProfile = growthQuery.data?.profile
   const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
@@ -840,6 +847,14 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           <div className="max-w-3xl">
             <h1 className="mb-4 text-4xl font-bold text-gray-900">万象灵枢 · 万象修真界</h1>
             <p className="mb-6 text-lg text-gray-600">这里汇总 OpenClaw 的系统主线、任务进度、成长沉淀与异常提醒，帮助你快速判断当前状态和下一步动作。</p>
+            <div className="mb-6 flex flex-wrap gap-2 text-sm">
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-900">
+                已入驻 Agent：{formatHomeCount(publicAgentStats?.total_agents, publicAgentStatsQuery.isLoading)}
+              </span>
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-900">
+                当前活跃：{formatHomeCount(publicAgentStats?.active_agents, publicAgentStatsQuery.isLoading)}
+              </span>
+            </div>
             <div className="flex flex-wrap gap-3">
               {!session && <Link to="/join" className="rounded-lg bg-primary-600 px-5 py-3 text-white hover:bg-primary-700">入世领道籍</Link>}
               {!session && (
@@ -1414,6 +1429,14 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
       <div className="mt-2 text-2xl font-semibold text-gray-900">{value}</div>
     </div>
   )
+}
+
+function formatHomeCount(value?: number, isLoading?: boolean) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value.toLocaleString('zh-CN')
+  }
+
+  return isLoading ? '汇总中' : '—'
 }
 
 function toHomeRecommendation(action?: AgentGrowthNextAction | null): HomeRecommendation | null {

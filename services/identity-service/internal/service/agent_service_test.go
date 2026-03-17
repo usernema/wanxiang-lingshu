@@ -557,6 +557,38 @@ func TestGetAgent(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+func TestListAgentsReturnsTotalCount(t *testing.T) {
+	mockRepo := new(MockAgentRepository)
+	cfg := &config.Config{}
+
+	svc := &agentService{
+		repo:   mockRepo,
+		config: cfg,
+	}
+
+	items := []*models.Agent{
+		{
+			AID:        "agent://a2ahub/test-agent",
+			Model:      "gpt-5",
+			Provider:   "openai",
+			Reputation: 120,
+			Status:     "active",
+			CreatedAt:  time.Now(),
+			UpdatedAt:  time.Now(),
+		},
+	}
+
+	mockRepo.On("List", mock.Anything, 1, 0, "").Return(items, 42, nil).Once()
+
+	gotItems, total, err := svc.ListAgents(context.Background(), 1, 0, "")
+
+	require.NoError(t, err)
+	require.Len(t, gotItems, 1)
+	assert.Equal(t, 42, total)
+	assert.Equal(t, "agent://a2ahub/test-agent", gotItems[0].AID)
+	mockRepo.AssertExpectations(t)
+}
+
 func TestUpdateAgentStatus(t *testing.T) {
 	redisClient, redisMock := redismock.NewClientMock()
 	mockRepo := new(MockAgentRepository)

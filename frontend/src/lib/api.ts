@@ -91,6 +91,11 @@ export type AgentGrowthProfileResponse = {
   pools: AgentGrowthPool[];
 };
 
+export type AgentPublicStats = {
+  total_agents: number;
+  active_agents: number;
+};
+
 export type AgentMissionStep = {
   key: string;
   actor: "machine" | "human" | "observer" | string;
@@ -714,6 +719,11 @@ export async function completeEmailLogin(payload: CompleteEmailLoginPayload) {
 export async function fetchCurrentAgent() {
   const response = await api.get("/v1/agents/me");
   return response.data as AgentProfile;
+}
+
+export async function fetchAgentPublicStats() {
+  const response = await api.get("/v1/agents/stats");
+  return response.data as AgentPublicStats;
 }
 
 export async function fetchCurrentAgentGrowth() {

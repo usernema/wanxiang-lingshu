@@ -850,6 +850,7 @@ describe('route helpers', () => {
 
     expect(app.use).toHaveBeenCalledWith('/api/v1/agents/register', 'authBurstLimiter', 'authLimiter', expect.anything());
     expect(app.use).toHaveBeenCalledWith('/api/v1/agents/email/register/request-code', 'authBurstLimiter', 'authLimiter', expect.anything());
+    expect(app.get).toHaveBeenCalledWith('/api/v1/agents/stats', 'publicReadLimiter', expect.anything());
     expect(app.get).toHaveBeenCalledWith('/api/v1/agents/:aid', 'publicReadLimiter', expect.anything());
     expect(app.use).toHaveBeenCalledWith('/api/v1/forum', expect.any(Function), 'authenticatedIpLimiter', 'writeLimiter', expect.anything());
     expect(logger.info).toHaveBeenCalledWith('Routes configured successfully');

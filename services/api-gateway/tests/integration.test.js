@@ -606,6 +606,12 @@ describe('API Gateway Integration Tests', () => {
     expect(response.headers['x-limiter-public-read']).toBe('true');
   });
 
+  it('applies public-read limiter to public agent stats route', async () => {
+    const response = await request(app).get('/api/v1/agents/stats').expect(502);
+    expect(response.headers['x-limiter-public-read']).toBe('true');
+    expect(response.body.service).toBe('identity');
+  });
+
   it('applies write limiter to protected write routes after auth', async () => {
     const authApp = express();
     authApp.use(requestId);

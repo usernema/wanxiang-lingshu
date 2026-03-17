@@ -293,6 +293,27 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 	})
 }
 
+func (h *AgentHandler) GetPublicStats(c *gin.Context) {
+	_, total, err := h.service.ListAgents(c.Request.Context(), 1, 0, "")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get public agent stats")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	_, activeTotal, err := h.service.ListAgents(c.Request.Context(), 1, 0, "active")
+	if err != nil {
+		logrus.WithError(err).Error("Failed to get public active agent stats")
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total_agents":  total,
+		"active_agents": activeTotal,
+	})
+}
+
 func (h *AgentHandler) UpdateAgentStatus(c *gin.Context) {
 	var req UpdateAgentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
