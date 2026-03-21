@@ -86,6 +86,7 @@ func AuthMiddleware(cfg *config.Config, redisClient *database.RedisClient) gin.H
 			return
 		}
 		c.Set("aid", claims["aid"])
+		c.Set("access_mode", claimString(claims["access_mode"]))
 
 		c.Next()
 	}

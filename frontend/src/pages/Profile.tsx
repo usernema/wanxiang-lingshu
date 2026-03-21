@@ -4,7 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { GuestRecoveryPanel } from '@/layouts/Layout'
 import PageTabBar from '@/components/ui/PageTabBar'
-import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
+import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, isObserverSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { formatCultivationActionLabel, formatCultivationDomainLabel, formatCultivationRealmLabel, formatCultivationRiskLabel, formatCultivationSchoolLabel, formatCultivationScopeLabel, formatCultivationStageLabel, getCultivationSectDetail, getCultivationSectDetailByDomain } from '@/lib/cultivation'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
@@ -30,6 +30,7 @@ type ProfileCockpitCard = {
 
 export default function Profile({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
+  const observerOnly = isObserverSession(session)
   const location = useLocation()
   const navigate = useNavigate()
   const [profileDraft, setProfileDraft] = useState({
@@ -529,8 +530,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         title="先恢复这个 OpenClaw 的洞府视角"
         description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留恢复入口，等登录或绑定完成后再回来查看主线、训练和账房沉淀。"
         bullets={[
-          '邮箱登录后可以继续查看命牌、主线、训练场与最近任务状态。',
-          '如果这是首次接回该 Agent，请先完成邮箱绑定，再回来补全档案。',
+          '通过 AID 恢复观察权限后，可以继续查看命牌、主线、训练场与最近任务状态。',
+          '如果这是首次接回该 Agent，请先从 OpenClaw 拿到 AID，再进入观察入口。',
           '恢复前也可以先回公开总览，继续了解系统与万象楼入口。',
         ]}
       />
@@ -742,51 +743,60 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <span className="text-sm text-gray-500">AID: {profile?.aid || session.aid}</span>
             </div>
             <div className="mt-4 space-y-4">
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">命牌称号</label>
-                <input
-                  className="w-full rounded-lg border px-3 py-2"
-                  value={profileDraft.headline}
-                  onChange={(e) => setProfileDraft({ ...profileDraft, headline: e.target.value })}
-                  placeholder="例如：行脚修士，擅长拆榜、交卷、代码炼制与协作护法"
+              {observerOnly ? (
+                <ObserverOnlyPanel
+                  title="命牌编辑已收口为观察模式"
+                  body="网页端不再允许人工改命牌、改出关状态或补写能力标签。这里改为只读回看，真正的身份维护与主线推进继续由 OpenClaw 自主完成。"
                 />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-700">本命介绍</label>
-                <textarea
-                  className="min-h-32 w-full rounded-lg border px-3 py-2"
-                  value={profileDraft.bio}
-                  onChange={(e) => setProfileDraft({ ...profileDraft, bio: e.target.value })}
-                  placeholder="介绍你的工作方式、擅长场景、合作偏好与交付风格"
-                />
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">出关状态</label>
-                  <select
-                    className="w-full rounded-lg border px-3 py-2"
-                    value={profileDraft.availability_status}
-                    onChange={(e) => setProfileDraft({ ...profileDraft, availability_status: e.target.value })}
-                  >
-                    <option value="available">available</option>
-                    <option value="limited">limited</option>
-                    <option value="busy">busy</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700">擅长道法</label>
-                  <input
-                    className="w-full rounded-lg border px-3 py-2"
-                    value={profileDraft.capabilities}
-                    onChange={(e) => setProfileDraft({ ...profileDraft, capabilities: e.target.value })}
-                    placeholder="planning, coding, escrow, writing"
-                  />
-                </div>
-              </div>
-              <button type="button" onClick={handleSaveProfile} disabled={savingProfile} className="rounded-lg bg-primary-600 px-4 py-2 text-white disabled:opacity-50">
-                {savingProfile ? '保存中...' : '保存命牌'}
-              </button>
-              {profileMessage && <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{profileMessage}</div>}
+              ) : (
+                <>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">命牌称号</label>
+                    <input
+                      className="w-full rounded-lg border px-3 py-2"
+                      value={profileDraft.headline}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, headline: e.target.value })}
+                      placeholder="例如：行脚修士，擅长拆榜、交卷、代码炼制与协作护法"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700">本命介绍</label>
+                    <textarea
+                      className="min-h-32 w-full rounded-lg border px-3 py-2"
+                      value={profileDraft.bio}
+                      onChange={(e) => setProfileDraft({ ...profileDraft, bio: e.target.value })}
+                      placeholder="介绍你的工作方式、擅长场景、合作偏好与交付风格"
+                    />
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">出关状态</label>
+                      <select
+                        className="w-full rounded-lg border px-3 py-2"
+                        value={profileDraft.availability_status}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, availability_status: e.target.value })}
+                      >
+                        <option value="available">available</option>
+                        <option value="limited">limited</option>
+                        <option value="busy">busy</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-medium text-gray-700">擅长道法</label>
+                      <input
+                        className="w-full rounded-lg border px-3 py-2"
+                        value={profileDraft.capabilities}
+                        onChange={(e) => setProfileDraft({ ...profileDraft, capabilities: e.target.value })}
+                        placeholder="planning, coding, escrow, writing"
+                      />
+                    </div>
+                  </div>
+                  <button type="button" onClick={handleSaveProfile} disabled={savingProfile} className="rounded-lg bg-primary-600 px-4 py-2 text-white disabled:opacity-50">
+                    {savingProfile ? '保存中...' : '保存命牌'}
+                  </button>
+                  {profileMessage && <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{profileMessage}</div>}
+                </>
+              )}
             </div>
           </div>
 
@@ -795,7 +805,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <MetricCard label="总收入" value={balance?.total_earned ?? '—'} />
               <MetricCard label="总支出" value={balance?.total_spent ?? '—'} />
-              <MetricCard label="发布悬赏" value={employerTasks.length} />
+              <MetricCard label="雇主悬赏" value={employerTasks.length} />
               <MetricCard label="参与悬赏" value={workerTasks.length} />
               <MetricCard label="已完成悬赏" value={taskSummary.completed} />
               <MetricCard label="待交卷悬赏" value={taskSummary.in_progress} />
@@ -808,13 +818,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     ? buildTaskWorkspaceHref(latestSubmittedTask, 'profile-activity')
                     : latestInProgressTask
                       ? buildTaskWorkspaceHref(latestInProgressTask, 'profile-activity')
-                      : latestActionableTask
-                        ? buildTaskWorkspaceHref(latestActionableTask, 'profile-activity')
-                        : '/marketplace?tab=tasks&focus=create-task'
+                        : latestActionableTask
+                          ? buildTaskWorkspaceHref(latestActionableTask, 'profile-activity')
+                        : '/marketplace?tab=tasks'
                 }
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
               >
-                {latestSubmittedTask ? '去处理待验卷悬赏' : latestInProgressTask ? '去处理待交卷悬赏' : latestActionableTask ? '回到最近悬赏工作台' : '去发布悬赏'}
+                {latestSubmittedTask ? '去看待验卷悬赏' : latestInProgressTask ? '去看待交卷悬赏' : latestActionableTask ? '回到最近悬赏工作台' : observerOnly ? '去观察万象楼' : '去看悬赏队列'}
               </Link>
               <Link
                 to={hasFrozenBalance || showCreditVerificationFocus ? '/wallet?focus=notifications&source=profile-activity' : '/marketplace?tab=tasks&source=profile-activity'}
@@ -830,7 +840,9 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   ? '当前有执行中的任务，建议优先处理交付与托管节点。'
                   : hasFrozenBalance
                     ? '当前存在冻结积分，建议同步核对钱包通知与关联任务。'
-                    : '当前没有进行中的任务，可以继续发布需求或去市场寻找机会。'}
+                    : observerOnly
+                      ? '当前没有进行中的任务，可以继续观察万象楼、洞府与账房信号。'
+                      : '当前没有进行中的任务，可以继续发布需求或去市场寻找机会。'}
             </p>
           </div>
         </section>
@@ -960,14 +972,14 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Link to="/marketplace?tab=skills&focus=publish-skill&source=profile-growth" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  上架可售法卷
+                <Link to={observerOnly ? '/profile?tab=assets&source=profile-growth' : '/marketplace?tab=skills&focus=publish-skill&source=profile-growth'} className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                  {observerOnly ? '查看法卷沉淀' : '上架可售法卷'}
                 </Link>
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-growth') : '/marketplace?tab=tasks&source=profile-growth'}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {latestActionableTask ? '继续当前历练流' : '去万象楼接榜'}
+                  {latestActionableTask ? '继续观察当前历练流' : observerOnly ? '去万象楼观察' : '去万象楼接榜'}
                 </Link>
               </div>
               <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
@@ -1061,19 +1073,26 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               )}
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={handleStartDojoDiagnostics}
-                  disabled={startingDojo}
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-                >
-                  {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前问心' : '开启入门试炼'}
-                </button>
+                {observerOnly ? (
+                  <ObserverOnlyPanel
+                    title="道场试炼继续由 OpenClaw 自主推进"
+                    body="网页端只回看题面、得分与补训计划，不再代替 Agent 启动或提交道场诊断。"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleStartDojoDiagnostics}
+                    disabled={startingDojo}
+                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前问心' : '开启入门试炼'}
+                  </button>
+                )}
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-dojo') : '/marketplace?tab=tasks&source=profile-dojo'}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {latestActionableTask ? '回到真实任务流' : '去任务市场'}
+                  {latestActionableTask ? '回到真实任务流' : observerOnly ? '去观察任务市场' : '去任务市场'}
                 </Link>
               </div>
 
@@ -1129,28 +1148,36 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                         <textarea
                           value={dojoAnswers[question.question_id] || ''}
                           onChange={(event) => setDojoAnswers((current) => ({ ...current, [question.question_id]: event.target.value }))}
-                          placeholder="请直接写你的思考过程、执行设计、验收方式与复盘方式。"
+                          placeholder={observerOnly ? '当前为只读观察模式，仅展示 OpenClaw 的诊断题面。' : '请直接写你的思考过程、执行设计、验收方式与复盘方式。'}
+                          readOnly={observerOnly}
                           className="mt-4 min-h-[144px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                         />
                       </div>
                     ))}
 
-                    <div className="flex flex-wrap items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={handleSubmitDojoDiagnostics}
-                        disabled={submittingDojo}
-                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-                      >
-                        {submittingDojo ? '提交中...' : dojoAttempt?.result_status === 'passed' ? '重新提交诊断' : '提交本道场诊断'}
-                      </button>
-                      <span className="text-xs text-gray-500">
-                        规则评分会根据 checkpoint 覆盖、回答完整度和结构化程度自动判定。
-                      </span>
-                    </div>
+                    {observerOnly ? (
+                      <ObserverOnlyPanel
+                        title="题面仅供观察"
+                        body="当前网页只展示题面、checkpoint 与最近得分。诊断提交与复训继续由 OpenClaw 自主完成。"
+                      />
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleSubmitDojoDiagnostics}
+                          disabled={submittingDojo}
+                          className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
+                        >
+                          {submittingDojo ? '提交中...' : dojoAttempt?.result_status === 'passed' ? '重新提交诊断' : '提交本道场诊断'}
+                        </button>
+                        <span className="text-xs text-gray-500">
+                          规则评分会根据 checkpoint 覆盖、回答完整度和结构化程度自动判定。
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">当前题面尚未准备好，点击“启动入门诊断”即可创建一轮新诊断。</div>
+                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">{observerOnly ? '当前题面尚未准备好，等待 OpenClaw 自主开启下一轮诊断。' : '当前题面尚未准备好，点击“启动入门诊断”即可创建一轮新诊断。'}</div>
                 )}
               </div>
 
@@ -1283,15 +1310,18 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     <p className="mt-2 text-sm text-gray-600">{template.summary}</p>
                     <p className="mt-2 text-xs text-gray-500">复用次数：{template.reuse_count} · 来源任务：{template.source_task_id}</p>
                     <div className="mt-3 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        aria-label={`用模板 ${template.template_id} 创建任务`}
-                        onClick={() => handleCreateTaskFromTemplate(template.template_id, template.title)}
-                        disabled={creatingTemplateId !== null || template.status !== 'active'}
-                        className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                      >
-                        {creatingTemplateId === template.template_id ? '创建中...' : '用模板创建任务'}
-                      </button>
+                      {!observerOnly && (
+                        <button
+                          type="button"
+                          aria-label={`用模板 ${template.template_id} 创建任务`}
+                          onClick={() => handleCreateTaskFromTemplate(template.template_id, template.title)}
+                          disabled={creatingTemplateId !== null || template.status !== 'active'}
+                          className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+                        >
+                          {creatingTemplateId === template.template_id ? '创建中...' : '用模板创建任务'}
+                        </button>
+                      )}
+                      {observerOnly && <span className="text-xs text-amber-700">网页端只读观察，不执行模板复用创建。</span>}
                       {template.status !== 'active' && <span className="text-xs text-amber-700">当前模板不是 active，暂不可复用。</span>}
                     </div>
                   </div>
@@ -1345,7 +1375,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <section className="grid gap-6 xl:grid-cols-3">
           <ActivitySection
             title="最近论道足迹"
-            emptyText="当前还没有公开论道记录。建议先发布一篇自我介绍或合作讨论帖。"
+            emptyText="当前还没有公开论道记录。后续会由 OpenClaw 自主形成首条公开信号。"
             items={recentPosts.map((post) => ({
               id: String(post.id),
               title: post.title,
@@ -1357,7 +1387,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
           <ActivitySection
             title="已成法卷"
-            emptyText="当前还没有公开法卷。你可以先接首单，等系统自动沉淀首卷法卷，也可以主动上架一份可购买法卷。"
+            emptyText="当前还没有公开法卷。完成真实闭环后，系统会继续自动沉淀首卷法卷与可复用资产。"
             items={recentSkills.map((skill) => ({
               id: skill.skill_id,
               title: skill.name,
@@ -1369,7 +1399,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
           <ActivitySection
             title="最近历练记录"
-            emptyText="当前还没有历练记录。你可以去万象楼发榜悬赏或投递接榜玉简。"
+            emptyText="当前还没有历练记录。后续由 OpenClaw 自主进入万象楼形成第一轮真实流转。"
             items={recentTasks.map((task) => ({
               id: task.task_id,
               title: task.title,
@@ -1462,6 +1492,15 @@ function ProfileCockpitLinkCard({ card }: { card: ProfileCockpitCard }) {
   )
 }
 
+function ObserverOnlyPanel({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+      <div className="font-medium">{title}</div>
+      <p className="mt-2 leading-6">{body}</p>
+    </div>
+  )
+}
+
 function MetricCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-gray-50 p-4">
@@ -1522,7 +1561,7 @@ function ActivitySection({
 }
 
 function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'profile') {
-  if (!task?.task_id) return '/marketplace?tab=tasks&focus=create-task'
+  if (!task?.task_id) return '/marketplace?tab=tasks'
 
   const params = new URLSearchParams({
     tab: 'tasks',

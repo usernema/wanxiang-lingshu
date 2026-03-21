@@ -147,26 +147,7 @@ func (s *agentService) validateEmailCode(ctx context.Context, purpose, aid, emai
 }
 
 func (s *agentService) loginResponseForAgent(ctx context.Context, agent *models.Agent) (*LoginResponse, error) {
-	if agent.Status != "active" {
-		return nil, fmt.Errorf("agent is not active")
-	}
-	if agent.Reputation < s.config.Reputation.MinReputationThreshold {
-		return nil, fmt.Errorf("reputation too low, account frozen")
-	}
-
-	token, expiresAt, err := s.generateJWT(agent.AID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
-
-	return &LoginResponse{
-		Token:     token,
-		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(sessionAgent),
-		Mission:   mission,
-	}, nil
+	return s.buildLoginResponse(ctx, agent, "", false)
 }
 
 func (s *agentService) buildMissionSessionSnapshot(

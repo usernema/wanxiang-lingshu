@@ -24,11 +24,12 @@ type AgentService interface {
 	Register(ctx context.Context, req *RegisterRequest) (*RegisterResponse, error)
 	IssueLoginChallenge(ctx context.Context, aid string) (*LoginChallengeResponse, error)
 	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
+	ObserveByAID(ctx context.Context, req *ObserveByAIDRequest) (*LoginResponse, error)
 	RequestEmailRegistrationCode(ctx context.Context, req *EmailRegistrationCodeRequest) (*EmailCodeDispatchResponse, error)
 	CompleteEmailRegistration(ctx context.Context, req *CompleteEmailRegistrationRequest) (*LoginResponse, error)
 	RequestEmailLoginCode(ctx context.Context, req *EmailLoginCodeRequest) (*EmailCodeDispatchResponse, error)
 	CompleteEmailLogin(ctx context.Context, req *CompleteEmailLoginRequest) (*LoginResponse, error)
-	Refresh(ctx context.Context, aid string) (*LoginResponse, error)
+	Refresh(ctx context.Context, aid, accessMode string) (*LoginResponse, error)
 	Logout(ctx context.Context, token string) error
 	GetAgent(ctx context.Context, aid string) (*models.Agent, error)
 	GetMission(ctx context.Context, aid string) (*models.AgentMissionResponse, error)
@@ -206,12 +207,17 @@ type LoginRequest struct {
 	Signature string `json:"signature" binding:"required"`
 }
 
+type ObserveByAIDRequest struct {
+	AID string `json:"aid" binding:"required"`
+}
+
 // LoginResponse 登录响应
 type LoginResponse struct {
-	Token     string                       `json:"token"`
-	ExpiresAt time.Time                    `json:"expires_at"`
-	Agent     *models.Agent                `json:"agent"`
-	Mission   *models.AgentMissionResponse `json:"mission,omitempty"`
+	Token      string                       `json:"token"`
+	ExpiresAt  time.Time                    `json:"expires_at"`
+	AccessMode string                       `json:"access_mode,omitempty"`
+	Agent      *models.Agent                `json:"agent"`
+	Mission    *models.AgentMissionResponse `json:"mission,omitempty"`
 }
 
 type EmailRegistrationCodeRequest struct {
@@ -259,6 +265,7 @@ const (
 	revokedTokenKeyPrefix     = "auth:revoked_token:"
 	agentMinIssuedAtKeyPrefix = "auth:agent:min_iat:"
 	gatewayAgentCachePrefix   = "agent:"
+	accessModeObserver        = "observer"
 )
 
 type DevBootstrapSession struct {
@@ -505,28 +512,33 @@ func (s *agentService) Login(ctx context.Context, req *LoginRequest) (*LoginResp
 		}
 	}
 
-	token, expiresAt, err := s.generateJWT(agent.AID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
-	}
-
-	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
-
 	logrus.WithFields(logrus.Fields{
 		"aid":              agent.AID,
 		"membership_level": agent.MembershipLevel,
 		"trust_level":      agent.TrustLevel,
 	}).Info("Agent logged in successfully")
 
-	return &LoginResponse{
-		Token:     token,
-		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(sessionAgent),
-		Mission:   mission,
-	}, nil
+	return s.buildLoginResponse(ctx, agent, "", false)
 }
 
-func (s *agentService) Refresh(ctx context.Context, aid string) (*LoginResponse, error) {
+func (s *agentService) ObserveByAID(ctx context.Context, req *ObserveByAIDRequest) (*LoginResponse, error) {
+	if !utils.ValidateAID(req.AID) {
+		return nil, fmt.Errorf("invalid AID format")
+	}
+
+	agent, err := s.repo.GetByAID(ctx, req.AID)
+	if err != nil {
+		return nil, fmt.Errorf("agent not found: %w", err)
+	}
+
+	if agent.Status != "active" {
+		return nil, fmt.Errorf("agent is not active")
+	}
+
+	return s.buildLoginResponse(ctx, agent, accessModeObserver, true)
+}
+
+func (s *agentService) Refresh(ctx context.Context, aid, accessMode string) (*LoginResponse, error) {
 	agent, err := s.repo.GetByAID(ctx, aid)
 	if err != nil {
 		return nil, fmt.Errorf("agent not found: %w", err)
@@ -535,18 +547,48 @@ func (s *agentService) Refresh(ctx context.Context, aid string) (*LoginResponse,
 		return nil, fmt.Errorf("agent is not active")
 	}
 
-	token, expiresAt, err := s.generateJWT(agent.AID)
+	return s.buildLoginResponse(ctx, agent, accessMode, normalizeAccessMode(accessMode) == accessModeObserver)
+}
+
+func normalizeAccessMode(value string) string {
+	if strings.EqualFold(strings.TrimSpace(value), accessModeObserver) {
+		return accessModeObserver
+	}
+	return ""
+}
+
+func (s *agentService) buildLoginResponse(ctx context.Context, agent *models.Agent, accessMode string, observerOnly bool) (*LoginResponse, error) {
+	if agent == nil {
+		return nil, fmt.Errorf("agent not found")
+	}
+	if agent.Status != "active" {
+		return nil, fmt.Errorf("agent is not active")
+	}
+	if agent.Reputation < s.config.Reputation.MinReputationThreshold {
+		return nil, fmt.Errorf("reputation too low, account frozen")
+	}
+
+	normalizedAccessMode := normalizeAccessMode(accessMode)
+	token, expiresAt, err := s.generateJWTForAccessMode(agent.AID, normalizedAccessMode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	sessionAgent, mission := s.buildMissionSessionSnapshot(ctx, agent)
+	var sessionAgent *models.Agent
+	var mission *models.AgentMissionResponse
+	if observerOnly {
+		sessionAgent = agent
+		mission = s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: true})
+	} else {
+		sessionAgent, mission = s.buildMissionSessionSnapshot(ctx, agent)
+	}
 
 	return &LoginResponse{
-		Token:     token,
-		ExpiresAt: expiresAt,
-		Agent:     s.sanitizeAgent(sessionAgent),
-		Mission:   mission,
+		Token:      token,
+		ExpiresAt:  expiresAt,
+		AccessMode: normalizedAccessMode,
+		Agent:      s.sanitizeAgent(sessionAgent),
+		Mission:    mission,
 	}, nil
 }
 
@@ -845,6 +887,10 @@ func (s *agentService) parseToken(tokenString string) (*jwt.Token, error) {
 
 // generateJWT 生成 JWT Token
 func (s *agentService) generateJWT(aid string) (string, time.Time, error) {
+	return s.generateJWTForAccessMode(aid, "")
+}
+
+func (s *agentService) generateJWTForAccessMode(aid, accessMode string) (string, time.Time, error) {
 	issuedAt := time.Now()
 	expiresAt := issuedAt.Add(s.config.JWT.Expiration)
 
@@ -853,6 +899,9 @@ func (s *agentService) generateJWT(aid string) (string, time.Time, error) {
 		"exp": expiresAt.Unix(),
 		"iat": issuedAt.Unix(),
 		"jti": uuid.NewString(),
+	}
+	if normalizedAccessMode := normalizeAccessMode(accessMode); normalizedAccessMode != "" {
+		claims["access_mode"] = normalizedAccessMode
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

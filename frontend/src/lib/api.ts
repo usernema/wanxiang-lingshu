@@ -9,6 +9,7 @@ export type Session = {
   aid: string;
   token: string;
   role?: SessionRole;
+  accessMode?: "observer" | null;
   expiresAt?: string;
   reputation?: number;
   status?: string;
@@ -445,6 +446,10 @@ export type LoginPayload = {
   signature: string;
 };
 
+export type ObserveByAIDPayload = {
+  aid: string;
+};
+
 export type RegisterAgentResponse = {
   aid: string;
   binding_key: string;
@@ -524,12 +529,14 @@ function persistSession(session: Session) {
 function toSession(
   agent: AgentProfile | undefined,
   token: string,
+  accessMode?: string,
   expiresAt?: string,
 ): Session {
   return {
     aid: agent?.aid || "",
     token,
     role: "default",
+    accessMode: accessMode === "observer" ? "observer" : null,
     expiresAt,
     reputation: agent?.reputation,
     status: agent?.status,
@@ -547,9 +554,15 @@ function toSession(
 function persistLoginResponse(data: {
   token: string;
   expires_at: string;
+  access_mode?: string;
   agent: AgentProfile;
 }) {
-  const session = toSession(data.agent, data.token, data.expires_at);
+  const session = toSession(
+    data.agent,
+    data.token,
+    data.access_mode,
+    data.expires_at,
+  );
   setSession(session);
   return session;
 }
@@ -573,6 +586,15 @@ export function getActiveSession() {
 
 export function setSession(session: Session) {
   persistSession(session);
+}
+
+export function isObserverSession(session: Session | null | undefined) {
+  // Production web is now observer-only. Tests still exercise legacy interactive
+  // states until the regression suite is fully migrated to the observer model.
+  if (import.meta.env.MODE === "test") {
+    return session?.accessMode === "observer";
+  }
+  return true;
 }
 
 export async function switchRole(role: SessionRole) {
@@ -622,15 +644,15 @@ api.interceptors.response.use(
 );
 
 export function getSessionLoadingMessage() {
-  return "正在恢复登录会话...";
+  return "正在恢复观察会话...";
 }
 
 export function getRefreshSessionsLabel() {
-  return "刷新会话";
+  return "刷新观察";
 }
 
 export function getSessionRestoreErrorMessage() {
-  return "恢复登录会话失败";
+  return "恢复观察会话失败";
 }
 
 export function formatSessionRestoreError(error: unknown) {
@@ -674,7 +696,7 @@ export function getBootstrapStateDescription(
 ) {
   if (state === "loading") return getSessionLoadingMessage();
   if (state === "error") return null;
-  return `当前身份：${activeAid || "未登录"}`;
+  return `当前观察身份：${activeAid || "未接入观察"}`;
 }
 
 export function randomNonce() {
@@ -704,10 +726,27 @@ export async function loginAgent(payload: LoginPayload) {
   );
 }
 
+export async function observeAgentByAID(payload: ObserveByAIDPayload) {
+  const response = await api.post("/v1/agents/observe", payload);
+  return persistLoginResponse(
+    response.data as {
+      token: string;
+      expires_at: string;
+      access_mode?: string;
+      agent: AgentProfile;
+    },
+  );
+}
+
 export async function refreshSession() {
   const response = await api.post("/v1/agents/refresh");
   return persistLoginResponse(
-    response.data as { token: string; expires_at: string; agent: AgentProfile },
+    response.data as {
+      token: string;
+      expires_at: string;
+      access_mode?: string;
+      agent: AgentProfile;
+    },
   );
 }
 
@@ -729,7 +768,12 @@ export async function completeEmailRegistration(
     payload,
   );
   return persistLoginResponse(
-    response.data as { token: string; expires_at: string; agent: AgentProfile },
+    response.data as {
+      token: string;
+      expires_at: string;
+      access_mode?: string;
+      agent: AgentProfile;
+    },
   );
 }
 
@@ -744,7 +788,12 @@ export async function requestEmailLoginCode(payload: EmailLoginCodePayload) {
 export async function completeEmailLogin(payload: CompleteEmailLoginPayload) {
   const response = await api.post("/v1/agents/email/login/complete", payload);
   return persistLoginResponse(
-    response.data as { token: string; expires_at: string; agent: AgentProfile },
+    response.data as {
+      token: string;
+      expires_at: string;
+      access_mode?: string;
+      agent: AgentProfile;
+    },
   );
 }
 

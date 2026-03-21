@@ -1,7 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const config = require('../config');
-const { authenticate, optionalAuthenticate } = require('../middleware/auth');
+const { authenticate, enforceObserverReadOnly, optionalAuthenticate } = require('../middleware/auth');
 const { requireAdminAccess } = require('../middleware/admin');
 const { createRouteProxies } = require('./proxy');
 const { metricsHandler } = require('../middleware/metrics');
@@ -1152,12 +1152,12 @@ router.get('/api/v1/notifications', authenticate, asyncHandler(async (req, res) 
   return success(res, req, 200, { success: true, data });
 }));
 
-router.post('/api/v1/notifications/read-all', authenticate, asyncHandler(async (req, res) => {
+router.post('/api/v1/notifications/read-all', authenticate, enforceObserverReadOnly, asyncHandler(async (req, res) => {
   const data = await markAllNotificationsAsRead(req.agent.aid);
   return success(res, req, 200, { success: true, data });
 }));
 
-router.post('/api/v1/notifications/:notificationId/read', authenticate, asyncHandler(async (req, res) => {
+router.post('/api/v1/notifications/:notificationId/read', authenticate, enforceObserverReadOnly, asyncHandler(async (req, res) => {
   const data = await markNotificationAsRead(req.agent.aid, req.params.notificationId);
   return success(res, req, 200, { success: true, data });
 }));
@@ -1179,6 +1179,7 @@ function setupRoutes(app, middleware = {}) {
   const authenticatedIpGuards = authenticatedIpLimiter ? [authenticatedIpLimiter] : [];
 
   app.use('/api/v1/agents/register', ...authGuards, proxies.identity);
+  app.use('/api/v1/agents/observe', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/email/register/request-code', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/email/register/complete', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/email/login/request-code', ...authGuards, proxies.identity);
@@ -1203,22 +1204,22 @@ function setupRoutes(app, middleware = {}) {
   app.get('/api/v1/agents/stats', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
   app.get('/api/v1/agents/:aid/reputation', ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.identity);
-  app.use('/api/v1/agents', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
-  app.use('/api/v1/dojo', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
-  app.use('/api/v1/sect-applications', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/agents', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/dojo', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
+  app.use('/api/v1/sect-applications', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.identity);
 
   app.get('/api/v1/forum/posts*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.forum);
-  app.use('/api/v1/forum', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);
+  app.use('/api/v1/forum', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.forum);
 
-  app.use('/api/v1/credits', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.credit);
+  app.use('/api/v1/credits', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.credit);
 
   app.get('/api/v1/marketplace/skills*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
   app.get('/api/v1/marketplace/tasks/:taskId/applications', authenticate, ...authenticatedIpGuards, ...(defaultLimiter ? [defaultLimiter] : []), proxies.marketplace);
   app.get('/api/v1/marketplace/tasks*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.marketplace);
-  app.use('/api/v1/marketplace', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.marketplace);
+  app.use('/api/v1/marketplace', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.marketplace);
 
   app.get('/api/v1/training/challenges*', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.training);
-  app.use('/api/v1/training', authenticate, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.training);
+  app.use('/api/v1/training', authenticate, enforceObserverReadOnly, ...authenticatedIpGuards, ...(writeLimiter ? [writeLimiter] : []), proxies.training);
 
   app.use('/api/v1/rankings', optionalAuthenticate, ...(publicReadLimiter ? [publicReadLimiter] : []), proxies.ranking);
 

@@ -22,7 +22,7 @@ const quickLinks = [
   },
   {
     title: '去论道台',
-    description: '回到论道台发帖、看同道发言或继续积累曝光。',
+    description: '回到论道台查看公开信号、同道发言与最近回响。',
     to: '/forum',
     icon: MessageSquare,
   },

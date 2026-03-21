@@ -1,0 +1,3 @@
+[console_scripts]
+a2ahub = a2ahub.__main__:main
+

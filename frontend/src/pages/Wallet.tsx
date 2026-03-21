@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchCreditBalance, fetchCreditTransactions, fetchNotifications, getActiveSession, markAllNotificationsRead, markNotificationRead } from '@/lib/api'
+import { fetchCreditBalance, fetchCreditTransactions, fetchNotifications, getActiveSession, isObserverSession, markAllNotificationsRead, markNotificationRead } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { CreditBalance, CreditTransaction, CreditTransactionListResponse, Notification, NotificationListResponse } from '@/types'
@@ -40,6 +40,7 @@ type WalletCockpitCard = {
 
 export default function Wallet({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
+  const observerOnly = isObserverSession(session)
   const location = useLocation()
   const [offset, setOffset] = useState(0)
   const [notificationOffset, setNotificationOffset] = useState(0)
@@ -199,8 +200,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
             ? '/wallet?focus=notifications&source=wallet-cockpit-summary'
             : transactions.length > 0
               ? '/wallet?focus=transactions&source=wallet-cockpit-summary'
-              : '/marketplace?tab=tasks&focus=create-task&source=wallet-cockpit-summary',
-        cta: unreadNotificationCount > 0 ? '先看飞剑告警' : transactions.length > 0 ? '查看最近流水' : '去形成首轮闭环',
+              : '/marketplace?tab=tasks&source=wallet-cockpit-summary',
+        cta: unreadNotificationCount > 0 ? '先看飞剑告警' : transactions.length > 0 ? '查看最近流水' : '去观察首轮闭环',
         tone: observerCardTone,
       },
       {
@@ -371,14 +372,16 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">未读 {unreadNotificationCount}</span>
-            <button
-              type="button"
-              className="rounded-lg border px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
-              disabled={unreadNotificationCount === 0 || markAllNotificationsReadMutation.isPending}
-              onClick={() => markAllNotificationsReadMutation.mutate()}
-            >
-              {markAllNotificationsReadMutation.isPending ? '处理中...' : '全部标记已读'}
-            </button>
+            {!observerOnly && (
+              <button
+                type="button"
+                className="rounded-lg border px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+                disabled={unreadNotificationCount === 0 || markAllNotificationsReadMutation.isPending}
+                onClick={() => markAllNotificationsReadMutation.mutate()}
+              >
+                {markAllNotificationsReadMutation.isPending ? '处理中...' : '全部标记已读'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -489,7 +492,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {notification.link && <NotificationActionLink notification={notification} />}
-                    {!notification.is_read && (
+                    {!observerOnly && !notification.is_read && (
                       <button
                         type="button"
                         className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
@@ -561,7 +564,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         {transactionsQuery.isLoading ? (
           <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载账房流水...</div>
         ) : transactions.length === 0 ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有灵石流水。先去万象楼购买法卷、发布悬赏或完成托管。</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有灵石流水。等待 OpenClaw 自主形成首轮购买、托管或结算记录后，这里会自动出现。</div>
         ) : (
           <div className="mt-6 space-y-3">
             {transactions.map((transaction) => {
@@ -798,14 +801,14 @@ function buildWalletRecommendedActions({
 
   if (transactions.length === 0) {
     actions.push({
-      label: '发布首个任务',
-      description: '还没有流水时，先创建一个真实需求，最快形成完整闭环。',
-      href: '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
+      label: '观察首轮任务闭环',
+      description: '还没有流水时，优先去万象楼观察 OpenClaw 何时形成第一笔真实托管或结算。',
+      href: '/marketplace?tab=tasks&source=wallet-empty',
       tone: 'green',
     })
     actions.push({
-      label: '去万象楼查看法卷',
-      description: '也可以先购买一卷法卷，完整体验账房、托管与结算流转。',
+      label: '去万象楼看法卷',
+      description: '也可以先观察法卷成交与相关流水，确认账房何时开始出现真实记录。',
       href: '/marketplace?tab=skills&source=wallet-empty',
       tone: 'slate',
     })
@@ -828,7 +831,7 @@ function buildWalletRecommendedActions({
   if (actions.length === 0) {
     actions.push({
       label: '继续浏览万象楼',
-      description: '当前资金状态平稳，可以继续发布悬赏或购买法卷。',
+      description: '当前资金状态平稳，可以继续观察任务、法卷与后续结算信号。',
       href: '/marketplace?source=wallet-default',
       tone: 'primary',
     })

@@ -30,6 +30,10 @@ type LoginChallengeRequest struct {
 	AID string `json:"aid" binding:"required"`
 }
 
+type ObserveByAIDRequest struct {
+	AID string `json:"aid" binding:"required"`
+}
+
 type LogoutRequest struct {
 	Token string `json:"token"`
 }
@@ -200,6 +204,22 @@ func (h *AgentHandler) Login(c *gin.Context) {
 	resp, err := h.service.Login(c.Request.Context(), &req)
 	if err != nil {
 		logrus.WithError(err).Error("Failed to login")
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AgentHandler) ObserveByAID(c *gin.Context) {
+	var req ObserveByAIDRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+		return
+	}
+
+	resp, err := h.service.ObserveByAID(c.Request.Context(), &service.ObserveByAIDRequest{AID: req.AID})
+	if err != nil {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
 		return
 	}
@@ -432,7 +452,10 @@ func (h *AgentHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.service.Refresh(c.Request.Context(), aid)
+	accessMode, _ := c.Get("access_mode")
+	accessModeString, _ := accessMode.(string)
+
+	resp, err := h.service.Refresh(c.Request.Context(), aid, accessModeString)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
 		return

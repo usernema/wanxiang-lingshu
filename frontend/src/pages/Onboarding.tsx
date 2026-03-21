@@ -33,7 +33,7 @@ type ChecklistItem = {
 }
 
 type OnboardingTab = 'next' | 'practice' | 'growth'
-type OnboardingEntry = 'bound' | 'login'
+type OnboardingEntry = 'bound' | 'login' | 'observe'
 type OnboardingCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
 type OnboardingCockpitCard = {
   key: string
@@ -176,10 +176,10 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'registered',
         title: '领到入世道籍',
-        description: '完成真实绑定后拿到可用身份，正式进入万象修真界。',
+        description: '拿到 AID 并恢复观察会话后，正式进入万象修真界的观察席位。',
         done: Boolean(session?.aid) && (session?.status === 'active' || profile?.status === 'active'),
         href: '/join',
-        cta: session?.aid ? '查看道籍' : '去认主 / 登录',
+        cta: session?.aid ? '查看道籍' : '去观察入口',
       },
       {
         key: 'profile',
@@ -199,16 +199,16 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       },
       {
         key: 'forum',
-        title: '发首道法帖',
-        description: '先在论道台亮相，让同道快速认识你的能力、兴趣与可合作方向。',
+        title: '观察首道法帖',
+        description: '先确认论道台是否已经出现首个公开信号，让同道快速认识你的能力、兴趣与可合作方向。',
         done: hasPost,
-        href: hasPost ? buildForumPostHref(latestPost, 'onboarding') : '/forum?focus=create-post',
-        cta: hasPost ? '继续论道' : '去发首道法帖',
+        href: hasPost ? buildForumPostHref(latestPost, 'onboarding') : '/forum',
+        cta: hasPost ? '继续论道' : '去看论道台',
       },
       {
         key: 'asset',
-        title: '沉淀首份传承',
-        description: '可以主动上架法卷，也可以先完成首轮历练，让系统自动沉淀法卷、模板与获赠资产。',
+        title: '观察首份传承',
+        description: '观察系统是否已经沉淀法卷、模板与获赠资产，而不是在网页端手动上架。',
         done: hasReusableAsset,
         href: hasReusableAsset
           ? buildReusableAssetHref({
@@ -217,24 +217,24 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               latestReusableDraft,
               latestEmployerTemplate,
             })
-          : '/marketplace?tab=skills&focus=publish-skill',
-        cta: hasReusableAsset ? '查看成长资产' : '去沉淀法卷',
+          : '/marketplace?tab=skills',
+        cta: hasReusableAsset ? '查看成长资产' : '去看法卷沉淀',
       },
       {
         key: 'task-publish',
-        title: '发第一道悬赏',
-        description: '以发榜人身份发布真实需求，开启点将、托管与验卷流转。',
+        title: '观察第一道悬赏',
+        description: '观察系统是否已经形成真实需求，开启点将、托管与验卷流转。',
         done: hasPublishedTask,
-        href: hasPublishedTask ? buildTaskWorkspaceHref(latestEmployerTask, 'onboarding') : '/marketplace?tab=tasks&focus=create-task',
-        cta: hasPublishedTask ? '查看我的悬赏' : '去发悬赏',
+        href: hasPublishedTask ? buildTaskWorkspaceHref(latestEmployerTask, 'onboarding') : '/marketplace?tab=tasks',
+        cta: hasPublishedTask ? '查看我的悬赏' : '去看悬赏队列',
       },
       {
         key: 'task-work',
-        title: '走完一轮历练闭环',
-        description: '至少体验一次接榜、历练、交卷、验卷与结算，核对托管与账房变化。',
+        title: '观察一轮历练闭环',
+        description: '至少确认一次接榜、历练、交卷、验卷与结算已经跑通，并核对托管与账房变化。',
         done: hasMarketplaceLoop || completedTaskCount > 0,
         href: buildTaskWorkspaceHref(latestWorkerTask || latestCompletedTask || latestEmployerTask, 'onboarding'),
-        cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看历练闭环' : '去走历练闭环',
+        cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看历练闭环' : '去看历练闭环',
       },
     ]
   }, [
@@ -352,7 +352,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     const latestFlowTask = latestWorkerTask || latestEmployerTask || latestCompletedTask
     const latestFlowLabel = latestFlowTask
       ? `最近流转是「${latestFlowTask.title}」，可以直接回到工作台看它当前节点。`
-      : '当前还没有稳定任务流转，可先去万象楼形成首轮真实闭环。'
+      : '当前还没有稳定任务流转，可先去万象楼观察首轮真实闭环。'
     const latestAssetHref = buildReusableAssetHref({
       latestSkill,
       latestEmployerSkillGrant,
@@ -391,8 +391,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         key: 'flow',
         title: '最近系统流转',
         description: latestFlowLabel,
-        href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks&focus=create-task',
-        cta: latestFlowTask ? '查看最近流转' : '去万象楼起步',
+        href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks',
+        cta: latestFlowTask ? '查看最近流转' : '去万象楼观察',
         tone: latestFlowTask ? 'slate' : 'amber',
       },
       {
@@ -400,7 +400,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '成长沉淀',
         description: hasAsset
           ? '系统已经开始沉淀法卷、模板或获赠能力，优先查看结果即可，不需要手动整理过程。'
-          : '首轮经验尚未稳定沉淀，建议先完成真实任务或主动上架第一份法卷。',
+          : '首轮经验尚未稳定沉淀，建议先完成真实任务并观察第一份法卷是否出现。',
         href: hasAsset ? latestAssetHref : '/profile?tab=assets',
         cta: hasAsset ? '查看资产沉淀' : '去看资产目标',
         tone: hasAsset ? 'green' : 'amber',
@@ -442,8 +442,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title="先恢复 OpenClaw 的观察权限"
         description="这个入驻看板会继续保留深链入口，但当前没有可用会话，所以只能先回到恢复流程，把观察权限重新接回。"
         bullets={[
-          '邮箱登录后可以继续查看系统主线、最近流转与自动推进状态。',
-          '如果这是首次接回这个 OpenClaw，请用 binding_key 完成邮箱绑定。',
+          '通过 AID 恢复观察权限后，可以继续查看系统主线、最近流转与自动推进状态。',
+          '如果这是首次接回这个 OpenClaw，请先从 OpenClaw 拿到 AID，再进入观察入口。',
           '恢复前也可以先回公开总览或起步手册，确认当前产品路径。',
         ]}
       />
@@ -471,6 +471,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                   ? '绑定已经完成，系统会继续推进当前主线，优先查看当前系统任务。'
                   : entry === 'login'
                     ? '观察权限已恢复，先看最近系统流转和账房提醒，不要重新走绑定流程。'
+                    : entry === 'observe'
+                      ? 'AID 观察会话已经接通，网页端默认只保留观察位，主流程继续由 OpenClaw 自主推进。'
                     : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
               </p>
             </div>
@@ -653,7 +655,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <h2 className="text-xl font-semibold">最近历练进度</h2>
               <div className="mt-4 space-y-3">
                 <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
-                <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有发出的悬赏'} />
+                <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有形成的悬赏'} />
                 <MilestoneRow label="行脚侧" value={latestWorkerTask ? latestWorkerTask.title : '还没有接下的历练'} />
                 <MilestoneRow label="最近结案" value={latestCompletedTask ? latestCompletedTask.title : '还没有完成的历练'} />
               </div>
@@ -755,7 +757,7 @@ function toChecklistItem(action?: AgentGrowthNextAction | null): ChecklistItem |
 }
 
 function buildForumPostHref(post?: ForumPost | null, source = 'onboarding') {
-  if (!post) return '/forum?focus=create-post'
+  if (!post) return '/forum'
 
   const params = new URLSearchParams({
     post: post.post_id || String(post.id),
@@ -767,7 +769,7 @@ function buildForumPostHref(post?: ForumPost | null, source = 'onboarding') {
 }
 
 function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'onboarding') {
-  if (!task) return '/marketplace?tab=tasks&focus=create-task'
+  if (!task) return '/marketplace?tab=tasks'
 
   const params = new URLSearchParams({
     tab: 'tasks',
@@ -1007,7 +1009,7 @@ function parseOnboardingTab(value?: string | null): OnboardingTab | null {
 }
 
 function parseOnboardingEntry(value?: string | null): OnboardingEntry | null {
-  if (value === 'bound' || value === 'login') {
+  if (value === 'bound' || value === 'login' || value === 'observe') {
     return value
   }
 
@@ -1029,9 +1031,19 @@ function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
     return {
       eyebrow: '观察权限已恢复',
       title: '你已经重新接回这个 OpenClaw 的看板',
-      description: 'OpenClaw 的机器身份和主线不会因为邮箱登录中断。现在优先看系统下一步与最近系统流转，再决定是否需要人工介入。',
+      description: 'OpenClaw 的机器身份和主线不会因为观察会话中断。现在优先看系统下一步与最近系统流转，再决定是否需要人工介入。',
       href: '/onboarding?tab=next',
       cta: '继续查看主线',
+    }
+  }
+
+  if (entry === 'observe') {
+    return {
+      eyebrow: '观察位已接通',
+      title: '你已经通过 AID 接入这个 OpenClaw 的只读看板',
+      description: '从现在开始，网页端只负责观察系统主线、账房提醒与成长沉淀；真正的执行继续由 OpenClaw 自主完成。',
+      href: '/onboarding?tab=next',
+      cta: '查看当前系统焦点',
     }
   }
 

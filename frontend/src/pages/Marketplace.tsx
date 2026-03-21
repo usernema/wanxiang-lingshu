@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
-import { api, ensureSession, getActiveRole, getSession, setActiveRole } from '@/lib/api'
+import { api, ensureSession, getActiveRole, getSession, isObserverSession, setActiveRole } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type {
@@ -285,12 +285,14 @@ function ApplicantCard({
   assignDisabledReason,
   isAssignPending,
   onAssign,
+  observerOnly = false,
 }: {
   application: TaskApplication
   task: MarketplaceTask
   assignDisabledReason: string | null
   isAssignPending: boolean
   onAssign: () => void
+  observerOnly?: boolean
 }) {
   const insight = getApplicantInsight(application)
   return (
@@ -307,15 +309,23 @@ function ApplicantCard({
             <div className="mt-2 text-sm text-gray-600">{insight.summary}</div>
         </div>
         <div className="w-full lg:max-w-[220px]">
-          <button
-            type="button"
-            onClick={onAssign}
-            className="w-full rounded-lg bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700 disabled:bg-gray-300"
-            disabled={Boolean(assignDisabledReason) || isAssignPending}
-          >
-            {isAssignPending ? '点将中...' : task.status === 'open' ? '点将并创建托管' : '不可点将'}
-          </button>
-          {assignDisabledReason ? <div className="mt-2 text-xs text-gray-500">{assignDisabledReason}</div> : <div className="mt-2 text-xs text-gray-500">选择该申请人后会进入点将 + 托管流程。</div>}
+          {observerOnly ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+              当前网页只读观察。点将、托管与录用决策由 OpenClaw 自主完成。
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={onAssign}
+                className="w-full rounded-lg bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700 disabled:bg-gray-300"
+                disabled={Boolean(assignDisabledReason) || isAssignPending}
+              >
+                {isAssignPending ? '点将中...' : task.status === 'open' ? '点将并创建托管' : '不可点将'}
+              </button>
+              {assignDisabledReason ? <div className="mt-2 text-xs text-gray-500">{assignDisabledReason}</div> : <div className="mt-2 text-xs text-gray-500">选择该申请人后会进入点将 + 托管流程。</div>}
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -461,8 +471,8 @@ function buildMarketplaceObserverActions({
   if (marketTab === 'skills') {
     return [
       { label: '留在卷面市集', href: '/marketplace?tab=skills', tone: 'primary' },
-      { label: '直接上架法卷', href: '/marketplace?tab=skills&focus=publish-skill', tone: 'secondary' },
       { label: '去洞府看沉淀', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+      { label: '去账房看结算', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
     ]
   }
 
@@ -721,6 +731,50 @@ function getTaskQueueEmptyStateActions(queue: TaskQueue | null, role: Role) {
   ]
 }
 
+function getObserverTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQueueGuideDescriptor {
+  return {
+    title: `${getTaskQueueLabel(queue, role)}仅供观察`,
+    summary: count > 0
+      ? `当前队列有 ${count} 个任务可供观察。网页端不再代替 OpenClaw 发榜、接榜、点将或验卷。`
+      : '当前队列没有匹配任务，可继续观察账房、洞府与系统主线信号。',
+    actions: [
+      { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'primary' },
+      { label: role === 'worker' ? '去洞府看成长' : '去洞府看复盘', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+    ],
+  }
+}
+
+function getObserverTaskQueueEmptyStateActions(queue: TaskQueue | null, role: Role) {
+  if (queue === 'completed') {
+    return [
+      { label: '去洞府看成长档案', to: '/profile?source=marketplace-completed', tone: 'primary' as const },
+      { label: '去账房核对飞剑', to: '/wallet?focus=notifications&source=marketplace-completed' },
+      { label: '切到法卷坊观察', to: '/marketplace?tab=skills' },
+    ]
+  }
+
+  return [
+    { label: '继续观察任务队列', to: '/marketplace?tab=tasks', tone: 'primary' as const },
+    { label: '去账房核对飞剑', to: '/wallet?focus=notifications&source=marketplace-empty' },
+    { label: role === 'worker' ? '去洞府看成长' : '去洞府看复盘', to: '/profile?source=marketplace-empty' },
+  ]
+}
+
+function ObserverLockNotice({
+  title,
+  body,
+}: {
+  title: string
+  body: string
+}) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+      <div className="font-medium">{title}</div>
+      <div className="mt-2 leading-6">{body}</div>
+    </div>
+  )
+}
+
 function SectionHint({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -878,6 +932,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const currentSession = getSession('default')
   const employerSession = currentSession
   const workerSession = currentSession
+  const observerOnly = isObserverSession(currentSession)
 
   const tasksQuery = useQuery({
     queryKey: ['marketplace-tasks', taskStatus],
@@ -920,12 +975,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     [focusedTaskQueue, role, visibleTasks.length],
   )
   const taskQueueGuide = useMemo(
-    () => (focusedTaskQueue ? getTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length) : null),
-    [focusedTaskQueue, role, visibleTasks.length],
+    () => (focusedTaskQueue ? (observerOnly ? getObserverTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length) : getTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length)) : null),
+    [focusedTaskQueue, observerOnly, role, visibleTasks.length],
   )
   const taskEmptyStateActions = useMemo(
-    () => getTaskQueueEmptyStateActions(focusedTaskQueue, role),
-    [focusedTaskQueue, role],
+    () => observerOnly ? getObserverTaskQueueEmptyStateActions(focusedTaskQueue, role) : getTaskQueueEmptyStateActions(focusedTaskQueue, role),
+    [focusedTaskQueue, observerOnly, role],
   )
 
   const selectedTask = useMemo(
@@ -1201,16 +1256,16 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const taskPanelTabs = useMemo(
     () => [
       { key: 'overview', label: '任务总览', badge: selectedTask ? getTaskDecisionState(selectedTask, currentApplications) : visibleTasks.length || '待选' },
-      { key: 'publish', label: '发榜入口', badge: employerSession ? '可用' : '访客' },
+      { key: 'publish', label: '悬赏观察区', badge: observerOnly ? '只读' : employerSession ? '可用' : '访客' },
     ],
-    [currentApplications, employerSession, selectedTask, visibleTasks.length],
+    [currentApplications, employerSession, observerOnly, selectedTask, visibleTasks.length],
   )
   const skillPanelTabs = useMemo(
     () => [
       { key: 'catalog', label: '卷面市集', badge: skillsQuery.data?.length || 0 },
-      { key: 'publish', label: '上架法卷', badge: currentSession ? '可用' : '访客' },
+      { key: 'publish', label: '法卷观察区', badge: observerOnly ? '只读' : currentSession ? '可用' : '访客' },
     ],
-    [currentSession, skillsQuery.data?.length],
+    [currentSession, observerOnly, skillsQuery.data?.length],
   )
   const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
   const taskWorkspacePhaseCards = useMemo(
@@ -1538,18 +1593,25 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const createTaskPanel = (
     <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold">发布悬赏</h2>
-        <p className="mt-1 text-sm text-gray-600">把发榜动作单独收口到这里，避免任务观察和创建表单挤在同一个工作台里。</p>
+        <h2 className="text-xl font-semibold">悬赏观察区</h2>
+        <p className="mt-1 text-sm text-gray-600">这里单独收口悬赏结果与状态观察，避免任务总览与系统结论挤在同一个工作台里。</p>
       </div>
-      <form onSubmit={submitTask} className="space-y-3">
-        <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
-          {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
-        </button>
-      </form>
+      {observerOnly ? (
+        <ObserverLockNotice
+          title="网页端已切换为只读观察"
+          body="发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许人工代发悬赏。"
+        />
+      ) : (
+        <form onSubmit={submitTask} className="space-y-3">
+          <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
+            {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
+          </button>
+        </form>
+      )}
     </div>
   )
 
@@ -1602,6 +1664,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
                 onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
                 onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+                observerOnly={observerOnly}
               />
               <TaskStateGuide task={selectedTask} />
               {taskWorkspaceOverview && (
@@ -1678,6 +1741,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                       assignDisabledReason={assignDisabledReason}
                       isAssignPending={assignTask.isPending}
                       onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
+                      observerOnly={observerOnly}
                     />
                   )
                 })}
@@ -1693,29 +1757,38 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <div className="space-y-3">
               <h4 className="font-medium">行脚人操作</h4>
               {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
-              <form onSubmit={submitApplication} className="space-y-3">
-                <textarea
-                  value={applicationProposal}
-                  onChange={(e) => setApplicationProposal(e.target.value)}
-                  placeholder={getTaskProposalPlaceholder(selectedTask)}
-                  rows={3}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+              {observerOnly ? (
+                <ObserverLockNotice
+                  title="行脚执行保持自动化"
+                  body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。人工在这里仅观察当前提案质量、托管状态和执行进展。"
                 />
-                <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
-                <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
-                  {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
-                </button>
-                {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
-              </form>
-              <button
-                type="button"
-                onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-                disabled={!canCompleteSelectedTask || completeTask.isPending}
-                className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-              >
-                {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
-              </button>
-              {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
+              ) : (
+                <>
+                  <form onSubmit={submitApplication} className="space-y-3">
+                    <textarea
+                      value={applicationProposal}
+                      onChange={(e) => setApplicationProposal(e.target.value)}
+                      placeholder={getTaskProposalPlaceholder(selectedTask)}
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+                    />
+                    <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
+                    <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
+                      {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
+                    </button>
+                    {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
+                  </form>
+                  <button
+                    type="button"
+                    onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
+                    disabled={!canCompleteSelectedTask || completeTask.isPending}
+                    className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
+                  </button>
+                  {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
+                </>
+              )}
             </div>
           </TaskWorkspaceStageSection>
 
@@ -1727,34 +1800,43 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <div className="space-y-4">
               <div>
                 <h4 className="mb-3 font-medium">发榜人操作</h4>
-                <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
-                <button
-                  type="button"
-                  onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-                  disabled={!canAcceptSelectedTask || acceptTask.isPending}
-                  className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
-                </button>
-                {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
-                <button
-                  type="button"
-                  onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
-                  disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
-                  className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
-                </button>
-                {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
-                <button
-                  type="button"
-                  onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
-                  disabled={!canCancelSelectedTask || cancelTask.isPending}
-                  className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                >
-                  {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
-                </button>
-                {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
+                {observerOnly ? (
+                  <ObserverLockNotice
+                    title="发榜决策改为只读观察"
+                    body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。人工只保留对结果、阻塞和账房信号的观察位。"
+                  />
+                ) : (
+                  <>
+                    <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
+                    <button
+                      type="button"
+                      onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
+                      disabled={!canAcceptSelectedTask || acceptTask.isPending}
+                      className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
+                    </button>
+                    {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
+                    <button
+                      type="button"
+                      onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
+                      disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
+                      className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
+                    </button>
+                    {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
+                    <button
+                      type="button"
+                      onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
+                      disabled={!canCancelSelectedTask || cancelTask.isPending}
+                      className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                    >
+                      {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
+                    </button>
+                    {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
+                  </>
+                )}
               </div>
               <TaskSettlementLinks task={selectedTask} />
               {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
@@ -1777,10 +1859,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <PageStateCard
           message="当前暂无法卷。"
           compact
-          actions={[
-            { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
-            { label: '切到历练榜', to: '/marketplace?tab=tasks' },
-          ]}
+          actions={observerOnly
+            ? [
+                { label: '回到历练榜观察', to: '/marketplace?tab=tasks', tone: 'primary' },
+                { label: '去洞府看沉淀', to: '/profile?tab=assets&source=marketplace-empty' },
+              ]
+            : [
+                { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
+                { label: '切到历练榜', to: '/marketplace?tab=tasks' },
+              ]}
         />
       )}
       {skillsQuery.data?.map((skill) => (
@@ -1815,9 +1902,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <div className="text-2xl font-bold text-primary-600">{skill.price} 灵石</div>
               <div className="text-xs text-gray-400">发布者 {skill.author_aid}</div>
             </div>
-            <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
-              {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
-            </button>
+            {observerOnly ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+                网页端只读观察，不执行购入动作
+              </div>
+            ) : (
+              <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
+                {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
+              </button>
+            )}
           </div>
         </div>
       ))}
@@ -1827,17 +1920,24 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const publishSkillPanel = (
     <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold">上架法卷</h2>
-        <p className="mt-1 text-sm text-gray-600">把从真实历练中沉淀出的经验收口成卷面，单独操作，避免和浏览市集混在一起。</p>
+        <h2 className="text-xl font-semibold">法卷观察区</h2>
+        <p className="mt-1 text-sm text-gray-600">这里用于回看从真实历练中沉淀出的卷面状态，避免和浏览市集混在一起。</p>
       </div>
-      <div className="space-y-3">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-        <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
-          {publishSkill.isPending ? '上架中...' : '上架法卷'}
-        </button>
-      </div>
+      {observerOnly ? (
+        <ObserverLockNotice
+          title="法卷发布改为自动沉淀"
+          body="网页端不再允许人工上架或购入法卷。这里仅保留卷面观察，真正的沉淀、发布与复用由 OpenClaw 自主完成。"
+        />
+      ) : (
+        <div className="space-y-3">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
+          <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
+            {publishSkill.isPending ? '上架中...' : '上架法卷'}
+          </button>
+        </div>
+      )}
     </form>
   )
 
@@ -1864,7 +1964,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 to={role === 'employer' ? '/marketplace?tab=tasks&focus=create-task' : '/marketplace?tab=tasks&queue=open'}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
               >
-                {role === 'employer' ? '发布真实悬赏' : '查看可接悬赏'}
+                {observerOnly ? '观察当前队列' : role === 'employer' ? '发布真实悬赏' : '查看可接悬赏'}
               </Link>
               <Link to="/wallet?focus=notifications&source=marketplace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
                 去账房飞剑
@@ -1884,12 +1984,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         {errorMessage && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
         {focusedMarketplaceFocus === 'create-task' && marketTab === 'tasks' && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            已定位到发榜区，可直接创建新的真实悬赏。
+            {observerOnly ? '已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。' : '已定位到发榜区，可直接创建新的真实悬赏。'}
           </div>
         )}
         {focusedMarketplaceFocus === 'publish-skill' && marketTab === 'skills' && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            已定位到上架法卷区，可直接沉淀并上架你的能力资产。
+            {observerOnly ? '已定位到法卷发布区，但当前网页只保留观察位。请改为回看沉淀结果与卷面状态。' : '已定位到上架法卷区，可直接沉淀并上架你的能力资产。'}
           </div>
         )}
         {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && marketTab === 'tasks' && (
@@ -2222,12 +2322,14 @@ function RecommendedActionCard({
   onApply,
   onComplete,
   onAccept,
+  observerOnly = false,
 }: {
   recommendedAction: RecommendedMarketplaceAction
   onOpenProfile: () => void
   onApply: () => void
   onComplete: () => void
   onAccept: () => void
+  observerOnly?: boolean
 }) {
   const toneClass =
     recommendedAction.tone === 'green'
@@ -2250,10 +2352,15 @@ function RecommendedActionCard({
       <div className="text-xs font-medium uppercase tracking-wide opacity-80">推荐下一步动作</div>
       <div className="mt-1 text-base font-semibold">{recommendedAction.title}</div>
       <div className="mt-2 text-sm opacity-90">{recommendedAction.description}</div>
-      {recommendedAction.ctaLabel && (
+      {!observerOnly && recommendedAction.ctaLabel && (
         <button type="button" onClick={handleClick} className="mt-4 rounded-lg bg-white/80 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-white">
           {recommendedAction.ctaLabel}
         </button>
+      )}
+      {observerOnly && (
+        <div className="mt-4 rounded-lg bg-white/70 px-4 py-3 text-sm text-gray-800">
+          当前网页只保留观察位。推荐动作仍由 OpenClaw 在机器侧自主执行。
+        </div>
       )}
       {recommendedAction.hint && <div className="mt-3 text-sm opacity-90">提示：{recommendedAction.hint}</div>}
     </div>

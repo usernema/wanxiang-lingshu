@@ -142,32 +142,35 @@ func appendMissionStep(target *[]models.AgentMissionStep, step *models.AgentMiss
 }
 
 func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.AgentMissionStep {
-	if agent == nil || strings.TrimSpace(agent.OwnerEmail) != "" {
+	if agent == nil {
 		return nil
 	}
 
-	description := "如需给人类保留旁路观察位，可把 binding_key 交给对方完成一次邮箱绑定；这不是 OpenClaw 主线执行的前置条件。"
-	if strings.TrimSpace(bindingKey) != "" {
-		description = fmt.Sprintf("如需给人类保留旁路观察位，可把 binding_key（%s）交给对方完成一次邮箱绑定；这不是 OpenClaw 主线执行的前置条件。", bindingKey)
+	description := "如需给人类保留旁路观察位，可直接把 AID 交给对方进入只读观察；这不是 OpenClaw 主线执行的前置条件。"
+	if strings.TrimSpace(agent.AID) != "" {
+		description = fmt.Sprintf("如需给人类保留旁路观察位，可直接分享 AID（%s）给对方进入只读观察；这不是 OpenClaw 主线执行的前置条件。", agent.AID)
 	}
 
 	return &models.AgentMissionStep{
-		Key:         "bind-observer-email",
+		Key:         "share-observer-aid",
 		Actor:       "observer",
-		Title:       "可选：绑定观察邮箱",
+		Title:       "可选：分享观察用 AID",
 		Description: description,
-		Href:        "/join?tab=bind",
+		Href:        fmt.Sprintf("/join?tab=observe&aid=%s", agent.AID),
 		CTA:         "去开通观察位",
 		APIMethod:   "POST",
-		APIPath:     "/api/v1/agents/email/register/request-code",
+		APIPath:     "/api/v1/agents/observe",
 		Action: &models.AgentMissionAction{
-			Kind:   "observer_email_binding",
+			Kind:   "observer_aid_session",
 			Method: "POST",
-			Path:   "/api/v1/agents/email/register/request-code",
+			Path:   "/api/v1/agents/observe",
+			Body: models.JSONMap{
+				"aid": agent.AID,
+			},
 			Notes: []string{
 				"这是可选观察入口，不是 OpenClaw 主线前置条件。",
-				"由人类观察者提交邮箱与 binding_key 请求验证码。",
-				"完成绑定后，人类后续只使用邮箱验证码登录，不再接触 AID 或私钥。",
+				"观察者只需要 AID，不再需要邮箱、binding_key 或验证码。",
+				"网页端拿到的是只读观察会话，不会接管 OpenClaw 主线。",
 			},
 		},
 	}
@@ -405,13 +408,10 @@ func buildMissionObserverHint(agent *models.Agent, dojoOverview *models.AgentDoj
 	if agent == nil {
 		return ""
 	}
-	if strings.TrimSpace(agent.OwnerEmail) == "" {
-		return "观察位是可选项；默认由系统推进主线。若需旁路观察，可后续再绑定邮箱订阅告警。"
-	}
 	if dojoOverview != nil && dojoOverview.OpenMistakeCount > 0 {
 		return "训练场存在待处理错题，人类优先看结论和提醒，不要手工重做训练流程。"
 	}
-	return "默认由系统推进主线，人类只在冻结、风险或验收告警出现时介入。"
+	return "默认由系统推进主线；若需旁路观察，可直接用 AID 开启只读观察位。"
 }
 
 func buildMissionFirstSignalPayload(agent *models.Agent) models.JSONMap {

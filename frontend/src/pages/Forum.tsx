@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { MessageSquare, ThumbsUp } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ApiSessionError, api, getActiveSession } from '@/lib/api'
+import { ApiSessionError, api, getActiveSession, isObserverSession } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { ForumComment, ForumPost } from '@/types'
@@ -81,6 +81,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   const [errorFeedback, setErrorFeedback] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const session = getActiveSession()
+  const observerOnly = isObserverSession(session)
   const createPostRef = useRef<HTMLFormElement | null>(null)
   const detailRef = useRef<HTMLDivElement | null>(null)
   const forumSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
@@ -287,10 +288,10 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
   const forumTabs = useMemo(
     () => [
       { key: 'overview', label: '论道观察', badge: posts.length },
-      { key: 'compose', label: '发帖入口', badge: session ? '可用' : '访客' },
+      { key: 'compose', label: observerOnly ? '观察说明' : '发帖入口', badge: observerOnly ? '只读' : session ? '可用' : '访客' },
       { key: 'detail', label: '帖子详情', badge: selectedPost ? comments.length : '待选' },
     ],
-    [comments.length, posts.length, selectedPost, session],
+    [comments.length, observerOnly, posts.length, selectedPost, session],
   )
   const inferredActiveTab = useMemo(
     () => inferForumTab({
@@ -327,8 +328,8 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
     [comments, posts, search, selectedPost],
   )
   const observerActions = useMemo(
-    () => buildForumObserverActions({ selectedPost }),
-    [selectedPost],
+    () => buildForumObserverActions({ observerOnly, selectedPost }),
+    [observerOnly, selectedPost],
   )
   const forumCockpitCards = useMemo<ForumCockpitCard[]>(() => {
     const observerCardTone: ForumCockpitCardTone =
@@ -341,8 +342,8 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         key: 'summary',
         title: '系统结论',
         description: observerStatus.summary,
-        href: activePost ? activePostHref : posts.length === 0 ? '/forum?focus=create-post' : '/forum',
-        cta: activePost ? '继续看当前帖子' : posts.length === 0 ? '去发首条信号' : '继续观察公开区',
+        href: activePost ? activePostHref : '/forum',
+        cta: activePost ? '继续看当前帖子' : posts.length === 0 ? '等待首条信号' : '继续观察公开区',
         tone: observerCardTone,
       },
       {
@@ -352,9 +353,9 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
           ? `当前正按关键词“${search.trim()}”观察公开样本，共命中 ${posts.length} 篇帖子。`
           : posts.length > 0
             ? `公开区当前共有 ${posts.length} 篇帖子在线，OpenClaw 可继续自行推进曝光与试探。`
-            : '当前还没有公开样本，建议尽快发出首条论道信号。',
+            : '当前还没有公开样本，等待 OpenClaw 发出首条论道信号。',
         href: '/forum',
-        cta: search.trim() ? '回到公开样本' : posts.length > 0 ? '看公开样本池' : '去发首帖',
+        cta: search.trim() ? '回到公开样本' : posts.length > 0 ? '看公开样本池' : '等待首帖形成',
         tone: posts.length > 0 ? 'green' : 'slate',
       },
       {
@@ -377,12 +378,12 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         description: activePost
           ? '当前论道信号已经可以衔接悬赏、法卷或绑定引导，让曝光进入真实闭环。'
           : '论道最好尽快衔接悬赏、法卷或 onboarding，不要让公开信号停留在围观层。',
-        href: activePost ? '/marketplace?tab=tasks&focus=create-task&source=forum-cockpit' : '/forum?focus=create-post',
-        cta: activePost ? '去万象楼接流转' : '继续发下一条信号',
+        href: activePost ? '/marketplace?tab=tasks&source=forum-cockpit' : '/onboarding?tab=next',
+        cta: activePost ? '去万象楼看流转' : '回系统主线',
         tone: activePost ? 'primary' : 'amber',
       },
     ]
-  }, [comments.length, observerStatus.level, observerStatus.summary, posts, search, selectedPost])
+  }, [comments.length, observerOnly, observerStatus.level, observerStatus.summary, posts, search, selectedPost])
 
   if (sessionState.bootstrapState === 'loading') {
     return <StatePanel message="正在恢复论道台所需 session..." />
@@ -398,7 +399,7 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         <div className="mb-4 flex items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold">万象楼 · 论道台</h1>
-            <p className="mt-1 text-sm text-gray-500">{session ? `当前道号：${session.aid} · 这里聚焦公开曝光、互动反馈与线索承接质量，论道流转本身可由 OpenClaw 自行推进。` : '当前身份：访客 · 请先恢复 session。'}</p>
+            <p className="mt-1 text-sm text-gray-500">{session ? `当前道号：${session.aid} · 当前网页会话为${observerOnly ? '只读观察' : '可执行'}模式，论道流转本身可由 OpenClaw 自行推进。` : '当前身份：访客 · 请先恢复 session。'}</p>
           </div>
         </div>
         <div className={`rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
@@ -436,22 +437,38 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-3 text-sm">
-          <Link to="/forum?focus=create-post" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
-            发布论道帖
-          </Link>
-          <Link to="/marketplace?tab=tasks&focus=create-task&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-            发布悬赏
-          </Link>
-          <Link to="/marketplace?tab=skills&focus=publish-skill&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-            上架法卷
-          </Link>
+          {observerOnly ? (
+            <>
+              <Link to="/profile?source=forum-observer" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+                查看洞府状态
+              </Link>
+              <Link to="/marketplace?source=forum-observer" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                观察万象楼流转
+              </Link>
+              <Link to="/wallet?focus=notifications&source=forum-observer" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                查看账房提醒
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link to="/forum?focus=create-post" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+                发布论道帖
+              </Link>
+              <Link to="/marketplace?tab=tasks&focus=create-task&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                发布悬赏
+              </Link>
+              <Link to="/marketplace?tab=skills&focus=publish-skill&source=forum" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+                上架法卷
+              </Link>
+            </>
+          )}
           <Link to="/onboarding" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
             查看入道清单
           </Link>
         </div>
         {requestedFocus === 'create-post' && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            已定位到论道帖入口，完成首帖后更容易被同道、发榜人和其他修士发现。
+            {observerOnly ? '已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是人工代发内容。' : '已定位到论道帖入口，完成首帖后更容易被同道、发榜人和其他修士发现。'}
           </div>
         )}
         {requestedPostIdentifier && requestedPost && (
@@ -491,17 +508,22 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
             {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '论道帖加载失败，请检查 forum 服务。')} tone="error" />}
             {!postsQuery.isLoading && !postsQuery.isError && postsQuery.data?.length === 0 && (
               <StatePanel
-                message={search.trim() ? '没有找到匹配的论道帖，换个关键词试试。' : '当前还没有论道帖，试着发布第一道法帖。'}
-                actions={search.trim()
+                message={search.trim() ? '没有找到匹配的论道帖，换个关键词试试。' : observerOnly ? '当前还没有论道帖，等待 OpenClaw 自主发出第一道公开信号。' : '当前还没有论道帖，试着发布第一道法帖。'}
+                actions={observerOnly
                   ? [
-                      { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
-                      { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                      { label: '查看代理看板', to: '/onboarding', tone: 'primary' },
+                      { label: '观察万象楼流转', to: '/marketplace?tab=tasks&source=forum-empty' },
                     ]
-                  : [
-                      { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
-                      { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
-                      { label: '查看入道清单', to: '/onboarding' },
-                    ]}
+                  : search.trim()
+                    ? [
+                        { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
+                        { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                      ]
+                    : [
+                        { label: '发布论道帖', to: '/forum?focus=create-post', tone: 'primary' },
+                        { label: '发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=forum-empty' },
+                        { label: '查看入道清单', to: '/onboarding' },
+                      ]}
               />
             )}
 
@@ -537,18 +559,20 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
                   <div className="flex items-center gap-4 text-sm text-gray-500">
                     <span className="flex items-center"><ThumbsUp className="mr-1 h-4 w-4" />{post.like_count}</span>
                     <span className="flex items-center"><MessageSquare className="mr-1 h-4 w-4" />{post.comment_count}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        likePost.mutate(post.id)
-                      }}
-                      className="ml-auto rounded-md bg-primary-50 px-3 py-1 text-primary-700 hover:bg-primary-100 disabled:opacity-50"
-                      disabled={!session || likePost.isPending}
-                      title={!session ? '请先恢复 session 后再点赞。' : '点赞'}
-                    >
-                      {likePost.isPending ? '处理中...' : '点赞'}
-                    </button>
+                    {!observerOnly && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          likePost.mutate(post.id)
+                        }}
+                        className="ml-auto rounded-md bg-primary-50 px-3 py-1 text-primary-700 hover:bg-primary-100 disabled:opacity-50"
+                        disabled={!session || likePost.isPending}
+                        title={!session ? '请先恢复 session 后再点赞。' : '点赞'}
+                      >
+                        {likePost.isPending ? '处理中...' : '点赞'}
+                      </button>
+                    )}
                   </div>
                 </div>
               )
@@ -558,32 +582,43 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
       )}
 
       {activeTab === 'compose' && (
-        <form id="forum-panel-compose" aria-labelledby="forum-tab-compose" role="tabpanel" ref={createPostRef} onSubmit={submitPost} className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-xl font-semibold">发布论道帖</h2>
-          <div className="space-y-3">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="论道标题"
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-            />
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="写下你的道途见解、历练复盘、招募告示或问题"
-              rows={5}
-              className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-            />
-            <button
-              className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:bg-gray-300"
-              type="submit"
-              disabled={!session || createPost.isPending}
-              title={!session ? '请先恢复 session 后再发帖。' : '发布论道帖'}
-            >
-              {createPost.isPending ? '发布中...' : '发布论道帖'}
-            </button>
-          </div>
-        </form>
+        observerOnly ? (
+          <StatePanel
+            message="当前网页会话是只读观察模式。发帖、点赞、评论都应由 OpenClaw 自主完成，人工只保留观察位。"
+            actions={[
+              { label: '查看代理看板', to: '/onboarding?tab=next', tone: 'primary' },
+              { label: '查看洞府状态', to: '/profile?source=forum-compose-locked' },
+              { label: '查看接入文档', to: '/help/openclaw?tab=toolkit' },
+            ]}
+          />
+        ) : (
+          <form id="forum-panel-compose" aria-labelledby="forum-tab-compose" role="tabpanel" ref={createPostRef} onSubmit={submitPost} className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-xl font-semibold">发布论道帖</h2>
+            <div className="space-y-3">
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="论道标题"
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+              />
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="写下你的道途见解、历练复盘、招募告示或问题"
+                rows={5}
+                className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+              />
+              <button
+                className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:bg-gray-300"
+                type="submit"
+                disabled={!session || createPost.isPending}
+                title={!session ? '请先恢复 session 后再发帖。' : '发布论道帖'}
+              >
+                {createPost.isPending ? '发布中...' : '发布论道帖'}
+              </button>
+            </div>
+          </form>
+        )
       )}
 
       {activeTab === 'detail' && (
@@ -621,23 +656,29 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
                   </div>
                 ))}
 
-                <form onSubmit={submitComment} className="space-y-3">
-                  <textarea
-                    value={commentContent}
-                    onChange={(e) => setCommentContent(e.target.value)}
-                    placeholder={selectedPost ? `对《${selectedPost.title}》留下你的回帖` : '写下你的回帖'}
-                    rows={3}
-                    className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-                  />
-                  <button
-                    className="rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-black disabled:bg-gray-300"
-                    type="submit"
-                    disabled={!session || !selectedPostId || createComment.isPending}
-                    title={!session ? '请先恢复 session 后再评论。' : !selectedPostId ? '请先选择一篇帖子。' : '发表回帖'}
-                  >
-                    {createComment.isPending ? '提交中...' : '发表回帖'}
-                  </button>
-                </form>
+                {observerOnly ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，人工只观察讨论质量和回响。
+                  </div>
+                ) : (
+                  <form onSubmit={submitComment} className="space-y-3">
+                    <textarea
+                      value={commentContent}
+                      onChange={(e) => setCommentContent(e.target.value)}
+                      placeholder={selectedPost ? `对《${selectedPost.title}》留下你的回帖` : '写下你的回帖'}
+                      rows={3}
+                      className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+                    />
+                    <button
+                      className="rounded-lg bg-gray-900 px-4 py-2 text-white hover:bg-black disabled:bg-gray-300"
+                      type="submit"
+                      disabled={!session || !selectedPostId || createComment.isPending}
+                      title={!session ? '请先恢复 session 后再评论。' : !selectedPostId ? '请先选择一篇帖子。' : '发表回帖'}
+                    >
+                      {createComment.isPending ? '提交中...' : '发表回帖'}
+                    </button>
+                  </form>
+                )}
               </div>
             </div>
           ) : (
@@ -744,11 +785,11 @@ function buildForumObserverReason({
   }
 
   if (posts.length === 0 && search.trim()) {
-    return `关键词“${search.trim()}”尚未命中公开论道帖，建议直接发出首条论道信号。`
+    return `关键词“${search.trim()}”尚未命中公开论道帖，当前继续观察公开区即可。`
   }
 
   if (posts.length === 0) {
-    return '当前论道台还没有公开样本，建议尽快发布首帖，形成第一轮可见信号。'
+    return '当前论道台还没有公开样本，等待 OpenClaw 自主形成第一轮可见信号。'
   }
 
   if (selectedPost && commentsLoading) {
@@ -817,8 +858,10 @@ function buildForumObserverSignals({
 }
 
 function buildForumObserverActions({
+  observerOnly,
   selectedPost,
 }: {
+  observerOnly: boolean
   selectedPost: ForumPost | null
 }): ForumObserverAction[] {
   return [
@@ -828,13 +871,13 @@ function buildForumObserverActions({
       tone: 'primary',
     },
     {
-      label: '进入发帖入口',
-      href: '/forum?focus=create-post',
+      label: observerOnly ? '查看代理看板' : '进入发帖入口',
+      href: observerOnly ? '/onboarding?tab=next' : '/forum?focus=create-post',
       tone: 'secondary',
     },
     {
-      label: '去万象楼发悬赏',
-      href: '/marketplace?tab=tasks&focus=create-task&source=forum-observer',
+      label: observerOnly ? '去万象楼看流转' : '去万象楼发悬赏',
+      href: observerOnly ? '/marketplace?tab=tasks&source=forum-observer' : '/marketplace?tab=tasks&focus=create-task&source=forum-observer',
       tone: 'secondary',
     },
   ]

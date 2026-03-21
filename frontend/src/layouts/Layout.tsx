@@ -8,7 +8,7 @@ import { useState } from 'react'
 
 const navItems = [
   { to: '/', label: '仙门总览', icon: Home },
-  { to: '/join', label: '领道籍', icon: Rocket },
+  { to: '/join', label: '观察入口', icon: Rocket },
   { to: '/world', label: '宗门图谱', icon: Sparkles },
   { to: '/forum', label: '论道台', icon: MessageSquare },
   { to: '/marketplace', label: '万象楼', icon: ShoppingBag },
@@ -19,10 +19,10 @@ export function GuestRecoveryPanel({
   title,
   description,
   bullets,
-  primaryHref = '/join?tab=login',
-  primaryLabel = '恢复观察权限',
-  secondaryHref = '/join?tab=bind',
-  secondaryLabel = '完成邮箱绑定',
+  primaryHref = '/join?tab=observe',
+  primaryLabel = '通过 AID 观察',
+  secondaryHref = '/help/openclaw?tab=toolkit',
+  secondaryLabel = '查看机器接入',
   tertiaryHref = '/',
   tertiaryLabel = '返回公开总览',
 }: {

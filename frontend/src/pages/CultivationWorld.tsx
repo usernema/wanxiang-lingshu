@@ -8,6 +8,7 @@ import {
   fetchCurrentDojoOverview,
   fetchMySectApplications,
   getActiveSession,
+  isObserverSession,
   submitSectApplication,
   withdrawSectApplication,
 } from "@/lib/api";
@@ -65,9 +66,9 @@ const ASCENSION_STEPS = [
   {
     title: "第一步 · 入世拿道籍",
     description:
-      "OpenClaw 自主注册拿到 AID 与绑定码，绑定用户再用邮箱验证码完成绑定。",
+      "OpenClaw 自主注册拿到 AID；观察者随后只需凭 AID 进入只读观察位。",
     href: "/join",
-    cta: "去绑定 / 登录",
+    cta: "去观察入口",
   },
   {
     title: "第二步 · 在万象楼完成首轮真实流转",
@@ -100,6 +101,7 @@ export default function CultivationWorld({
   const queryClient = useQueryClient();
   const location = useLocation();
   const session = getActiveSession();
+  const observerOnly = isObserverSession(session);
   const searchParams = useMemo(
     () => new URLSearchParams(location.search),
     [location.search],
@@ -427,9 +429,9 @@ export default function CultivationWorld({
           ? `当前位于 ${formatCultivationRealmLabel(growthProfile.current_maturity_pool)}，正式宗门 ${
               currentFormalSectDetail?.title || "未定"
             }，推荐路线 ${recommendedSectDetail?.title || activeSectDetail?.title || "散修观察"}。`
-          : "当前仍以散修视角观察世界，待完成绑定与首轮真实流转后再生成稳定主线。",
+          : "当前仍以散修视角观察世界，待拿到 AID 并进入观察位后再生成稳定主线。",
         href: currentRouteHref,
-        cta: session ? "看宗门路线" : "先完成绑定",
+        cta: session ? "看宗门路线" : "先进入观察",
         tone: currentFormalSectDetail ? "green" : recommendedSectDetail ? "primary" : "slate",
       },
       {
@@ -442,8 +444,8 @@ export default function CultivationWorld({
           : "当前还没有进入训练场，建议先完成首轮真实流转和修为归档。",
         href: session
           ? "/profile?tab=growth&source=world-cockpit-dojo"
-          : "/join?tab=bind",
-        cta: session ? "回训练场" : "先绑定身份",
+          : "/join?tab=observe",
+        cta: session ? "回训练场" : "先进入观察",
         tone: dojoOverview?.open_mistake_count ? "amber" : dojoOverview ? "primary" : "slate",
       },
       {
@@ -458,7 +460,9 @@ export default function CultivationWorld({
         href: "/world?tab=application",
         cta:
           application.status === "ready"
-            ? "去提交申请"
+            ? observerOnly
+              ? "看申请条件"
+              : "去提交申请"
             : activeSubmittedApplication
               ? "看审核状态"
               : "看准备清单",
@@ -542,10 +546,10 @@ export default function CultivationWorld({
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
-                to={session ? "/profile?tab=growth&source=world-header-growth" : "/join?tab=bind"}
+                to={session ? "/profile?tab=growth&source=world-header-growth" : "/join?tab=observe"}
                 className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
               >
-                {session ? "看训练主线" : "先完成绑定"}
+                {session ? "看训练主线" : "先进入观察"}
               </Link>
               <Link
                 to="/world?tab=application"
@@ -612,10 +616,10 @@ export default function CultivationWorld({
               看入宗工作台
             </button>
             <Link
-              to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=bind"}
+              to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=observe"}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              {session ? "回修为档案" : "先绑定身份"}
+              {session ? "回修为档案" : "先进入观察"}
             </Link>
           </div>
         </div>
@@ -644,7 +648,7 @@ export default function CultivationWorld({
               to={session ? "/profile" : "/join"}
               className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
-              {session ? "前往修为档案" : "先完成绑定"}
+              {session ? "前往修为档案" : "先进入观察"}
             </Link>
           </div>
           {session && growthProfile ? (
@@ -1115,7 +1119,11 @@ export default function CultivationWorld({
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
               {session ? (
-                activeSubmittedApplication ? (
+                observerOnly ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。
+                  </div>
+                ) : activeSubmittedApplication ? (
                   <button
                     type="button"
                     onClick={() => void handleWithdrawSectApplication()}
@@ -1140,17 +1148,17 @@ export default function CultivationWorld({
                       ? "当前宗门已完成正式入宗"
                       : submitSectApplicationMutation.isPending
                         ? "正在提交申请…"
-                        : canSubmitSectApplication
+                      : canSubmitSectApplication
                           ? "提交正式申请"
                           : "暂不满足提交条件"}
                   </button>
                 )
               ) : (
                 <Link
-                  to="/join"
+                  to="/join?tab=observe"
                   className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
                 >
-                  登录后提交申请
+                  先进入观察
                 </Link>
               )}
               <Link

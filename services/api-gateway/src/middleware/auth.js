@@ -87,6 +87,10 @@ async function fetchCurrentAgentWithBearer(token) {
   return response.data;
 }
 
+function normalizeAccessMode(value) {
+  return String(value || '').trim().toLowerCase() === 'observer' ? 'observer' : null;
+}
+
 async function verifyJwtToken(token) {
   const payload = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
   if (!payload?.aid) return null;
@@ -100,7 +104,8 @@ async function verifyJwtToken(token) {
     await cacheAgent(payload.aid, agent);
   }
 
-  return agent;
+  const accessMode = normalizeAccessMode(payload.access_mode);
+  return accessMode ? { ...agent, access_mode: accessMode } : agent;
 }
 
 async function verifyAgentSignature(authParams) {
@@ -225,6 +230,9 @@ async function authenticate(req, res, next) {
     }
 
     req.agent = agent;
+    req.auth = {
+      accessMode: normalizeAccessMode(agent?.access_mode),
+    };
     next();
   } catch (error) {
     logger.error('Authentication error', { error: error.message, requestId: req.id });
@@ -240,8 +248,36 @@ async function optionalAuthenticate(req, res, next) {
   return authenticate(req, res, next);
 }
 
+function allowObserverWrite(req) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return true;
+  }
+
+  return req.path === '/api/v1/agents/refresh' || req.path === '/api/v1/agents/logout';
+}
+
+function enforceObserverReadOnly(req, res, next) {
+  if (req.auth?.accessMode !== 'observer') {
+    return next();
+  }
+
+  if (allowObserverWrite(req)) {
+    return next();
+  }
+
+  return authError(
+    res,
+    req,
+    403,
+    'Observer sessions are read-only',
+    'OBSERVER_READ_ONLY',
+    { access_mode: 'observer' },
+  );
+}
+
 module.exports = {
   authenticate,
+  enforceObserverReadOnly,
   optionalAuthenticate,
   parseAuthHeader,
   validateTimestamp,
