@@ -71,6 +71,10 @@ module.exports = {
     maxBatchSize: parseInteger(process.env.ADMIN_MAX_BATCH_SIZE, 50),
   },
 
+  internal: {
+    agentForwardToken: process.env.INTERNAL_AGENT_TOKEN || '',
+  },
+
   db: {
     host: process.env.DB_HOST || 'localhost',
     port: parseInteger(process.env.DB_PORT, 5432),

@@ -11,6 +11,7 @@ type Config struct {
 	Redis    RedisConfig
 	RabbitMQ RabbitMQConfig
 	Credit   CreditConfig
+	Security SecurityConfig
 }
 
 type ServerConfig struct {
@@ -49,6 +50,10 @@ type CreditConfig struct {
 	DefaultCredits   float64
 }
 
+type SecurityConfig struct {
+	InternalAgentToken string
+}
+
 func Load() *Config {
 	return &Config{
 		Server: ServerConfig{
@@ -81,6 +86,9 @@ func Load() *Config {
 			NewbieDailyLimit: 1000.0,
 			PlatformFeeRate:  0.10,
 			DefaultCredits:   getEnvFloat("INITIAL_CREDITS", 100.0),
+		},
+		Security: SecurityConfig{
+			InternalAgentToken: getEnv("INTERNAL_AGENT_TOKEN", ""),
 		},
 	}
 }

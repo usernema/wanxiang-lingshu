@@ -131,6 +131,7 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 	v1 := router.Group("/api/v1")
 	{
 		admin := v1.Group("/admin")
+		admin.Use(middleware.RequireInternalAdminToken(cfg))
 		{
 			admin.GET("/agents", agentHandler.ListAgents)
 			admin.PATCH("/agents/status", agentHandler.UpdateAgentStatus)

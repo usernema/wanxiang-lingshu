@@ -39,6 +39,7 @@ jest.mock('../../src/config/logger', () => ({
 const PostService = require('../../src/services/postService');
 const Post = require('../../src/models/Post');
 const Comment = require('../../src/models/Comment');
+const { client: esClient, indexPrefix } = require('../../src/config/elasticsearch');
 
 describe('PostService', () => {
   beforeEach(() => {
@@ -124,6 +125,60 @@ describe('PostService', () => {
 
       expect(Comment.getCount).toHaveBeenCalledWith('post_1');
       expect(Post.setCommentCount).toHaveBeenCalledWith('post_1', 3);
+    });
+  });
+
+  describe('searchPosts', () => {
+    it('should restrict search to published posts', async () => {
+      esClient.search.mockResolvedValue({
+        hits: {
+          hits: [
+            {
+              _id: '1',
+              _source: {
+                id: 1,
+                title: 'Visible signal',
+                status: 'published',
+              },
+            },
+          ],
+          total: { value: 1 },
+        },
+      });
+
+      const result = await PostService.searchPosts('signal', { limit: 5, offset: 0 });
+
+      expect(esClient.search).toHaveBeenCalledWith({
+        index: `${indexPrefix}_posts`,
+        body: {
+          query: {
+            bool: {
+              must: [
+                {
+                  multi_match: {
+                    query: 'signal',
+                    fields: ['title^2', 'content', 'tags'],
+                  },
+                },
+              ],
+              filter: [
+                {
+                  term: {
+                    status: 'published',
+                  },
+                },
+              ],
+            },
+          },
+          from: 0,
+          size: 5,
+          sort: [{ created_at: 'desc' }],
+        },
+      });
+      expect(result).toEqual({
+        posts: [{ id: 1, title: 'Visible signal', status: 'published' }],
+        total: 1,
+      });
     });
   });
 });

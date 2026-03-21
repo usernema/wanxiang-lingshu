@@ -46,6 +46,11 @@ func (m *MockAccountRepository) UpdateBalance(ctx context.Context, tx *sql.Tx, a
 	return args.Error(0)
 }
 
+func (m *MockAccountRepository) RecordSettledTransfer(ctx context.Context, tx *sql.Tx, fromAID, toAID string, amount decimal.Decimal) error {
+	args := m.Called(ctx, tx, fromAID, toAID, amount)
+	return args.Error(0)
+}
+
 func (m *MockAccountRepository) FreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error {
 	args := m.Called(ctx, tx, aid, amount)
 	return args.Error(0)
@@ -94,6 +99,36 @@ func (m *MockTransactionRepository) List(ctx context.Context, aid string, limit,
 func (m *MockTransactionRepository) GetDailyTotal(ctx context.Context, aid string) (decimal.Decimal, error) {
 	args := m.Called(ctx, aid)
 	return args.Get(0).(decimal.Decimal), args.Error(1)
+}
+
+type MockEscrowRepository struct {
+	mock.Mock
+}
+
+func (m *MockEscrowRepository) Create(ctx context.Context, tx *sql.Tx, escrow *models.Escrow) error {
+	args := m.Called(ctx, tx, escrow)
+	return args.Error(0)
+}
+
+func (m *MockEscrowRepository) UpdateStatus(ctx context.Context, tx *sql.Tx, escrowID string, status string) error {
+	args := m.Called(ctx, tx, escrowID, status)
+	return args.Error(0)
+}
+
+func (m *MockEscrowRepository) GetByID(ctx context.Context, escrowID string) (*models.Escrow, error) {
+	args := m.Called(ctx, escrowID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Escrow), args.Error(1)
+}
+
+func (m *MockEscrowRepository) GetExpired(ctx context.Context) ([]*models.Escrow, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*models.Escrow), args.Error(1)
 }
 
 type MockLockService struct {
@@ -326,6 +361,102 @@ func TestGetBalanceUsesReservedInitialBalance(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, expectedAccount, account)
 	mockAccountRepo.AssertExpectations(t)
+}
+
+func TestShouldRecordSettledTransfer(t *testing.T) {
+	assert.True(t, shouldRecordSettledTransfer(nil))
+	assert.True(t, shouldRecordSettledTransfer(map[string]interface{}{"payment_phase": "charge"}))
+	assert.True(t, shouldRecordSettledTransfer(map[string]interface{}{"payment_phase": "payout"}))
+	assert.False(t, shouldRecordSettledTransfer(map[string]interface{}{"payment_phase": "rollback_charge"}))
+	assert.False(t, shouldRecordSettledTransfer(map[string]interface{}{"payment_phase": "rollback_payout"}))
+	assert.False(t, shouldRecordSettledTransfer(map[string]interface{}{"payment_phase": " Rollback_Charge "}))
+	assert.False(t, shouldRecordSettledTransfer(map[string]interface{}{"internal_compensation": true}))
+}
+
+func TestReleaseEscrowIsIdempotentWhenAlreadyReleased(t *testing.T) {
+	mockEscrowRepo := new(MockEscrowRepository)
+	service := &CreditService{
+		escrowRepo: mockEscrowRepo,
+	}
+
+	ctx := context.Background()
+	escrow := &models.Escrow{
+		EscrowID: "escrow_123",
+		PayerAID: "agent://a2ahub/employer",
+		PayeeAID: "agent://a2ahub/worker",
+		Status:   models.EscrowStatusReleased,
+	}
+
+	mockEscrowRepo.On("GetByID", ctx, "escrow_123").Return(escrow, nil).Once()
+
+	err := service.ReleaseEscrow(ctx, "escrow_123", "agent://a2ahub/employer")
+	assert.NoError(t, err)
+	mockEscrowRepo.AssertExpectations(t)
+}
+
+func TestReleaseEscrowStillRejectsUnauthorizedActorWhenAlreadyReleased(t *testing.T) {
+	mockEscrowRepo := new(MockEscrowRepository)
+	service := &CreditService{
+		escrowRepo: mockEscrowRepo,
+	}
+
+	ctx := context.Background()
+	escrow := &models.Escrow{
+		EscrowID: "escrow_123",
+		PayerAID: "agent://a2ahub/employer",
+		PayeeAID: "agent://a2ahub/worker",
+		Status:   models.EscrowStatusReleased,
+	}
+
+	mockEscrowRepo.On("GetByID", ctx, "escrow_123").Return(escrow, nil).Once()
+
+	err := service.ReleaseEscrow(ctx, "escrow_123", "agent://a2ahub/stranger")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unauthorized")
+	mockEscrowRepo.AssertExpectations(t)
+}
+
+func TestRefundEscrowIsIdempotentWhenAlreadyRefunded(t *testing.T) {
+	mockEscrowRepo := new(MockEscrowRepository)
+	service := &CreditService{
+		escrowRepo: mockEscrowRepo,
+	}
+
+	ctx := context.Background()
+	escrow := &models.Escrow{
+		EscrowID: "escrow_123",
+		PayerAID: "agent://a2ahub/employer",
+		PayeeAID: "agent://a2ahub/worker",
+		Status:   models.EscrowStatusRefunded,
+	}
+
+	mockEscrowRepo.On("GetByID", ctx, "escrow_123").Return(escrow, nil).Once()
+
+	err := service.RefundEscrow(ctx, "escrow_123", "agent://a2ahub/employer")
+	assert.NoError(t, err)
+	mockEscrowRepo.AssertExpectations(t)
+}
+
+func TestRefundEscrowStillRejectsUnauthorizedActorWhenAlreadyRefunded(t *testing.T) {
+	mockEscrowRepo := new(MockEscrowRepository)
+	service := &CreditService{
+		escrowRepo: mockEscrowRepo,
+	}
+
+	ctx := context.Background()
+	escrow := &models.Escrow{
+		EscrowID: "escrow_123",
+		PayerAID: "agent://a2ahub/employer",
+		PayeeAID: "agent://a2ahub/worker",
+		Status:   models.EscrowStatusRefunded,
+	}
+
+	mockEscrowRepo.On("GetByID", ctx, "escrow_123").Return(escrow, nil).Once()
+
+	err := service.RefundEscrow(ctx, "escrow_123", "agent://a2ahub/worker")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "only payer can refund")
+	mockEscrowRepo.AssertExpectations(t)
 }
 
 func TestEmitTransactionNotificationsPersistsSenderAndReceiver(t *testing.T) {

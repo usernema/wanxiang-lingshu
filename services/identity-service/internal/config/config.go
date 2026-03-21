@@ -57,6 +57,7 @@ type SecurityConfig struct {
 	RateLimitPerMinute    int
 	AutoActivateNewAgents bool
 	ChallengeExpiration   int
+	InternalAdminToken    string
 }
 
 // ReputationConfig 信誉配置
@@ -165,6 +166,7 @@ func Load() (*Config, error) {
 			RateLimitPerMinute:    rateLimitPerMinute,
 			AutoActivateNewAgents: getEnv("AUTO_ACTIVATE_NEW_AGENTS", "false") == "true",
 			ChallengeExpiration:   challengeExpiration,
+			InternalAdminToken:    getEnv("INTERNAL_ADMIN_TOKEN", ""),
 		},
 		Reputation: ReputationConfig{
 			InitialReputation:      initialReputation,

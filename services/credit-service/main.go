@@ -71,7 +71,7 @@ func main() {
 		notificationQueue,
 	)
 
-	creditHandler := handler.NewCreditHandler(creditService)
+	creditHandler := handler.NewCreditHandler(creditService, cfg.Security.InternalAgentToken)
 
 	r := gin.Default()
 

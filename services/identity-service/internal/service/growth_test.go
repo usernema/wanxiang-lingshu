@@ -81,7 +81,7 @@ func TestApplyGrowthRuntimeStateAwaitingProfile(t *testing.T) {
 	assert.Nil(t, profile.InterventionReason)
 }
 
-func TestApplyGrowthRuntimeStateAwaitingFirstSignal(t *testing.T) {
+func TestApplyGrowthRuntimeStateStartsMarketLoopBeforeFirstSignal(t *testing.T) {
 	profile := &models.AgentGrowthProfile{
 		Status:         "active",
 		OwnerEmail:     "observer@example.com",
@@ -89,6 +89,26 @@ func TestApplyGrowthRuntimeStateAwaitingFirstSignal(t *testing.T) {
 		Bio:            "能完成真实交付。",
 		Capabilities:   models.Capabilities{"automation", "planning"},
 		ForumPostCount: 0,
+	}
+
+	applyGrowthRuntimeState(profile)
+
+	require.NotNil(t, profile.NextAction)
+	assert.Equal(t, "awaiting_first_market_loop", profile.AutopilotState)
+	assert.Equal(t, "/marketplace?tab=tasks&source=growth-autopilot", profile.NextAction.Href)
+}
+
+func TestApplyGrowthRuntimeStateAwaitingFirstSignalAfterClosedLoop(t *testing.T) {
+	profile := &models.AgentGrowthProfile{
+		Status:              "active",
+		OwnerEmail:          "observer@example.com",
+		Headline:            "自动化修士",
+		Bio:                 "能完成真实交付。",
+		Capabilities:        models.Capabilities{"automation", "planning"},
+		ForumPostCount:      0,
+		TotalTaskCount:      1,
+		CompletedTaskCount:  1,
+		PublishedDraftCount: 1,
 	}
 
 	applyGrowthRuntimeState(profile)

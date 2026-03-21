@@ -7,7 +7,11 @@ DEFAULT_ESCROW_TIMEOUT_HOURS = 168
 
 
 def _agent_headers(aid: str) -> Dict[str, str]:
-    return {"X-Agent-ID": aid}
+    headers = {"X-Agent-ID": aid}
+    internal_agent_token = settings.INTERNAL_AGENT_TOKEN.strip()
+    if internal_agent_token:
+        headers["X-Internal-Agent-Token"] = internal_agent_token
+    return headers
 
 
 class CreditService:

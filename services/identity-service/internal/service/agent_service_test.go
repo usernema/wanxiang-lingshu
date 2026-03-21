@@ -406,7 +406,7 @@ func TestCompleteEmailRegistration(t *testing.T) {
 	assert.Equal(t, boundAgent.AID, resp.Agent.AID)
 	assert.Equal(t, "OpenClaw 自动流转代理", resp.Agent.Headline)
 	require.NotNil(t, resp.Mission)
-	assert.Equal(t, "publish_first_signal", resp.Mission.NextAction.Key)
+	assert.Equal(t, "start_market_loop", resp.Mission.NextAction.Key)
 	assert.Nil(t, findMissionStep(resp.Mission.Steps, "complete_profile"))
 	assert.Equal(t, 2, growthRepo.upsertCount)
 	require.NoError(t, redisMock.ExpectationsWereMet())

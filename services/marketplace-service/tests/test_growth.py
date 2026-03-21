@@ -39,6 +39,13 @@ async def close_session(session: AsyncSession, engine):
     await engine.dispose()
 
 
+async def insert_agent(session: AsyncSession, *, aid: str, model: str, provider: str):
+    await session.execute(
+        text("INSERT INTO agents (aid, model, provider) VALUES (:aid, :model, :provider)"),
+        {"aid": aid, "model": model, "provider": provider},
+    )
+
+
 def test_create_growth_assets_for_completed_task():
     async def scenario():
         session, engine = await create_session()
@@ -154,16 +161,12 @@ def test_openclaw_first_completed_task_auto_publishes_skill_and_grants_employer_
     async def scenario():
         session, engine = await create_session()
         try:
-            await session.execute(text(
-                "INSERT INTO agents (aid, model, provider) VALUES (:aid, :model, :provider)"
-            ), {
+            await insert_agent(session, **{
                 "aid": "agent://a2ahub/openclaw-worker",
                 "model": "openclaw-prod",
                 "provider": "openclaw",
             })
-            await session.execute(text(
-                "INSERT INTO agents (aid, model, provider) VALUES (:aid, :model, :provider)"
-            ), {
+            await insert_agent(session, **{
                 "aid": "agent://a2ahub/employer",
                 "model": "human-employer",
                 "provider": "human",
@@ -212,6 +215,171 @@ def test_openclaw_first_completed_task_auto_publishes_skill_and_grants_employer_
                 )
             ).first()
             assert grant_row is not None
+        finally:
+            await close_session(session, engine)
+
+    run(scenario())
+
+
+def test_openclaw_first_completed_task_does_not_auto_publish_for_openclaw_employer():
+    async def scenario():
+        session, engine = await create_session()
+        try:
+            await insert_agent(session, **{
+                "aid": "agent://a2ahub/openclaw-worker",
+                "model": "openclaw-prod",
+                "provider": "openclaw",
+            })
+            await insert_agent(session, **{
+                "aid": "agent://a2ahub/openclaw-employer",
+                "model": "openclaw-admin",
+                "provider": "openclaw",
+            })
+            await session.commit()
+
+            task = Task(
+                task_id="task_openclaw_no_bonus_1",
+                employer_aid="agent://a2ahub/openclaw-employer",
+                worker_aid="agent://a2ahub/openclaw-worker",
+                title="同系代理内部验证任务",
+                description="验证自动流转，但不应触发首单公开奖励",
+                requirements="执行记录, 验证摘要",
+                reward=Decimal("99.00"),
+                escrow_id="escrow_openclaw_no_bonus_1",
+                status="completed",
+            )
+            session.add(task)
+            await session.commit()
+
+            draft, template, grant = await GrowthService.create_growth_assets_for_task(
+                session,
+                task,
+                "完成验证，但这是一笔 OpenClaw 内部闭环",
+            )
+
+            assert draft is not None
+            assert draft.status == "incubating"
+            assert draft.published_skill_id is None
+            assert template is not None
+            assert grant is None
+        finally:
+            await close_session(session, engine)
+
+    run(scenario())
+
+
+def test_cross_employer_validation_requires_two_non_openclaw_employers():
+    async def scenario():
+        session, engine = await create_session()
+        try:
+            await insert_agent(
+                session,
+                aid="agent://a2ahub/employer-1",
+                model="human-employer-1",
+                provider="human",
+            )
+            await insert_agent(
+                session,
+                aid="agent://a2ahub/employer-2",
+                model="human-employer-2",
+                provider="human",
+            )
+            await session.commit()
+
+            first_task = Task(
+                task_id="task_cross_employer_1",
+                employer_aid="agent://a2ahub/employer-1",
+                worker_aid="agent://a2ahub/worker",
+                title="通用运营日报整理",
+                description="整理日报并形成稳定产出结构",
+                requirements="日报, 结论, 跟进建议",
+                reward=Decimal("48.00"),
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+            second_task = Task(
+                task_id="task_cross_employer_2",
+                employer_aid="agent://a2ahub/employer-2",
+                worker_aid="agent://a2ahub/worker",
+                title="通用运营日报整理",
+                description="整理日报并形成稳定产出结构",
+                requirements="日报, 结论, 跟进建议",
+                reward=Decimal("52.00"),
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+            session.add_all([first_task, second_task])
+            await session.commit()
+
+            await GrowthService.create_growth_assets_for_task(session, first_task, "第一家雇主验收通过")
+            await GrowthService.create_growth_assets_for_task(session, second_task, "第二家雇主验收通过")
+
+            first_card = await GrowthService.get_experience_card_by_task(session, "task_cross_employer_1")
+            second_card = await GrowthService.get_experience_card_by_task(session, "task_cross_employer_2")
+
+            assert first_card is not None
+            assert second_card is not None
+            assert first_card.is_cross_employer_validated is True
+            assert second_card.is_cross_employer_validated is True
+        finally:
+            await close_session(session, engine)
+
+    run(scenario())
+
+
+def test_cross_employer_validation_ignores_openclaw_employers():
+    async def scenario():
+        session, engine = await create_session()
+        try:
+            await insert_agent(
+                session,
+                aid="agent://a2ahub/openclaw-employer-1",
+                model="openclaw-admin-1",
+                provider="openclaw",
+            )
+            await insert_agent(
+                session,
+                aid="agent://a2ahub/openclaw-employer-2",
+                model="openclaw-admin-2",
+                provider="openclaw",
+            )
+            await session.commit()
+
+            first_task = Task(
+                task_id="task_internal_cross_employer_1",
+                employer_aid="agent://a2ahub/openclaw-employer-1",
+                worker_aid="agent://a2ahub/worker",
+                title="通用质检报告整理",
+                description="生成同类质检报告",
+                requirements="报告, 结论, 风险提示",
+                reward=Decimal("36.00"),
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+            second_task = Task(
+                task_id="task_internal_cross_employer_2",
+                employer_aid="agent://a2ahub/openclaw-employer-2",
+                worker_aid="agent://a2ahub/worker",
+                title="通用质检报告整理",
+                description="生成同类质检报告",
+                requirements="报告, 结论, 风险提示",
+                reward=Decimal("42.00"),
+                status="completed",
+                completed_at=datetime.now(timezone.utc),
+            )
+            session.add_all([first_task, second_task])
+            await session.commit()
+
+            await GrowthService.create_growth_assets_for_task(session, first_task, "内部演练 1")
+            await GrowthService.create_growth_assets_for_task(session, second_task, "内部演练 2")
+
+            first_card = await GrowthService.get_experience_card_by_task(session, "task_internal_cross_employer_1")
+            second_card = await GrowthService.get_experience_card_by_task(session, "task_internal_cross_employer_2")
+
+            assert first_card is not None
+            assert second_card is not None
+            assert first_card.is_cross_employer_validated is False
+            assert second_card.is_cross_employer_validated is False
         finally:
             await close_session(session, engine)
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/a2ahub/credit-service/config"
@@ -21,6 +22,7 @@ type AccountRepository interface {
 	UpsertInitialBalance(ctx context.Context, aid string, initialBalance decimal.Decimal) error
 	GetBalance(ctx context.Context, aid string) (*models.Account, error)
 	UpdateBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
+	RecordSettledTransfer(ctx context.Context, tx *sql.Tx, fromAID, toAID string, amount decimal.Decimal) error
 	FreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
 	UnfreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
 	ReleaseFrozenBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error
@@ -312,6 +314,12 @@ func (s *CreditService) Transfer(ctx context.Context, fromAID, toAID string, amo
 		return nil, fmt.Errorf("failed to credit receiver: %w", err)
 	}
 
+	if shouldRecordSettledTransfer(metadata) {
+		if err := s.accountRepo.RecordSettledTransfer(ctx, tx, fromAID, toAID, amount); err != nil {
+			return nil, fmt.Errorf("failed to update transfer totals: %w", err)
+		}
+	}
+
 	transaction.Status = models.TransactionStatusCompleted
 	if err := s.transactionRepo.UpdateStatus(ctx, tx, transaction.TransactionID, models.TransactionStatusCompleted); err != nil {
 		return nil, err
@@ -556,6 +564,24 @@ func mergeMetadata(base map[string]interface{}, extra map[string]interface{}) ma
 		merged[key] = value
 	}
 	return merged
+}
+
+func shouldRecordSettledTransfer(metadata map[string]interface{}) bool {
+	if metadata == nil {
+		return true
+	}
+
+	if compensation, ok := metadata["internal_compensation"].(bool); ok && compensation {
+		return false
+	}
+
+	phase, ok := metadata["payment_phase"].(string)
+	if !ok {
+		return true
+	}
+
+	normalizedPhase := strings.TrimSpace(strings.ToLower(phase))
+	return !strings.HasPrefix(normalizedPhase, "rollback_")
 }
 
 func resolveNotificationLink(metadata map[string]interface{}, fallback string) string {

@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.auth import require_agent_header
 from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.growth import (
@@ -20,12 +21,6 @@ from app.services.growth_service import GrowthService
 
 router = APIRouter()
 internal_admin_router = APIRouter()
-
-
-def require_agent_header(x_agent_id: Optional[str]) -> str:
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
-    return x_agent_id
 
 
 def require_internal_admin_token(
@@ -45,8 +40,9 @@ async def get_my_skill_drafts(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    aid = require_agent_header(x_agent_id)
+    aid = require_agent_header(x_agent_id, x_internal_agent_token)
     items, total = await GrowthService.list_skill_drafts(db, limit=limit, offset=offset, status=status, aid=aid)
     return GrowthSkillDraftListResponse(items=items, total=total, limit=limit, offset=offset)
 
@@ -59,8 +55,9 @@ async def get_my_experience_cards(
     outcome_status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    aid = require_agent_header(x_agent_id)
+    aid = require_agent_header(x_agent_id, x_internal_agent_token)
     items, total = await GrowthService.list_experience_cards(
         db,
         limit=limit,
@@ -80,8 +77,9 @@ async def get_my_risk_memories(
     risk_type: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    aid = require_agent_header(x_agent_id)
+    aid = require_agent_header(x_agent_id, x_internal_agent_token)
     items, total = await GrowthService.list_risk_memories(
         db,
         limit=limit,
@@ -100,8 +98,9 @@ async def get_my_employer_skill_grants(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    owner_aid = require_agent_header(x_agent_id)
+    owner_aid = require_agent_header(x_agent_id, x_internal_agent_token)
     items, total = await GrowthService.list_employer_skill_grants(
         db,
         limit=limit,
@@ -119,8 +118,9 @@ async def get_my_employer_templates(
     status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    owner_aid = require_agent_header(x_agent_id)
+    owner_aid = require_agent_header(x_agent_id, x_internal_agent_token)
     items, total = await GrowthService.list_employer_templates(
         db,
         limit=limit,
@@ -158,8 +158,9 @@ async def create_task_from_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
-    owner_aid = require_agent_header(x_agent_id)
+    owner_aid = require_agent_header(x_agent_id, x_internal_agent_token)
     try:
         task = await GrowthService.create_task_from_template(db, template_id, owner_aid=owner_aid)
     except PermissionError as error:

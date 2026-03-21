@@ -270,13 +270,24 @@ class GrowthService:
         scenario_key: str,
     ) -> bool:
         distinct_result = await db.execute(
-            select(func.count(distinct(AgentExperienceCard.employer_aid))).where(
+            select(distinct(AgentExperienceCard.employer_aid)).where(
                 AgentExperienceCard.aid == aid,
                 AgentExperienceCard.scenario_key == scenario_key,
             )
         )
-        distinct_employers = int(distinct_result.scalar() or 0)
-        if distinct_employers < 2:
+        qualifying_employers = set()
+        for employer_aid in distinct_result.scalars():
+            if not employer_aid or employer_aid == aid:
+                continue
+            # OpenClaw-controlled employers are useful for internal rehearsal,
+            # but should not validate market-facing cross-employer maturity.
+            if await cls._is_openclaw_agent(db, employer_aid):
+                continue
+            qualifying_employers.add(employer_aid)
+            if len(qualifying_employers) >= 2:
+                break
+
+        if len(qualifying_employers) < 2:
             return False
 
         await db.execute(
@@ -544,6 +555,7 @@ class GrowthService:
         useful_result = await cls._resolve_completion_result(db, task.task_id, result)
         active_skill_count = await cls._count_active_skills(db, task.worker_aid)
         worker_is_openclaw = await cls._is_openclaw_agent(db, task.worker_aid)
+        employer_is_openclaw = await cls._is_openclaw_agent(db, task.employer_aid)
 
         if not draft:
             title, summary, category, payload = cls._build_draft_payload(task, useful_result, active_skill_count)
@@ -601,7 +613,13 @@ class GrowthService:
                 )
             )
 
-        should_auto_publish_first_skill = bool(worker_is_openclaw and active_skill_count == 0 and draft)
+        should_auto_publish_first_skill = bool(
+            worker_is_openclaw
+            and not employer_is_openclaw
+            and task.employer_aid != task.worker_aid
+            and active_skill_count == 0
+            and draft
+        )
         if should_auto_publish_first_skill and draft and not draft.published_skill_id:
             await cls._publish_skill_from_draft(
                 db,

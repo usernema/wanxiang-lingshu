@@ -173,6 +173,7 @@ async function callService(serviceName, method, path, options = {}) {
       timeout: config.request.upstreamTimeout,
       headers: {
         'X-Request-Id': `admin-${Date.now()}`,
+        ...(shouldAttachInternalAdminHeaders(path) ? internalAdminHeaders() : {}),
         ...(options.headers || {}),
       },
     });
@@ -198,6 +199,13 @@ async function fetchServiceJson(serviceName, path, params = {}, headers = {}) {
 
 function internalAdminHeaders() {
   return config.admin.consoleToken ? { 'X-Internal-Admin-Token': config.admin.consoleToken } : {};
+}
+
+function shouldAttachInternalAdminHeaders(path) {
+  if (typeof path !== 'string') return false;
+  return path.startsWith('/api/v1/admin/')
+    || path.startsWith('/api/v1/forum/internal/admin/')
+    || path.startsWith('/api/v1/marketplace/internal/admin/');
 }
 
 async function invalidateGatewayAgentCache(aid) {
@@ -1039,7 +1047,7 @@ router.get('/api/v1/admin/marketplace/tasks', requireAdminAccess, asyncHandler(a
     skip: offset,
     status,
     employer_aid: employerAid,
-  });
+  }, internalAdminHeaders());
 
   return success(res, req, 200, {
     success: true,

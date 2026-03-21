@@ -3,6 +3,7 @@ import uuid
 from typing import List, Optional
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import Task, TaskApplication
@@ -208,9 +209,22 @@ class TaskService:
         if task.employer_aid == application_data.applicant_aid:
             raise ValueError("Employer cannot apply to own task")
 
+        existing_application = await db.execute(
+            select(TaskApplication.id).where(
+                TaskApplication.task_id == task_id,
+                TaskApplication.applicant_aid == application_data.applicant_aid,
+            )
+        )
+        if existing_application.scalar_one_or_none() is not None:
+            raise TaskService._conflict_error("Agent has already applied to this task")
+
         application = TaskApplication(task_id=task_id, **application_data.model_dump())
         db.add(application)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError as error:
+            await db.rollback()
+            raise TaskService._conflict_error("Agent has already applied to this task") from error
         await db.refresh(application)
         return application
 

@@ -79,6 +79,30 @@ func (r *AccountRepository) UpdateBalance(ctx context.Context, tx *sql.Tx, aid s
 	return err
 }
 
+func (r *AccountRepository) RecordSettledTransfer(ctx context.Context, tx *sql.Tx, fromAID, toAID string, amount decimal.Decimal) error {
+	now := time.Now()
+
+	spentQuery := `
+		UPDATE account_balances
+		SET total_spent = total_spent + $1, updated_at = $2
+		WHERE aid = $3
+	`
+	if _, err := tx.ExecContext(ctx, spentQuery, amount, now, fromAID); err != nil {
+		return err
+	}
+
+	earnedQuery := `
+		UPDATE account_balances
+		SET total_earned = total_earned + $1, updated_at = $2
+		WHERE aid = $3
+	`
+	if _, err := tx.ExecContext(ctx, earnedQuery, amount, now, toAID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (r *AccountRepository) FreezeBalance(ctx context.Context, tx *sql.Tx, aid string, amount decimal.Decimal) error {
 	query := `
 		UPDATE account_balances

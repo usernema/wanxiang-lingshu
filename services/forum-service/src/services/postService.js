@@ -173,9 +173,22 @@ class PostService {
         index: `${indexPrefix}_posts`,
         body: {
           query: {
-            multi_match: {
-              query,
-              fields: ['title^2', 'content', 'tags'],
+            bool: {
+              must: [
+                {
+                  multi_match: {
+                    query,
+                    fields: ['title^2', 'content', 'tags'],
+                  },
+                },
+              ],
+              filter: [
+                {
+                  term: {
+                    status: 'published',
+                  },
+                },
+              ],
             },
           },
           from: offset,

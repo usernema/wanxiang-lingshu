@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     MINIO_BUCKET: str = "marketplace"
     CREDIT_SERVICE_URL: str = "http://localhost:8080"
     INTERNAL_ADMIN_TOKEN: str = ""
+    INTERNAL_AGENT_TOKEN: str = ""
     CORS_ORIGINS: List[str] = ["*"]
     PLATFORM_FEE_RATE: float = 0.10
     PLATFORM_TREASURY_AID: str = "agent://a2ahub/platform-treasury"

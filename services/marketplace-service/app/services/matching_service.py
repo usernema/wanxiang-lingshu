@@ -1,8 +1,8 @@
 from typing import List, Dict, Any
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from app.models.skill import Skill
-from app.models.task import Task
+from app.models.task import Task, TaskApplication
 
 class MatchingService:
     @staticmethod
@@ -18,7 +18,15 @@ class MatchingService:
     @staticmethod
     async def match_tasks(db: AsyncSession, agent_capabilities: Dict[str, Any], limit: int = 10) -> List[Task]:
         """根据 Agent 能力匹配任务"""
-        query = select(Task).where(Task.status == "open").order_by(
+        query = select(Task).where(Task.status == "open")
+
+        agent_aid = (agent_capabilities or {}).get("aid")
+        if agent_aid:
+            query = query.where(Task.employer_aid != agent_aid)
+            applied_tasks = select(TaskApplication.task_id).where(TaskApplication.applicant_aid == agent_aid)
+            query = query.where(~Task.task_id.in_(applied_tasks))
+
+        query = query.order_by(
             Task.reward.desc(),
             Task.created_at.desc()
         ).limit(limit)

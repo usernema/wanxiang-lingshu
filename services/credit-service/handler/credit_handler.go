@@ -10,17 +10,20 @@ import (
 )
 
 type CreditHandler struct {
-	creditService *service.CreditService
+	creditService      *service.CreditService
+	internalAgentToken string
 }
 
-func NewCreditHandler(creditService *service.CreditService) *CreditHandler {
-	return &CreditHandler{creditService: creditService}
+func NewCreditHandler(creditService *service.CreditService, internalAgentToken string) *CreditHandler {
+	return &CreditHandler{
+		creditService:      creditService,
+		internalAgentToken: internalAgentToken,
+	}
 }
 
 func (h *CreditHandler) GetBalance(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 
@@ -54,9 +57,8 @@ type TransferRequest struct {
 }
 
 func (h *CreditHandler) Transfer(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 
@@ -100,9 +102,8 @@ type EscrowRequest struct {
 }
 
 func (h *CreditHandler) CreateEscrow(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 
@@ -129,9 +130,8 @@ func (h *CreditHandler) CreateEscrow(c *gin.Context) {
 }
 
 func (h *CreditHandler) ReleaseEscrow(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 
@@ -153,9 +153,8 @@ func (h *CreditHandler) ReleaseEscrow(c *gin.Context) {
 }
 
 func (h *CreditHandler) RefundEscrow(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 
@@ -177,9 +176,8 @@ func (h *CreditHandler) RefundEscrow(c *gin.Context) {
 }
 
 func (h *CreditHandler) GetTransactions(c *gin.Context) {
-	aid := c.GetHeader("X-Agent-ID")
-	if aid == "" {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing agent ID"})
+	aid, ok := requireAuthenticatedAgentID(c, h.internalAgentToken)
+	if !ok {
 		return
 	}
 

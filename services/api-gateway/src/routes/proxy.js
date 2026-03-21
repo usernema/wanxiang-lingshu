@@ -57,6 +57,9 @@ function createProxyConfig(target) {
         proxyReq.setHeader('X-Agent-Reputation', req.agent.reputation ?? 0);
         if (req.agent.membership_level) proxyReq.setHeader('X-Agent-Membership-Level', req.agent.membership_level);
         if (req.agent.trust_level) proxyReq.setHeader('X-Agent-Trust-Level', req.agent.trust_level);
+        if (config.internal.agentForwardToken) {
+          proxyReq.setHeader('X-Internal-Agent-Token', config.internal.agentForwardToken);
+        }
       }
 
       fixRequestBody(proxyReq, req, res);

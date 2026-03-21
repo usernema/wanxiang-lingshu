@@ -5,6 +5,7 @@ from typing import List, Optional
 import httpx
 import logging
 
+from app.api.auth import get_authenticated_agent_if_present, require_agent_header
 from app.core.config import settings
 from app.db.database import get_db
 from app.schemas.task import (
@@ -45,12 +46,12 @@ def require_internal_admin_token(
 async def create_task(
     task: TaskCreate,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """发布任务"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
-    if task.employer_aid != x_agent_id:
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
+    if task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="employer_aid must match authenticated agent")
 
     return await TaskService.create_task(db, task)
@@ -63,28 +64,68 @@ async def get_tasks(
     status: Optional[str] = None,
     employer_aid: Optional[str] = None,
     worker_aid: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_admin_token: Optional[str] = Header(None, alias="X-Internal-Admin-Token"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """获取任务列表"""
-    return await TaskService.get_tasks(db, skip, limit, status, employer_aid, worker_aid)
+    allow_all = has_internal_admin_token(x_internal_admin_token)
+    viewer_aid = None if allow_all else get_authenticated_agent_if_present(x_agent_id, x_internal_agent_token)
+
+    effective_status = status
+    if not allow_all:
+        if worker_aid:
+            if not viewer_aid:
+                raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+            if worker_aid != viewer_aid:
+                raise HTTPException(status_code=403, detail="worker_aid must match authenticated agent")
+
+        if status and status != "open":
+            if not viewer_aid:
+                raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+            is_participant_scope = employer_aid == viewer_aid or worker_aid == viewer_aid
+            if not is_participant_scope:
+                raise HTTPException(status_code=403, detail="Non-open task filters require authenticated task participation")
+
+        if effective_status is None:
+            if not viewer_aid or (worker_aid != viewer_aid and employer_aid != viewer_aid):
+                effective_status = "open"
+
+    return await TaskService.get_tasks(db, skip, limit, effective_status, employer_aid, worker_aid)
 
 
 @router.get("/tasks/match")
 async def match_tasks(
     agent_aid: str,
     limit: int = Query(10, ge=1, le=50),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """匹配任务"""
-    agent_capabilities = {}
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
+    if agent_aid != actor_aid:
+        raise HTTPException(status_code=403, detail="agent_aid must match authenticated agent")
+    agent_capabilities = {"aid": agent_aid}
     return await MatchingService.match_tasks(db, agent_capabilities, limit)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: str, db: AsyncSession = Depends(get_db)):
+async def get_task(
+    task_id: str,
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_admin_token: Optional[str] = Header(None, alias="X-Internal-Admin-Token"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
+):
     """获取任务详情"""
     task = await TaskService.get_task(db, task_id)
     if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    allow_all = has_internal_admin_token(x_internal_admin_token)
+    viewer_aid = None if allow_all else get_authenticated_agent_if_present(x_agent_id, x_internal_agent_token)
+    if not allow_all and task.status != "open" and viewer_aid not in {task.employer_aid, task.worker_aid}:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
@@ -94,16 +135,16 @@ async def update_task(
     task_id: str,
     task_data: TaskUpdate,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """更新任务"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
 
     existing_task = await TaskService.get_task(db, task_id)
     if not existing_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if existing_task.employer_aid != x_agent_id:
+    if existing_task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="Only employer can update the task")
 
     try:
@@ -137,18 +178,18 @@ async def apply_task(
     task_id: str,
     application: TaskApplicationCreate,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """申请任务"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
-    if application.applicant_aid != x_agent_id:
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
+    if application.applicant_aid != actor_aid:
         raise HTTPException(status_code=403, detail="applicant_aid must match authenticated agent")
 
     try:
         return await TaskService.apply_task(db, task_id, application)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
 
 @router.get("/tasks/{task_id}/applications", response_model=List[TaskApplicationResponse])
@@ -157,17 +198,19 @@ async def get_applications(
     db: AsyncSession = Depends(get_db),
     x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
     x_internal_admin_token: Optional[str] = Header(None, alias="X-Internal-Admin-Token"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """获取任务申请列表"""
     allow_all = has_internal_admin_token(x_internal_admin_token)
-    if not allow_all and not x_agent_id:
+    viewer_aid = None if allow_all else get_authenticated_agent_if_present(x_agent_id, x_internal_agent_token)
+    if not allow_all and not viewer_aid:
         raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
 
     try:
         return await TaskService.get_applications(
             db,
             task_id,
-            viewer_aid=x_agent_id,
+            viewer_aid=viewer_aid,
             allow_all=allow_all,
         )
     except ValueError as e:
@@ -181,16 +224,16 @@ async def assign_task(
     task_id: str,
     worker_aid: str,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """分配任务"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
 
     task = await TaskService.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.employer_aid != x_agent_id:
+    if task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="Only employer can assign the task")
 
     if not worker_aid:
@@ -223,10 +266,21 @@ async def assign_task(
     try:
         return await TaskService.assign_task(db, task_id, worker_aid, escrow_id)
     except ValueError as e:
+        refund_failure = None
         try:
             await CreditService.refund_escrow(escrow_id, task.employer_aid)
-        except httpx.HTTPStatusError:
-            pass
+        except httpx.HTTPStatusError as refund_error:
+            refund_failure = refund_error.response.text or "Failed to refund escrow"
+            logger.exception("Failed to refund escrow after task assignment failure")
+
+        if refund_failure:
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "Task assignment failed after escrow creation and automatic refund is incomplete: "
+                    f"{str(e)}. Refund failure: {refund_failure}"
+                ),
+            )
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
 
@@ -234,16 +288,16 @@ async def assign_task(
 async def cancel_task(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """取消任务"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
 
     task = await TaskService.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.employer_aid != x_agent_id:
+    if task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="Only employer can cancel the task")
     if task.status not in {"open", "assigned", "in_progress"}:
         if task.status == "completed":
@@ -260,17 +314,22 @@ async def cancel_task(
             raise HTTPException(status_code=400, detail=detail)
 
     try:
-        cancelled_task = await TaskService.cancel_task(db, task_id, x_agent_id)
+        cancelled_task = await TaskService.cancel_task(db, task_id, actor_aid)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
+        if task.escrow_id:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Escrow refund completed but task state reconciliation failed; retry cancel-task to finalize: {str(e)}",
+            )
         raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
 
     try:
         await GrowthService.record_task_cancellation_feedback(
             db,
             cancelled_task,
-            actor_aid=x_agent_id,
+            actor_aid=actor_aid,
             previous_status=task.status,
         )
     except Exception:
@@ -284,12 +343,12 @@ async def complete_task(
     task_id: str,
     complete_data: TaskCompleteRequest,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """提交任务结果，等待雇主验收"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
-    if complete_data.worker_aid != x_agent_id:
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
+    if complete_data.worker_aid != actor_aid:
         raise HTTPException(status_code=403, detail="worker_aid must match authenticated agent")
 
     task = await TaskService.get_task(db, task_id)
@@ -331,16 +390,16 @@ async def complete_task(
 async def accept_task_completion(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """雇主验收任务并释放托管"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
 
     task = await TaskService.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.employer_aid != x_agent_id:
+    if task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="Only employer can accept task completion")
     if task.status != "submitted":
         if task.status == "completed":
@@ -358,11 +417,14 @@ async def accept_task_completion(
         raise HTTPException(status_code=400, detail=detail)
 
     try:
-        completed_task = await TaskService.accept_task_completion(db, task_id, x_agent_id)
+        completed_task = await TaskService.accept_task_completion(db, task_id, actor_aid)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=getattr(e, "status_code", 400), detail=str(e))
+        raise HTTPException(
+            status_code=502,
+            detail=f"Payment was released but task state reconciliation failed; retry accept-completion to finalize: {str(e)}",
+        )
 
     growth_assets = None
     try:
@@ -406,20 +468,20 @@ async def accept_task_completion(
 async def request_task_revision(
     task_id: str,
     db: AsyncSession = Depends(get_db),
-    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID")
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
 ):
     """雇主将任务退回执行中"""
-    if not x_agent_id:
-        raise HTTPException(status_code=401, detail="Missing X-Agent-ID header")
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
 
     task = await TaskService.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task.employer_aid != x_agent_id:
+    if task.employer_aid != actor_aid:
         raise HTTPException(status_code=403, detail="Only employer can request revision")
 
     try:
-        revised_task = await TaskService.request_task_revision(db, task_id, x_agent_id)
+        revised_task = await TaskService.request_task_revision(db, task_id, actor_aid)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
@@ -429,7 +491,7 @@ async def request_task_revision(
         raise HTTPException(status_code=404, detail="Task not found")
 
     try:
-        await GrowthService.record_task_revision_feedback(db, revised_task, actor_aid=x_agent_id)
+        await GrowthService.record_task_revision_feedback(db, revised_task, actor_aid=actor_aid)
     except Exception:
         logger.exception("Failed to record growth revision feedback")
 

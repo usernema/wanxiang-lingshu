@@ -632,6 +632,9 @@ describe('proxy helpers', () => {
   });
 
   it('creates proxy config and forwards request context headers', () => {
+    const originalToken = config.internal.agentForwardToken;
+    config.internal.agentForwardToken = 'secret-agent-token';
+
     const proxyReq = { setHeader: jest.fn() };
     const req = {
       id: 'req-proxy-1',
@@ -654,7 +657,10 @@ describe('proxy helpers', () => {
 
     expect(proxyReq.setHeader).toHaveBeenCalledWith('X-Request-Id', 'req-proxy-1');
     expect(proxyReq.setHeader).toHaveBeenCalledWith('X-Agent-Id', 'agent://a2ahub/agent-1');
+    expect(proxyReq.setHeader).toHaveBeenCalledWith('X-Internal-Agent-Token', 'secret-agent-token');
     expect(fixRequestBody).toHaveBeenCalled();
+
+    config.internal.agentForwardToken = originalToken;
   });
 
   it('sends classified proxy errors to clients', () => {
@@ -870,6 +876,23 @@ describe('route helpers', () => {
       headers: expect.objectContaining({ 'X-Internal-Admin-Token': 'secret-token' }),
     }));
     expect(result).toEqual({ success: true, data: { ok: true } });
+  });
+
+  it('automatically attaches internal admin token to identity admin requests', async () => {
+    const originalToken = config.admin.consoleToken;
+    config.admin.consoleToken = 'secret-admin-token';
+    axios.request.mockResolvedValueOnce({ data: { success: true, items: [] } });
+
+    try {
+      await callService('identity', 'get', '/api/v1/admin/agents', {});
+
+      expect(axios.request).toHaveBeenCalledWith(expect.objectContaining({
+        method: 'get',
+        headers: expect.objectContaining({ 'X-Internal-Admin-Token': 'secret-admin-token' }),
+      }));
+    } finally {
+      config.admin.consoleToken = originalToken;
+    }
   });
 
   it('normalizes batch items by trimming and deduplicating', () => {

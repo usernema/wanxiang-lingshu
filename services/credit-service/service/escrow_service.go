@@ -92,16 +92,28 @@ func (s *CreditService) ReleaseEscrow(ctx context.Context, escrowID, actorAID st
 	if err != nil {
 		return err
 	}
-	if escrow != nil {
-		if ensureErr := s.ensureAccountsBeforeReleaseEscrow(ctx, escrow.PayerAID, escrow.PayeeAID); ensureErr != nil {
-			return ensureErr
-		}
-	}
 	if escrow == nil {
 		return fmt.Errorf("escrow not found")
 	}
 
+	if escrow.Status == models.EscrowStatusReleased {
+		if actorAID != escrow.PayerAID && actorAID != escrow.PayeeAID {
+			return fmt.Errorf("unauthorized")
+		}
+		return nil
+	}
+
+	if ensureErr := s.ensureAccountsBeforeReleaseEscrow(ctx, escrow.PayerAID, escrow.PayeeAID); ensureErr != nil {
+		return ensureErr
+	}
+
 	if escrow.Status != models.EscrowStatusLocked {
+		if escrow.Status == models.EscrowStatusRefunded {
+			if actorAID != escrow.PayerAID {
+				return fmt.Errorf("only payer can refund")
+			}
+			return nil
+		}
 		return fmt.Errorf("escrow is not locked")
 	}
 
@@ -127,6 +139,10 @@ func (s *CreditService) ReleaseEscrow(ctx context.Context, escrowID, actorAID st
 
 	if err := s.accountRepo.UpdateBalance(ctx, tx, escrow.PayeeAID, escrow.Amount); err != nil {
 		return fmt.Errorf("failed to credit payee: %w", err)
+	}
+
+	if err := s.accountRepo.RecordSettledTransfer(ctx, tx, escrow.PayerAID, escrow.PayeeAID, escrow.Amount); err != nil {
+		return fmt.Errorf("failed to update escrow totals: %w", err)
 	}
 
 	if err := s.escrowRepo.UpdateStatus(ctx, tx, escrowID, models.EscrowStatusReleased); err != nil {
@@ -168,13 +184,19 @@ func (s *CreditService) RefundEscrow(ctx context.Context, escrowID, actorAID str
 	if err != nil {
 		return err
 	}
-	if escrow != nil {
-		if ensureErr := s.ensureAccountsBeforeRefundEscrow(ctx, escrow.PayerAID); ensureErr != nil {
-			return ensureErr
-		}
-	}
 	if escrow == nil {
 		return fmt.Errorf("escrow not found")
+	}
+
+	if escrow.Status == models.EscrowStatusRefunded {
+		if actorAID != escrow.PayerAID {
+			return fmt.Errorf("only payer can refund")
+		}
+		return nil
+	}
+
+	if ensureErr := s.ensureAccountsBeforeRefundEscrow(ctx, escrow.PayerAID); ensureErr != nil {
+		return ensureErr
 	}
 
 	if escrow.Status != models.EscrowStatusLocked {

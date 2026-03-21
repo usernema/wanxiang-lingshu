@@ -5,13 +5,14 @@ from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.api.v1 import tasks as task_routes
 from app.db.database import Base
 from app.models.task import Task, TaskApplication
-from app.schemas.task import TaskCompleteRequest, TaskCreate, TaskUpdate
+from app.schemas.task import TaskApplicationCreate, TaskCompleteRequest, TaskCreate, TaskUpdate
 from app.services.task_service import TaskService
 
 
@@ -164,6 +165,7 @@ def test_get_tasks_passes_worker_filter(monkeypatch):
         employer_aid="agent://a2ahub/employer",
         worker_aid="agent://a2ahub/worker",
         db=None,
+        x_agent_id="agent://a2ahub/worker",
     ))
 
     assert recorded["filters"] == {
@@ -175,6 +177,202 @@ def test_get_tasks_passes_worker_filter(monkeypatch):
     }
     assert len(response) == 1
     assert response[0].worker_aid == "agent://a2ahub/worker"
+
+
+def test_get_tasks_defaults_public_queries_to_open(monkeypatch):
+    recorded = {}
+
+    async def fake_get_tasks(db, skip=0, limit=20, status=None, employer_aid=None, worker_aid=None):
+        recorded["filters"] = {
+            "skip": skip,
+            "limit": limit,
+            "status": status,
+            "employer_aid": employer_aid,
+            "worker_aid": worker_aid,
+        }
+        return [DummyTask(task_id="task_public_1", status="open")]
+
+    monkeypatch.setattr(task_routes.TaskService, "get_tasks", fake_get_tasks)
+
+    response = run(task_routes.get_tasks(
+        skip=0,
+        limit=20,
+        status=None,
+        employer_aid=None,
+        worker_aid=None,
+        db=None,
+        x_agent_id=None,
+    ))
+
+    assert recorded["filters"] == {
+        "skip": 0,
+        "limit": 20,
+        "status": "open",
+        "employer_aid": None,
+        "worker_aid": None,
+    }
+    assert len(response) == 1
+    assert response[0].status == "open"
+
+
+def test_get_tasks_rejects_worker_filter_without_auth():
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.get_tasks(
+            skip=0,
+            limit=20,
+            status=None,
+            employer_aid=None,
+            worker_aid="agent://a2ahub/worker",
+            db=None,
+            x_agent_id=None,
+        ))
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Missing X-Agent-ID header"
+
+
+def test_get_tasks_rejects_non_open_foreign_filter():
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.get_tasks(
+            skip=0,
+            limit=20,
+            status="submitted",
+            employer_aid="agent://a2ahub/employer",
+            worker_aid=None,
+            db=None,
+            x_agent_id="agent://a2ahub/other",
+        ))
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Non-open task filters require authenticated task participation"
+
+
+def test_get_tasks_allows_participant_to_query_non_open_tasks(monkeypatch):
+    recorded = {}
+
+    async def fake_get_tasks(db, skip=0, limit=20, status=None, employer_aid=None, worker_aid=None):
+        recorded["filters"] = {
+            "skip": skip,
+            "limit": limit,
+            "status": status,
+            "employer_aid": employer_aid,
+            "worker_aid": worker_aid,
+        }
+        return [DummyTask(task_id="task_private_1", employer_aid=employer_aid, status="submitted")]
+
+    monkeypatch.setattr(task_routes.TaskService, "get_tasks", fake_get_tasks)
+
+    response = run(task_routes.get_tasks(
+        skip=0,
+        limit=20,
+        status="submitted",
+        employer_aid="agent://a2ahub/employer",
+        worker_aid=None,
+        db=None,
+        x_agent_id="agent://a2ahub/employer",
+    ))
+
+    assert recorded["filters"]["status"] == "submitted"
+    assert len(response) == 1
+    assert response[0].status == "submitted"
+
+
+def test_get_task_hides_private_task_from_public(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(task_id=task_id, employer_aid="agent://a2ahub/employer", worker_aid="agent://a2ahub/worker", status="completed")
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.get_task(
+            task_id="task_private_1",
+            db=None,
+            x_agent_id=None,
+        ))
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "Task not found"
+
+
+def test_get_task_allows_participant_to_view_private_task(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(task_id=task_id, employer_aid="agent://a2ahub/employer", worker_aid="agent://a2ahub/worker", status="completed")
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+
+    response = run(task_routes.get_task(
+        task_id="task_private_1",
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert response.status == "completed"
+
+
+def test_match_tasks_passes_agent_identity(monkeypatch):
+    recorded = {}
+
+    async def fake_match_tasks(db, agent_capabilities, limit=10):
+        recorded["agent_capabilities"] = agent_capabilities
+        recorded["limit"] = limit
+        return [DummyTask(task_id="task_match_1", employer_aid="agent://a2ahub/employer-1")]
+
+    monkeypatch.setattr(task_routes.MatchingService, "match_tasks", fake_match_tasks)
+
+    response = run(task_routes.match_tasks(
+        agent_aid="agent://a2ahub/worker",
+        limit=7,
+        db=None,
+        x_agent_id="agent://a2ahub/worker",
+    ))
+
+    assert recorded == {
+        "agent_capabilities": {"aid": "agent://a2ahub/worker"},
+        "limit": 7,
+    }
+    assert len(response) == 1
+    assert response[0].task_id == "task_match_1"
+
+
+def test_match_tasks_requires_authenticated_agent(monkeypatch):
+    async def fake_match_tasks(db, agent_capabilities, limit=10):
+        return []
+
+    monkeypatch.setattr(task_routes.MatchingService, "match_tasks", fake_match_tasks)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.match_tasks(
+            agent_aid="agent://a2ahub/worker",
+            limit=7,
+            db=None,
+            x_agent_id=None,
+        ))
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Missing X-Agent-ID header"
+
+
+def test_apply_task_rejects_duplicate_application(monkeypatch):
+    async def fake_apply_task(db, task_id, application):
+        error = ValueError("Agent has already applied to this task")
+        error.status_code = 409
+        raise error
+
+    monkeypatch.setattr(task_routes.TaskService, "apply_task", fake_apply_task)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.apply_task(
+            task_id="task_123",
+            application=task_routes.TaskApplicationCreate(
+                applicant_aid="agent://a2ahub/worker",
+                proposal="I can do this",
+            ),
+            db=None,
+            x_agent_id="agent://a2ahub/worker",
+        ))
+
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.detail == "Agent has already applied to this task"
 
 
 @pytest.mark.parametrize("status", ["in_progress", "completed", "cancelled"])
@@ -315,6 +513,40 @@ def test_assign_endpoint_refunds_escrow_when_task_update_fails(monkeypatch):
         "escrow_id": "escrow_123",
         "actor_aid": "agent://a2ahub/employer",
     }
+
+
+def test_assign_endpoint_reports_incomplete_refund_when_assignment_rollback_fails(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(task_id=task_id, status="open", reward=Decimal("10"))
+
+    async def fake_create_escrow(payer, payee, amount, release_condition="task_completion", timeout_hours=168, metadata=None):
+        return {"escrow_id": "escrow_123"}
+
+    async def fake_assign_task(db, task_id, worker_aid, escrow_id):
+        raise ValueError("database write failed")
+
+    async def fake_refund_escrow(escrow_id, actor_aid):
+        request = task_routes.httpx.Request("POST", f"http://credit/api/v1/credits/escrow/{escrow_id}/refund")
+        response = task_routes.httpx.Response(400, request=request, text="refund failed")
+        raise task_routes.httpx.HTTPStatusError("refund failed", request=request, response=response)
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "create_escrow", fake_create_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "assign_task", fake_assign_task)
+    monkeypatch.setattr(task_routes.CreditService, "refund_escrow", fake_refund_escrow)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.assign_task(
+            task_id="task_123",
+            worker_aid="agent://a2ahub/worker",
+            db=None,
+            x_agent_id="agent://a2ahub/employer",
+        ))
+
+    assert exc_info.value.status_code == 502
+    assert "automatic refund is incomplete" in exc_info.value.detail
+    assert "database write failed" in exc_info.value.detail
+    assert "refund failed" in exc_info.value.detail
 
 
 def test_cancel_endpoint_cancels_open_task_without_refund(monkeypatch):
@@ -482,6 +714,40 @@ def test_cancel_endpoint_does_not_advance_when_refund_fails(monkeypatch):
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "refund failed"
     assert recorded["cancelled"] is False
+
+
+def test_cancel_endpoint_returns_retriable_error_when_state_update_fails_after_refund(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="in_progress",
+        )
+
+    async def fake_refund_escrow(escrow_id, actor_aid):
+        return {"message": "escrow refunded successfully"}
+
+    async def fake_cancel_task(db, task_id, actor_aid):
+        error = ValueError("database write failed")
+        error.status_code = 400
+        raise error
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "refund_escrow", fake_refund_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "cancel_task", fake_cancel_task)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.cancel_task(
+            task_id="task_123",
+            db=None,
+            x_agent_id="agent://a2ahub/employer",
+        ))
+
+    assert exc_info.value.status_code == 502
+    assert "retry cancel-task to finalize" in exc_info.value.detail
+    assert "database write failed" in exc_info.value.detail
 
 
 def test_cancel_endpoint_rejects_non_employer_before_refund(monkeypatch):
@@ -924,6 +1190,40 @@ def test_accept_completion_endpoint_does_not_advance_when_release_fails(monkeypa
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "release failed"
     assert recorded["accepted"] is False
+
+
+def test_accept_completion_endpoint_returns_retriable_error_when_state_update_fails_after_release(monkeypatch):
+    async def fake_get_task(db, task_id):
+        return DummyTask(
+            task_id=task_id,
+            employer_aid="agent://a2ahub/employer",
+            worker_aid="agent://a2ahub/worker",
+            escrow_id="escrow_123",
+            status="submitted",
+        )
+
+    async def fake_release_escrow(escrow_id, actor_aid):
+        return {"message": "escrow released successfully"}
+
+    async def fake_accept_task_completion(db, task_id, actor_aid):
+        error = ValueError("database write failed")
+        error.status_code = 400
+        raise error
+
+    monkeypatch.setattr(task_routes.TaskService, "get_task", fake_get_task)
+    monkeypatch.setattr(task_routes.CreditService, "release_escrow", fake_release_escrow)
+    monkeypatch.setattr(task_routes.TaskService, "accept_task_completion", fake_accept_task_completion)
+
+    with pytest.raises(task_routes.HTTPException) as exc_info:
+        run(task_routes.accept_task_completion(
+            task_id="task_123",
+            db=None,
+            x_agent_id="agent://a2ahub/employer",
+        ))
+
+    assert exc_info.value.status_code == 502
+    assert "retry accept-completion to finalize" in exc_info.value.detail
+    assert "database write failed" in exc_info.value.detail
 
 
 def test_complete_endpoint_rejects_wrong_worker_before_submission(monkeypatch):
@@ -1399,6 +1699,47 @@ def test_task_service_validation_error_sets_status_code():
     assert isinstance(error, ValueError)
     assert str(error) == "Task has no escrow to release"
     assert getattr(error, "status_code") == 400
+
+
+def test_task_service_apply_task_translates_integrity_error_to_conflict(monkeypatch):
+    async def scenario():
+        async with create_test_db_session() as db:
+            db.add(Task(
+                task_id="task_duplicate_apply",
+                employer_aid="agent://a2ahub/employer",
+                title="Duplicate Apply Guard",
+                description="Ensure DB uniqueness races return 409",
+                reward=Decimal("10"),
+                status="open",
+            ))
+            await db.commit()
+
+            rollback_called = {"value": False}
+
+            async def fake_commit():
+                raise IntegrityError("INSERT", {}, Exception("duplicate key value"))
+
+            async def fake_rollback():
+                rollback_called["value"] = True
+
+            monkeypatch.setattr(db, "commit", fake_commit)
+            monkeypatch.setattr(db, "rollback", fake_rollback)
+
+            with pytest.raises(ValueError) as exc_info:
+                await TaskService.apply_task(
+                    db,
+                    "task_duplicate_apply",
+                    TaskApplicationCreate(
+                        applicant_aid="agent://a2ahub/worker",
+                        proposal="I can do this",
+                    ),
+                )
+
+            assert str(exc_info.value) == "Agent has already applied to this task"
+            assert getattr(exc_info.value, "status_code") == 409
+            assert rollback_called["value"] is True
+
+    run(scenario())
 
 
 def teardown_module():

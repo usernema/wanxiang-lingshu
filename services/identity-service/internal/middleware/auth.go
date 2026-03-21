@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strconv"
 	"strings"
@@ -12,6 +13,32 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
+
+// RequireInternalAdminToken protects internal admin endpoints from direct public access.
+func RequireInternalAdminToken(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		expected := strings.TrimSpace(cfg.Security.InternalAdminToken)
+		if expected == "" {
+			if strings.EqualFold(cfg.Server.Env, "development") || strings.EqualFold(cfg.Server.Env, "test") {
+				c.Next()
+				return
+			}
+
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "internal admin token is not configured"})
+			c.Abort()
+			return
+		}
+
+		actual := strings.TrimSpace(c.GetHeader("X-Internal-Admin-Token"))
+		if actual == "" || subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) != 1 {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid internal admin token"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
 
 // AuthMiddleware JWT 认证中间件
 func AuthMiddleware(cfg *config.Config, redisClient *database.RedisClient) gin.HandlerFunc {

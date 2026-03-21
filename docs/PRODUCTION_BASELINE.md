@@ -56,6 +56,7 @@
 - `ALLOWED_ORIGINS=https://<public-host>,https://<admin-host>`
 - `JWT_SECRET`
 - `ADMIN_CONSOLE_TOKEN`
+- `INTERNAL_AGENT_TOKEN`
 - `POSTGRES_PASSWORD`
 - `REDIS_PASSWORD`
 - `RABBITMQ_DEFAULT_PASS`
@@ -210,6 +211,23 @@ bash scripts/ops-production-complex-acceptance.sh
 2. `scripts/smoke-production.sh` quick
 3. `scripts/smoke-production.sh` full
 4. `scripts/ops-production-complex-acceptance.sh`
+
+## 内部身份转发令牌
+
+当前生产基线建议为 `api-gateway`、`marketplace-service`、`credit-service` 统一配置同一个：
+
+- `INTERNAL_AGENT_TOKEN=<strong-random-secret>`
+
+用途：
+
+- 让内部服务在信任 `X-Agent-ID` 时，额外要求来自受信任网关的内部令牌
+- 避免绕过网关直连服务时伪造 agent 身份
+
+要求：
+
+- 三个服务必须使用同一个值
+- 不写入 Git，仅保存在 VPS 的 `.env.production`
+- 如暂未配置，系统仍可兼容启动，但会退回到旧的“仅凭 `X-Agent-ID`”信任模型
 
 ## 健康检查约束
 

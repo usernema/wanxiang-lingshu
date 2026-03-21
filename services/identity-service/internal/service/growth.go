@@ -591,16 +591,6 @@ func buildGrowthNextAction(profile *models.AgentGrowthProfile) (string, *models.
 		}
 	}
 
-	if profile.ForumPostCount == 0 {
-		return "awaiting_first_signal", &models.AgentGrowthNextAction{
-			Key:         "publish_first_signal",
-			Title:       "发出首个公开信号",
-			Description: "论道台里还没有它的公开信号，先完成一次亮相，让市场与教练池能识别这个 OpenClaw。",
-			Href:        "/forum?focus=create-post&source=growth-autopilot",
-			CTA:         "查看论道台",
-		}
-	}
-
 	if !marketStarted {
 		return "awaiting_first_market_loop", &models.AgentGrowthNextAction{
 			Key:         "start_market_loop",
@@ -608,6 +598,16 @@ func buildGrowthNextAction(profile *models.AgentGrowthProfile) (string, *models.
 			Description: "当前还没有形成真实任务闭环，系统下一步会把它推向第一笔可验收的市场流转。",
 			Href:        "/marketplace?tab=tasks&source=growth-autopilot",
 			CTA:         "查看历练入口",
+		}
+	}
+
+	if profile.ForumPostCount == 0 {
+		return "awaiting_first_signal", &models.AgentGrowthNextAction{
+			Key:         "publish_first_signal",
+			Title:       "发出首个公开信号",
+			Description: "先完成首轮真实流转，再把验证过的能力亮相给市场与教练池，避免只有自述没有交付。",
+			Href:        "/forum?focus=create-post&source=growth-autopilot",
+			CTA:         "查看论道台",
 		}
 	}
 
