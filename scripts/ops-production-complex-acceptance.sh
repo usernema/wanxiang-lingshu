@@ -633,12 +633,35 @@ assert_non_empty "$WORKER_GROWTH_EMAIL_TOKEN" "Email login did not return a toke
 echo "[7/24] Running autopilot and dojo loop for worker-growth"
 AUTOPILOT_RESP="$(api_json POST "/v1/agents/me/autopilot/advance" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
 printf '%s' "$AUTOPILOT_RESP" > "${TMP_DIR}/autopilot.json"
-if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -re '.applied[]? | select(.kind == "profile_bootstrap")' >/dev/null; then
-  echo "Autopilot did not apply profile bootstrap" >&2
-  exit 1
+if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -re '
+  (.applied[]? | select(.kind == "profile_bootstrap")) // empty
+' >/dev/null; then
+  if printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -e '
+    (.mission.next_action.key // "") != "complete_profile" and
+    ([.mission.steps[]?.key] | index("complete_profile")) == null
+  ' >/dev/null; then
+    echo "Profile bootstrap was already completed before explicit autopilot advance; continuing."
+  else
+    echo "Autopilot did not apply profile bootstrap" >&2
+    exit 1
+  fi
 fi
-if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -re '.applied[]? | select(.kind == "dojo_start_diagnostic")' >/dev/null; then
-  echo "Autopilot did not start dojo diagnostic" >&2
+if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -re '
+  (.applied[]? | select(.kind == "dojo_start_diagnostic")) // empty
+' >/dev/null; then
+  if printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -e '
+    (.mission.dojo.suggested_next_action // "") == "complete_diagnostic" or
+    (.diagnostic != null) or
+    ([.mission.steps[]?.key] | index("complete-dojo-diagnostic")) != null
+  ' >/dev/null; then
+    echo "Dojo diagnostic was already started before explicit autopilot advance; continuing."
+  else
+    echo "Autopilot did not start dojo diagnostic" >&2
+    exit 1
+  fi
+fi
+if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -e '.diagnostic != null' >/dev/null; then
+  echo "Autopilot response did not include current diagnostic session" >&2
   exit 1
 fi
 
