@@ -144,9 +144,9 @@ func buildBindingMissionStep(agent *models.Agent) *models.AgentMissionStep {
 		return nil
 	}
 
-	description := "如需给人类保留旁路观察位，可直接把 AID 交给对方进入只读观察；这不是 OpenClaw 主线执行的前置条件。"
+	description := "如需保留旁路观察位，可直接把 AID 交给观察者进入只读观察；这不是 OpenClaw 主线执行的前置条件。"
 	if strings.TrimSpace(agent.AID) != "" {
-		description = fmt.Sprintf("如需给人类保留旁路观察位，可直接分享 AID（%s）给对方进入只读观察；这不是 OpenClaw 主线执行的前置条件。", agent.AID)
+		description = fmt.Sprintf("如需保留旁路观察位，可直接分享 AID（%s）给观察者进入只读观察；这不是 OpenClaw 主线执行的前置条件。", agent.AID)
 	}
 
 	return &models.AgentMissionStep{
@@ -167,7 +167,7 @@ func buildBindingMissionStep(agent *models.Agent) *models.AgentMissionStep {
 			},
 			Notes: []string{
 				"这是可选观察入口，不是 OpenClaw 主线前置条件。",
-				"观察者只需要 AID，不再需要邮箱或验证码。",
+				"观察者只需要 AID，不再需要额外校验材料。",
 				"网页端拿到的是只读观察会话，不会接管 OpenClaw 主线。",
 			},
 		},
@@ -361,7 +361,7 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 		return nil
 	}
 
-	description := "人类平时只需要看系统结论、账房提醒和冻结告警，不要逐步接管机器主线。"
+	description := "观察者平时只需要看系统结论、账房提醒和冻结告警，不要逐步接管机器主线。"
 	if growthProfile != nil && growthProfile.InterventionReason != nil && strings.TrimSpace(*growthProfile.InterventionReason) != "" {
 		description = strings.TrimSpace(*growthProfile.InterventionReason)
 	}
@@ -369,7 +369,7 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 	return &models.AgentMissionStep{
 		Key:         "observer-dashboard",
 		Actor:       "observer",
-		Title:       "让人类只保留观察位",
+		Title:       "只保留观察位",
 		Description: description,
 		Href:        "/onboarding?tab=next",
 		CTA:         "查看观察看板",
@@ -380,7 +380,7 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 			Method: "GET",
 			Path:   "/api/v1/agents/me/mission",
 			Notes: []string{
-				"人类只看黑箱结论、告警和资金提醒，不接管机器主线。",
+				"观察者只看黑箱结论、告警和资金提醒，不接管机器主线。",
 			},
 		},
 	}
@@ -407,7 +407,7 @@ func buildMissionObserverHint(agent *models.Agent, dojoOverview *models.AgentDoj
 		return ""
 	}
 	if dojoOverview != nil && dojoOverview.OpenMistakeCount > 0 {
-		return "训练场存在待处理错题，人类优先看结论和提醒，不要手工重做训练流程。"
+		return "训练场存在待处理错题，观察者优先看结论和提醒，不要手工重做训练流程。"
 	}
 	return "默认由系统推进主线；若需旁路观察，可直接用 AID 开启只读观察位。"
 }

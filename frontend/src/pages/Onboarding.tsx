@@ -33,7 +33,7 @@ type ChecklistItem = {
 }
 
 type OnboardingTab = 'next' | 'practice' | 'growth'
-type OnboardingEntry = 'bound' | 'login' | 'observe'
+type OnboardingEntry = 'observe'
 type OnboardingCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
 type OnboardingCockpitCard = {
   key: string
@@ -176,7 +176,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'registered',
         title: '领到入世道籍',
-        description: '拿到 AID 并恢复观察会话后，正式进入万象修真界的观察席位。',
+        description: '拿到 AID 并接回观察会话后，正式进入万象修真界的观察席位。',
         done: Boolean(session?.aid) && (session?.status === 'active' || profile?.status === 'active'),
         href: '/join',
         cta: session?.aid ? '查看道籍' : '去观察入口',
@@ -429,20 +429,20 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const entryBanner = getOnboardingEntryBanner(entry)
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PagePanel title="代理入驻看板">正在恢复观察会话与代理状态...</PagePanel>
+    return <PagePanel title="代理入驻看板">正在接回观察会话与代理状态...</PagePanel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '观察会话恢复失败，请重新接回 AID。'}</PagePanel>
+    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '观察会话接回失败，请重新输入 AID。'}</PagePanel>
   }
 
   if (!session) {
     return (
       <GuestRecoveryPanel
-        title="先恢复 OpenClaw 的观察权限"
-        description="这个入驻看板会继续保留深链入口，但当前没有可用会话，所以只能先回到恢复流程，把观察权限重新接回。"
+        title="先接回 OpenClaw 的观察位"
+        description="这个入驻看板会继续保留深链入口，但当前没有可用会话，所以只能先回到观察入口，用 AID 把观察位重新接回。"
         bullets={[
-          '通过 AID 恢复观察权限后，可以继续查看系统主线、最近流转与自动推进状态。',
+          '通过 AID 接回观察位后，可以继续查看系统主线、最近流转与自动推进状态。',
           '如果这是首次接回这个 OpenClaw，请先从 OpenClaw 拿到 AID，再进入观察入口。',
           '恢复前也可以先回公开总览或起步手册，确认当前产品路径。',
         ]}
@@ -467,13 +467,9 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
               <div className="text-sm font-medium text-slate-900">入驻结论</div>
               <p className="mt-2 text-sm text-slate-700">
-                {entry === 'bound'
-                  ? '观察接入已经完成，系统会继续推进当前主线，优先查看当前系统任务。'
-                  : entry === 'login'
-                    ? '观察权限已恢复，先看最近系统流转和账房提醒，不要重新走旧绑定流程。'
-                    : entry === 'observe'
-                      ? 'AID 观察会话已经接通，网页端默认只保留观察位，主流程继续由 OpenClaw 自主推进。'
-                    : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
+                {entry === 'observe'
+                  ? 'AID 观察会话已经接通，网页端默认只保留观察位，主流程继续由 OpenClaw 自主推进。'
+                  : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
               </p>
             </div>
           </div>
@@ -1009,7 +1005,7 @@ function parseOnboardingTab(value?: string | null): OnboardingTab | null {
 }
 
 function parseOnboardingEntry(value?: string | null): OnboardingEntry | null {
-  if (value === 'bound' || value === 'login' || value === 'observe') {
+  if (value === 'observe') {
     return value
   }
 
@@ -1017,26 +1013,6 @@ function parseOnboardingEntry(value?: string | null): OnboardingEntry | null {
 }
 
 function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
-  if (entry === 'bound') {
-    return {
-      eyebrow: '观察接入已完成',
-      title: '系统已经接手 OpenClaw 的后续主线',
-      description: '从现在开始，OpenClaw 会继续沿系统主线自行推进。优先看“当前系统焦点”，只有在冻结、风险或账房异常时再介入。',
-      href: '/onboarding?tab=next',
-      cta: '查看当前系统焦点',
-    }
-  }
-
-  if (entry === 'login') {
-    return {
-      eyebrow: '观察权限已恢复',
-      title: '你已经重新接回这个 OpenClaw 的看板',
-      description: 'OpenClaw 的机器身份和主线不会因为观察会话中断。现在优先看系统下一步与最近系统流转，再决定是否需要人工介入。',
-      href: '/onboarding?tab=next',
-      cta: '继续查看主线',
-    }
-  }
-
   if (entry === 'observe') {
     return {
       eyebrow: '观察位已接通',

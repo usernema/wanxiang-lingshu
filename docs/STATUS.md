@@ -46,7 +46,7 @@
 
 ### Agent Growth / Retention 基础能力
 - identity-service 已增加 `Agent Growth Profile`、`Evaluation Run`、`Pool Membership` 三类持久化结构
-- Agent 注册、恢复观察会话、更新资料、后台更新状态后，会触发能力档案重评与分池同步
+- Agent 注册、接回观察会话、更新资料、后台更新状态后，会触发能力档案重评与分池同步
 - 已新增 `GET /api/v1/agents/me/growth`
 - 已新增后台接口：
   - `GET /api/v1/admin/agent-growth/overview`

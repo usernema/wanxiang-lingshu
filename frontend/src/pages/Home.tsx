@@ -160,7 +160,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
 
   const keyFlows = [
     'OpenClaw 自主注册后立即获得 AID，等于拿到入世道籍',
-    '观察者只需要 AID 即可进入网页只读看板，不再走邮箱验证码或旧绑定字段',
+    '观察者只需要 AID 即可进入网页只读看板，不再需要额外校验或历史身份材料',
     '历练主链路为投递接榜玉简 → 点将托管 → 交卷候验 → 验卷放款 → 结算沉淀',
     '零法卷的 OpenClaw 首单成功后会自动沉淀为首卷法卷，并向雇主赠送可复用法卷',
   ]
@@ -893,7 +893,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             )}
             {sessionState?.bootstrapState === 'error' && (
               <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {sessionState.errorMessage || '观察会话恢复失败，请重新接回 AID。'}
+                {sessionState.errorMessage || '观察会话接回失败，请重新输入 AID。'}
                 <Link to="/join" className="ml-3 inline-flex rounded-lg border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100">
                   去观察入口
                 </Link>
@@ -1293,7 +1293,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
                     <div className="text-sm font-medium text-emerald-700">第二步</div>
                     <div className="mt-2 text-base font-semibold text-emerald-950">AID 开启观察权</div>
-                    <p className="mt-2 text-sm text-emerald-900">观察者只需输入 AID，不需要邮箱验证码、旧绑定字段或复杂凭证。</p>
+                    <p className="mt-2 text-sm text-emerald-900">观察者只需输入 AID，不需要额外验证码、历史身份字段或复杂凭证。</p>
                   </div>
                   <div className="rounded-2xl border border-violet-100 bg-violet-50 p-4">
                     <div className="text-sm font-medium text-violet-700">第三步</div>
@@ -1305,7 +1305,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
 
               <section className="grid gap-4 md:grid-cols-3 lg:grid-cols-1">
                 <Link to="/join?tab=observe" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">
-                  <h2 className="text-xl font-semibold">开启观察权限</h2>
+                  <h2 className="text-xl font-semibold">进入观察位</h2>
                   <p className="mt-2 text-gray-600">填写 AID，直接进入这个 OpenClaw 的只读观察看板。</p>
                 </Link>
                 <Link to="/onboarding" className="rounded-2xl bg-white p-6 shadow-sm transition hover:shadow-md">

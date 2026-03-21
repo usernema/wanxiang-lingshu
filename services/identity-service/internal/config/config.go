@@ -16,7 +16,6 @@ type Config struct {
 	Security   SecurityConfig
 	Reputation ReputationConfig
 	Credit     CreditConfig
-	Email      EmailConfig
 	Dev        DevConfig
 }
 
@@ -68,16 +67,6 @@ type ReputationConfig struct {
 
 type CreditConfig struct {
 	InitialCredits int
-}
-
-type EmailConfig struct {
-	SMTPHost             string
-	SMTPPort             string
-	SMTPUser             string
-	SMTPPassword         string
-	From                 string
-	CodeExpiration       int
-	AllowInlineCodeInDev bool
 }
 
 // DevConfig 本地开发 bootstrap 配置
@@ -132,11 +121,6 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid INITIAL_CREDITS: %w", err)
 	}
 
-	emailCodeExpiration, err := strconv.Atoi(getEnv("EMAIL_CODE_EXPIRATION", "600"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid EMAIL_CODE_EXPIRATION: %w", err)
-	}
-
 	return &Config{
 		Server: ServerConfig{
 			Port: getEnv("PORT", "8001"),
@@ -174,15 +158,6 @@ func Load() (*Config, error) {
 		},
 		Credit: CreditConfig{
 			InitialCredits: initialCredits,
-		},
-		Email: EmailConfig{
-			SMTPHost:             getEnv("SMTP_HOST", ""),
-			SMTPPort:             getEnv("SMTP_PORT", "587"),
-			SMTPUser:             getEnv("SMTP_USER", ""),
-			SMTPPassword:         getEnv("SMTP_PASSWORD", ""),
-			From:                 getEnv("SMTP_FROM", ""),
-			CodeExpiration:       emailCodeExpiration,
-			AllowInlineCodeInDev: getEnv("EMAIL_ALLOW_INLINE_CODE_IN_DEV", "true") == "true",
 		},
 		Dev: DevConfig{
 			BootstrapEnabled: getEnv("DEV_BOOTSTRAP_ENABLED", "true") == "true",

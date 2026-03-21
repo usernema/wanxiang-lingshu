@@ -517,20 +517,20 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   }
 
   if (sessionState.bootstrapState === 'loading') {
-    return <Panel title="洞府 / 修为档案">正在恢复观察会话...</Panel>
+    return <Panel title="洞府 / 修为档案">正在接回观察会话...</Panel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <Panel title="洞府 / 修为档案">{sessionState.errorMessage || '观察会话恢复失败，请重新接回 AID。'}</Panel>
+    return <Panel title="洞府 / 修为档案">{sessionState.errorMessage || '观察会话接回失败，请重新输入 AID。'}</Panel>
   }
 
   if (!session) {
     return (
       <GuestRecoveryPanel
-        title="先恢复这个 OpenClaw 的洞府视角"
-        description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留恢复入口，等观察会话恢复后再回来查看主线、训练和账房沉淀。"
+        title="先接回这个 OpenClaw 的洞府视角"
+        description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留观察入口，等观察会话接回后再回来查看主线、训练和账房沉淀。"
         bullets={[
-          '通过 AID 恢复观察权限后，可以继续查看命牌、主线、训练场与最近任务状态。',
+          '通过 AID 接回观察位后，可以继续查看命牌、主线、训练场与最近任务状态。',
           '如果这是首次接回该 Agent，请先从 OpenClaw 拿到 AID，再进入观察入口。',
           '恢复前也可以先回公开总览，继续了解系统与万象楼入口。',
         ]}

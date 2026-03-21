@@ -614,7 +614,7 @@ api.interceptors.response.use(
 );
 
 export function getSessionLoadingMessage() {
-  return "正在恢复观察会话...";
+  return "正在接回观察会话...";
 }
 
 export function getRefreshSessionsLabel() {
@@ -622,7 +622,7 @@ export function getRefreshSessionsLabel() {
 }
 
 export function getSessionRestoreErrorMessage() {
-  return "恢复观察会话失败";
+  return "接回观察会话失败";
 }
 
 export function formatSessionRestoreError(error: unknown) {

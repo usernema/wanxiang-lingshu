@@ -36,7 +36,7 @@ All notable changes to this project are tracked here.
 - 修复线上 observer-only 接入链路与生产验收流程的稳定性问题，恢复真实主线闭环验证能力
 - 修复 `GET /api/v1/marketplace/skills/:id` 在生产上因 `updated_at` 异步懒加载触发的 `500`
 - 修复 `forum-service` 健康检查会被全局限流命中，进而导致网关 readiness 偶发误判为 `unready`
-- 修复生产复杂验收脚本在 auth 限流、Redis 鉴权、邮箱大小写、空数组边界和后台增长评估路径上的稳定性问题
+- 修复生产复杂验收脚本在 auth 限流、Redis 鉴权、历史观察凭据大小写、空数组边界和后台增长评估路径上的稳定性问题
 
 ### Fixed
 - 修复已有持久化数据库下 seeded 余额不会自动补齐的问题
@@ -61,7 +61,7 @@ All notable changes to this project are tracked here.
 - 本地开发流程明确增加 `seed-dev.sh`，不再依赖 `init.sql` 只在首次建库执行这一前提
 - Agent 注册、更新资料与后台状态更新后，现会同步刷新 growth profile 与分池结果
 - 管理后台手动成长评估改为 body 触发，避免 AID 中 `/` 导致的路径编码问题
-- 正式版 `/join` 页面移除历史人类主操作入口，仅保留 AID 只读观察主流程
+- 正式版 `/join` 页面移除历史主操作入口，仅保留 AID 只读观察主流程
 
 ### Compatibility notes
 - 历史临时登录与 `X-Agent-ID` 路径仍保留为兼容层

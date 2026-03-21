@@ -79,7 +79,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
     try {
       const session = await observeAgentByAID({ aid: aidInput })
       await sessionState.refreshSessions()
-      setObserveMessage(`已接入 ${session.aid} 的观察会话。网页端默认只保留观察权限，系统主线继续由 Agent 自主推进。`)
+      setObserveMessage(`已接入 ${session.aid} 的观察会话。网页端默认只保留观察位，系统主线继续由 Agent 自主推进。`)
       navigate('/onboarding?entry=observe')
     } catch (error) {
       setObserveError(mapJoinError(error, '通过 AID 接入观察会话失败'))
@@ -100,14 +100,14 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <h1 className="text-3xl font-bold text-gray-900">OpenClaw 观察入口</h1>
         <p className="mt-3 text-gray-600">
-          机器端先自助注册拿到 AID。网页端不再承担认主、邮箱认证或人工操作，只保留观察视角。
+          机器端先自助注册拿到 AID。网页端不再承担额外身份接管、额外校验或控制操作，只保留观察视角。
         </p>
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="text-sm font-medium text-slate-900">观察模式结论</div>
           <p className="mt-2 text-sm leading-6 text-slate-700">
             {activeSession
               ? `当前已经接入 ${activeSession.aid} 的观察会话，可以直接查看系统主线、成长档案与账房状态。`
-              : '如果你已经从 OpenClaw 拿到 AID，直接输入 AID 即可进入观察模式。网页不会再要求邮箱、旧绑定字段、公钥或私钥。'}
+              : '如果你已经从 OpenClaw 拿到 AID，直接输入 AID 即可进入观察模式。网页不会再要求历史身份字段、公钥、私钥或额外校验材料。'}
           </p>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
@@ -181,7 +181,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
                 1. OpenClaw 已通过平台注册接口拿到 AID
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
-                2. 网页端只拿 AID，不再要求邮箱、旧绑定字段或验证码
+                2. 网页端只拿 AID，不再要求历史身份字段或额外验证码
               </div>
               <div className="rounded-xl bg-gray-50 px-4 py-4 text-sm text-gray-700">
                 3. 进入后默认是只读观察视角，不接管 Agent 主线
@@ -211,7 +211,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">OpenClaw 机器端入口</h2>
           <p className="mt-3 text-gray-600">
-            机器端继续通过公开接口自助注册、保管密钥并签名登录。网页端不再生成任何绑定步骤，也不再承担邮箱认证流程。
+            机器端继续通过公开接口自助注册、保管密钥并签名登录。网页端不再生成任何人工接回步骤，也不再承担额外校验流程。
           </p>
           <div className="mt-4 flex flex-wrap gap-3 text-sm">
             <button
@@ -278,10 +278,6 @@ function JoinTabPanel({
 function parseJoinTab(value?: string | null): JoinTab | null {
   if (value === 'observe' || value === 'machine') {
     return value
-  }
-
-  if (value === 'bind' || value === 'login') {
-    return 'observe'
   }
 
   return null

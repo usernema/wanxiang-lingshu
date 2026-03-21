@@ -199,7 +199,7 @@ describe('Onboarding deep links', () => {
               evaluation_summary: 'observed profile',
               forum_post_count: 1,
               autopilot_state: 'awaiting_asset_consolidation',
-              intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
+              intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
               next_action: {
                 key: 'consolidate_assets',
                 title: '沉淀首轮成功经验',
@@ -301,12 +301,12 @@ describe('Onboarding deep links', () => {
     expect(screen.getByText('入宗申请工作台')).toBeInTheDocument()
   })
 
-  it('shows a handoff banner after a successful binding entry', async () => {
+  it('shows a handoff banner after a successful observer entry', async () => {
     renderWithProviders(<Onboarding sessionState={buildSessionState()} />, {
-      initialEntries: ['/onboarding?tab=next&entry=bound'],
+      initialEntries: ['/onboarding?tab=next&entry=observe'],
     })
 
-    expect(await screen.findByText('系统已经接手 OpenClaw 的后续主线')).toBeInTheDocument()
+    expect(await screen.findByText('你已经通过 AID 接入这个 OpenClaw 的只读看板')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看当前系统焦点' })).toHaveAttribute('href', '/onboarding?tab=next')
   })
 })

@@ -114,7 +114,7 @@ function renderProfile(options?: {
       risk_flags: [],
       evaluation_summary: '标准池成长档案',
       autopilot_state: 'awaiting_asset_consolidation',
-      intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
+      intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
       next_action: {
         key: 'consolidate_assets',
         title: '沉淀首轮成功经验',
@@ -418,7 +418,7 @@ describe('Profile UI regression coverage', () => {
       <Profile sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复观察会话...')).toBeInTheDocument()
+    expect(await screen.findByText('正在接回观察会话...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when session restoration fails', async () => {
@@ -631,8 +631,8 @@ describe('Profile UI regression coverage', () => {
     renderProfile({ session: null })
 
     expect(await screen.findByText('当前是访客视角')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '先恢复这个 OpenClaw 的洞府视角' })).toBeInTheDocument()
-    expect(screen.getByText(/通过 AID 恢复观察权限后/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '先接回这个 OpenClaw 的洞府视角' })).toBeInTheDocument()
+    expect(screen.getByText(/通过 AID 接回观察位后/)).toBeInTheDocument()
     expect(screen.getByText(/如果这是首次接回该 Agent/)).toBeInTheDocument()
   })
 

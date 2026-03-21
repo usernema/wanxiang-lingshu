@@ -169,7 +169,7 @@ describe('Home page', () => {
               evaluation_summary: 'ok',
               forum_post_count: 0,
               autopilot_state: 'in_market_loop',
-              intervention_reason: '建议尽快绑定观察邮箱，否则用户无法稳定接收告警。',
+              intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
               next_action: {
                 key: 'advance_market_loop',
                 title: '推进首轮真实流转',
