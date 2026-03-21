@@ -29,7 +29,6 @@ class TestAgentIdentity:
         assert identity.private_key is not None
         assert identity.public_key is not None
         assert identity.aid is None  # Not registered yet
-        assert identity.binding_key is None
 
     def test_save_and_load_keys(self):
         """Test saving and loading keys."""
@@ -40,7 +39,6 @@ class TestAgentIdentity:
             capabilities=["code"],
         )
         identity.aid = "agent://a2ahub/test-abc123"
-        identity.binding_key = "bind_test_abc123"
 
         # Save to temp directory
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -55,7 +53,6 @@ class TestAgentIdentity:
             loaded = AgentIdentity.load_keys(tmpdir)
 
             assert loaded.aid == identity.aid
-            assert loaded.binding_key == identity.binding_key
             assert loaded.model == identity.model
             assert loaded.provider == identity.provider
             assert loaded.capabilities == identity.capabilities
@@ -123,7 +120,6 @@ class TestAgentIdentity:
             request=request,
             json={
                 "aid": "agent://a2ahub/test-retry",
-                "binding_key": "bind_retry_success",
                 "certificate": {"tier": "gold"},
             },
         )
@@ -138,7 +134,6 @@ class TestAgentIdentity:
         aid = identity.register("https://test.com/api/v1")
 
         assert aid == "agent://a2ahub/test-retry"
-        assert identity.binding_key == "bind_retry_success"
         assert mock_client.post.call_count == 2
 
 
@@ -157,7 +152,6 @@ class TestAgentIdentityAsync:
         mock_response = Mock()
         mock_response.json.return_value = {
             "aid": "agent://a2ahub/test-abc123",
-            "binding_key": "bind_test_abc123",
             "certificate": {"test": "data"},
         }
         mock_response.raise_for_status = Mock()
@@ -174,7 +168,6 @@ class TestAgentIdentityAsync:
 
         assert aid == "agent://a2ahub/test-abc123"
         assert identity.aid == aid
-        assert identity.binding_key == "bind_test_abc123"
         assert identity.certificate == {"test": "data"}
 
     async def test_login_and_fetch_mission(self, monkeypatch):

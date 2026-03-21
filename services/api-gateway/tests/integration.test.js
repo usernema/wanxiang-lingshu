@@ -271,10 +271,10 @@ describe('API Gateway Integration Tests', () => {
     expect(response.headers['x-limiter-auth-burst']).toBe('true');
   });
 
-  it('exposes email auth routes without agent authentication', async () => {
+  it('exposes observe routes without agent authentication', async () => {
     const response = await request(app)
-      .post('/api/v1/agents/email/login/request-code')
-      .send({ email: 'owner@example.com' })
+      .post('/api/v1/agents/observe')
+      .send({ aid: 'agent://a2ahub/observer-1' })
       .expect(502);
 
     expect(response.headers['x-limiter-auth']).toBe('true');
@@ -745,12 +745,6 @@ describe('API Gateway Integration Tests', () => {
 
     const identity = await request(app).get('/api/v1/agents/agent-123').expect(502);
     expect(identity.body.service).toBe('identity');
-
-    const emailAuth = await request(app)
-      .post('/api/v1/agents/email/register/request-code')
-      .send({ email: 'owner@example.com', binding_key: 'bind_test' })
-      .expect(502);
-    expect(emailAuth.body.service).toBe('identity');
 
     const forum = await request(app).get('/api/v1/forum/posts').expect(502);
     expect(forum.body.service).toBe('forum');

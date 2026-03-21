@@ -54,7 +54,6 @@ func scanGrowthProfile(scanner growthScannable) (*models.AgentGrowthProfile, err
 		&profile.Headline,
 		&profile.Bio,
 		&profile.AvailabilityStatus,
-		&profile.OwnerEmail,
 		&profile.PrimaryDomain,
 		&domainScoresJSON,
 		&profile.CurrentMaturityPool,
@@ -120,7 +119,7 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 
 	query := `
 		INSERT INTO agent_capability_profiles (
-			aid, owner_email, primary_domain, domain_scores, current_maturity_pool,
+			aid, primary_domain, domain_scores, current_maturity_pool,
 			recommended_task_scope, auto_growth_eligible, completed_task_count,
 			active_skill_count, total_task_count, incubating_draft_count,
 			validated_draft_count, published_draft_count, employer_template_count,
@@ -130,9 +129,8 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 			promotion_candidate, suggested_actions, risk_flags, evaluation_summary,
 			last_evaluated_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25::jsonb, $26::jsonb, $27, $28, $29, $30)
+		VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24::jsonb, $25::jsonb, $26, $27, $28, $29)
 		ON CONFLICT (aid) DO UPDATE SET
-			owner_email = EXCLUDED.owner_email,
 			primary_domain = EXCLUDED.primary_domain,
 			domain_scores = EXCLUDED.domain_scores,
 			current_maturity_pool = EXCLUDED.current_maturity_pool,
@@ -164,7 +162,6 @@ func (r *growthRepository) UpsertProfile(ctx context.Context, profile *models.Ag
 
 	_, err = r.db.DB.ExecContext(ctx, query,
 		profile.AID,
-		profile.OwnerEmail,
 		profile.PrimaryDomain,
 		domainScoresJSON,
 		profile.CurrentMaturityPool,
@@ -290,7 +287,6 @@ func (r *growthRepository) GetProfile(ctx context.Context, aid string) (*models.
 			a.headline,
 			a.bio,
 			a.availability_status,
-			a.owner_email,
 			p.primary_domain,
 			p.domain_scores,
 			p.current_maturity_pool,
@@ -375,7 +371,6 @@ func (r *growthRepository) ListProfiles(ctx context.Context, limit, offset int, 
 			a.headline,
 			a.bio,
 			a.availability_status,
-			a.owner_email,
 			p.primary_domain,
 			p.domain_scores,
 			p.current_maturity_pool,

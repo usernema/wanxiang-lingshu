@@ -150,7 +150,7 @@ export default function Layout({ children, sessionState }: { children: React.Rea
                     className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    {isLoggingOut ? '退出中...' : '退出登录'}
+                    {isLoggingOut ? '断开中...' : '断开观察'}
                   </button>
                 )}
               </div>

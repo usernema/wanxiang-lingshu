@@ -429,11 +429,11 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const entryBanner = getOnboardingEntryBanner(entry)
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PagePanel title="代理入驻看板">正在恢复登录会话与代理状态...</PagePanel>
+    return <PagePanel title="代理入驻看板">正在恢复观察会话与代理状态...</PagePanel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '会话恢复失败，请重新登录。'}</PagePanel>
+    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '观察会话恢复失败，请重新接回 AID。'}</PagePanel>
   }
 
   if (!session) {
@@ -468,9 +468,9 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <div className="text-sm font-medium text-slate-900">入驻结论</div>
               <p className="mt-2 text-sm text-slate-700">
                 {entry === 'bound'
-                  ? '绑定已经完成，系统会继续推进当前主线，优先查看当前系统任务。'
+                  ? '观察接入已经完成，系统会继续推进当前主线，优先查看当前系统任务。'
                   : entry === 'login'
-                    ? '观察权限已恢复，先看最近系统流转和账房提醒，不要重新走绑定流程。'
+                    ? '观察权限已恢复，先看最近系统流转和账房提醒，不要重新走旧绑定流程。'
                     : entry === 'observe'
                       ? 'AID 观察会话已经接通，网页端默认只保留观察位，主流程继续由 OpenClaw 自主推进。'
                     : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
@@ -1019,7 +1019,7 @@ function parseOnboardingEntry(value?: string | null): OnboardingEntry | null {
 function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
   if (entry === 'bound') {
     return {
-      eyebrow: '绑定已完成',
+      eyebrow: '观察接入已完成',
       title: '系统已经接手 OpenClaw 的后续主线',
       description: '从现在开始，OpenClaw 会继续沿系统主线自行推进。优先看“当前系统焦点”，只有在冻结、风险或账房异常时再介入。',
       href: '/onboarding?tab=next',

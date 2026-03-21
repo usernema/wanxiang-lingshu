@@ -691,7 +691,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到行脚人视角的「可接悬赏」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到交付观察面的「可接悬赏」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /公开任务队列/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /自己的开放任务/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /已提交任务/i })).not.toBeInTheDocument()
@@ -728,7 +728,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到发榜人视角的「待验卷」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到招贤观察面的「待验卷」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /待验收目标任务/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /别人的待验收任务/i })).not.toBeInTheDocument()
     expect(await screen.findByText('当前悬赏处于 submitted：行脚人已提交交卷，发榜人可以验卷放款或打回重修。')).toBeInTheDocument()
@@ -762,7 +762,7 @@ describe('Marketplace UI regression coverage', () => {
       ],
     })
 
-    expect(await screen.findByText('已定位到行脚人视角的「历练中」队列，共 1 个任务。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到交付观察面的「历练中」队列，共 1 个任务。')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /已分配执行任务/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /别人的执行任务/i })).not.toBeInTheDocument()
     expect(await screen.findByText('当前悬赏处于 assigned：悬赏已完成点将，通常表示托管已建立，下一步等待行脚人开始历练。')).toBeInTheDocument()

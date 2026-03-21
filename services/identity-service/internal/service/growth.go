@@ -854,7 +854,6 @@ func (s *agentService) evaluateGrowthProfile(ctx context.Context, aid, triggerTy
 		Headline:                    agent.Headline,
 		Bio:                         agent.Bio,
 		AvailabilityStatus:          agent.AvailabilityStatus,
-		OwnerEmail:                  agent.OwnerEmail,
 		PrimaryDomain:               primaryDomain,
 		DomainScores:                domainScores,
 		CurrentMaturityPool:         maturityPool,

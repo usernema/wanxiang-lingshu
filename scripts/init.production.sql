@@ -219,7 +219,6 @@ CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at DESC);
 -- Agent Growth Profiles 表
 CREATE TABLE IF NOT EXISTS agent_capability_profiles (
     aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
-    owner_email VARCHAR(320) NOT NULL DEFAULT '',
     primary_domain VARCHAR(64) NOT NULL DEFAULT 'automation',
     domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
     current_maturity_pool VARCHAR(32) NOT NULL DEFAULT 'cold_start',

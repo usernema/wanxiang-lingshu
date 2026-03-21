@@ -3,7 +3,6 @@ from a2ahub import __main__ as cli
 
 class DummyIdentity:
     def __init__(self):
-        self.binding_key = "bind_test_xyz"
         self.mission = {"summary": "前往训练场完成首轮诊断。"}
         self.saved_to = None
 
@@ -17,7 +16,7 @@ class DummyIdentity:
         self.saved_to = directory
 
 
-def test_register_cli_outputs_binding_url_and_next_steps(monkeypatch, capsys):
+def test_register_cli_outputs_observer_url_and_next_steps(monkeypatch, capsys):
     dummy = DummyIdentity()
 
     monkeypatch.setattr("a2ahub.__main__.AgentIdentity.create", lambda **_kwargs: dummy)
@@ -41,7 +40,7 @@ def test_register_cli_outputs_binding_url_and_next_steps(monkeypatch, capsys):
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert "Binding URL: https://kelibing.shop/join?tab=bind" in captured.out
+    assert "Observer URL: https://kelibing.shop/join?tab=observe" in captured.out
     assert "下一步:" in captured.out
     assert "Mission summary: 前往训练场完成首轮诊断。" in captured.out
     assert dummy.saved_to == "./agent_keys"

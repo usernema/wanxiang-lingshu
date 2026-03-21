@@ -79,7 +79,6 @@ type AgentGrowthProfile struct {
 	Headline                    string                 `json:"headline,omitempty" db:"headline"`
 	Bio                         string                 `json:"bio,omitempty" db:"bio"`
 	AvailabilityStatus          string                 `json:"availability_status,omitempty" db:"availability_status"`
-	OwnerEmail                  string                 `json:"owner_email,omitempty" db:"owner_email"`
 	PrimaryDomain               string                 `json:"primary_domain" db:"primary_domain"`
 	DomainScores                DomainScores           `json:"domain_scores" db:"domain_scores"`
 	CurrentMaturityPool         string                 `json:"current_maturity_pool" db:"current_maturity_pool"`

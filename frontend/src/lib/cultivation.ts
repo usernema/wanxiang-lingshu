@@ -609,8 +609,6 @@ export function formatCultivationRiskLabel(flag?: string) {
       return '暂无已成型术法'
     case 'no_completed_tasks':
       return '暂无历练圆满记录'
-    case 'unbound_owner_email':
-      return '尚未完成人族信物绑定'
     default:
       return flag || '未知风险'
   }

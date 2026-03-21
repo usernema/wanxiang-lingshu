@@ -327,7 +327,7 @@ create_agent() {
   local model="$2"
   local capabilities_json="$3"
   local provider="${4:-openclaw}"
-  local paths private_key_path public_key_path public_key register_resp token aid binding_key
+  local paths private_key_path public_key_path public_key register_resp token aid
 
   paths="$(create_keypair "$key")"
   private_key_path="$(printf '%s\n' "$paths" | sed -n '1p')"
@@ -340,90 +340,14 @@ EOF
 )" "auth")"
 
   aid="$(printf '%s' "$register_resp" | "$JQ_BIN" -r '.aid')"
-  binding_key="$(printf '%s' "$register_resp" | "$JQ_BIN" -r '.binding_key // empty')"
   token="$(login_with_key "$aid" "$private_key_path")"
 
   set_named_value "${key}_AID" "$aid"
   set_named_value "${key}_TOKEN" "$token"
   set_named_value "${key}_PRIVATE_KEY" "$private_key_path"
   set_named_value "${key}_PUBLIC_KEY" "$public_key_path"
-  set_named_value "${key}_BINDING_KEY" "$binding_key"
 
   CREATED_AGENT_AIDS+=("$aid")
-}
-
-require_remote_redis_access() {
-  if [[ -z "$SSH_HOST" || -z "$SSH_PASSWORD" ]]; then
-    echo "SSH_HOST and SSH_PASSWORD are required to fetch production email codes from Redis" >&2
-    exit 1
-  fi
-}
-
-ensure_remote_redis_auth() {
-  if [[ -z "$REMOTE_REDIS_PASSWORD" ]]; then
-    REMOTE_REDIS_PASSWORD="$(
-      sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-        "grep -E '^REDIS_PASSWORD=' '${REMOTE_ENV_FILE}' 2>/dev/null | tail -n 1 | cut -d= -f2-"
-    )"
-  fi
-
-  if [[ -z "$REMOTE_REDIS_DB" ]]; then
-    REMOTE_REDIS_DB="$(
-      sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-        "grep -E '^REDIS_DB=' '${REMOTE_ENV_FILE}' 2>/dev/null | tail -n 1 | cut -d= -f2-"
-    )"
-    REMOTE_REDIS_DB="${REMOTE_REDIS_DB:-0}"
-  fi
-}
-
-fetch_remote_email_code() {
-  local purpose="$1"
-  local aid="$2"
-  local email="$3"
-  local key_b64 redis_password_b64
-
-  email="$(printf '%s' "$email" | tr '[:upper:]' '[:lower:]')"
-
-  require_remote_redis_access
-  ensure_remote_redis_auth
-  key_b64="$(printf 'email_auth:%s:%s:%s' "$purpose" "$aid" "$email" | base64)"
-  redis_password_b64="$(printf '%s' "$REMOTE_REDIS_PASSWORD" | base64)"
-  sshpass -p "$SSH_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
-    "EMAIL='${email}' PURPOSE='${purpose}' KEY_B64='${key_b64}' REDIS_PASSWORD_B64='${redis_password_b64}' REDIS_DB='${REMOTE_REDIS_DB}' REDIS_CONTAINER='${REMOTE_REDIS_CONTAINER}' python3 - <<'PY'
-import base64
-import os
-import subprocess
-
-key = base64.b64decode(os.environ['KEY_B64']).decode()
-password = base64.b64decode(os.environ['REDIS_PASSWORD_B64']).decode()
-redis_db = os.environ.get('REDIS_DB', '0')
-container = os.environ['REDIS_CONTAINER']
-email = os.environ['EMAIL']
-purpose = os.environ['PURPOSE']
-
-base_command = ['docker', 'exec', container, 'redis-cli', '--raw', '--no-auth-warning', '-a', password, '-n', redis_db]
-
-result = subprocess.run(base_command + ['GET', key], capture_output=True, text=True, check=False)
-code = result.stdout.strip()
-if code:
-    print(code)
-    raise SystemExit(0)
-
-scan = subprocess.run(
-    base_command + ['--scan', '--pattern', f'email_auth:{purpose}:*:{email}'],
-    capture_output=True,
-    text=True,
-    check=False,
-)
-for match in [line.strip() for line in scan.stdout.splitlines() if line.strip()]:
-    fallback = subprocess.run(base_command + ['GET', match], capture_output=True, text=True, check=False)
-    fallback_code = fallback.stdout.strip()
-    if fallback_code:
-        print(fallback_code)
-        raise SystemExit(0)
-
-raise SystemExit(1)
-PY"
 }
 
 assert_non_empty() {
@@ -590,7 +514,6 @@ import cryptography
 PY
 
 RUN_ID="$(date +%Y%m%d%H%M%S)-$$-$(random_suffix)"
-EMAIL_WORKER_GROWTH="$(printf 'observer+%s@example.com' "$RUN_ID" | tr '[:upper:]' '[:lower:]')"
 
 echo "[1/24] Checking public readiness"
 curl_request GET "${HEALTH_BASE_URL}/health/ready" "api" | "$JQ_BIN" >/dev/null
@@ -607,32 +530,20 @@ create_agent "WORKER_SKILL" "${LABEL_PREFIX}-worker-skill-${RUN_ID}" '["code","f
 echo "[5/24] Creating worker-growth"
 create_agent "WORKER_GROWTH" "${LABEL_PREFIX}-worker-growth-${RUN_ID}" '["code","browser"]'
 
-echo "[6/24] Binding observer email and verifying email login"
-WORKER_GROWTH_BINDING_KEY="$(get_named_value "WORKER_GROWTH_BINDING_KEY")"
+echo "[6/24] Verifying observer-only access by AID"
 WORKER_GROWTH_AID="$(get_named_value "WORKER_GROWTH_AID")"
-EMAIL_REGISTER_REQUEST_RESP="$(api_json POST "/v1/agents/email/register/request-code" "" "{\"email\":\"${EMAIL_WORKER_GROWTH}\",\"binding_key\":\"${WORKER_GROWTH_BINDING_KEY}\"}" "auth")"
-EMAIL_REGISTER_AID="$(printf '%s' "$EMAIL_REGISTER_REQUEST_RESP" | "$JQ_BIN" -r '.aid // empty')"
-if [[ -z "$EMAIL_REGISTER_AID" ]]; then
-  EMAIL_REGISTER_AID="$WORKER_GROWTH_AID"
+WORKER_GROWTH_SESSION_TOKEN="$(get_named_value "WORKER_GROWTH_TOKEN")"
+assert_non_empty "$WORKER_GROWTH_SESSION_TOKEN" "Worker growth did not return an agent token"
+OBSERVER_SESSION_RESP="$(api_json POST "/v1/agents/observe" "" "{\"aid\":\"${WORKER_GROWTH_AID}\"}" "auth")"
+WORKER_GROWTH_OBSERVER_TOKEN="$(printf '%s' "$OBSERVER_SESSION_RESP" | "$JQ_BIN" -r '.token')"
+assert_non_empty "$WORKER_GROWTH_OBSERVER_TOKEN" "Observer session did not return a token"
+if [[ "$(printf '%s' "$OBSERVER_SESSION_RESP" | "$JQ_BIN" -r '.access_mode // empty')" != "observer" ]]; then
+  echo "Observer session did not return observer access mode" >&2
+  exit 1
 fi
-REGISTER_CODE="$(fetch_remote_email_code "register" "$EMAIL_REGISTER_AID" "$EMAIL_WORKER_GROWTH")"
-assert_non_empty "$REGISTER_CODE" "Failed to fetch email registration code from Redis"
-EMAIL_REGISTER_RESP="$(api_json POST "/v1/agents/email/register/complete" "" "{\"email\":\"${EMAIL_WORKER_GROWTH}\",\"binding_key\":\"${WORKER_GROWTH_BINDING_KEY}\",\"code\":\"${REGISTER_CODE}\"}" "auth")"
-EMAIL_REGISTER_TOKEN="$(printf '%s' "$EMAIL_REGISTER_RESP" | "$JQ_BIN" -r '.token')"
-assert_non_empty "$EMAIL_REGISTER_TOKEN" "Email registration did not return a token"
-EMAIL_LOGIN_REQUEST_RESP="$(api_json POST "/v1/agents/email/login/request-code" "" "{\"email\":\"${EMAIL_WORKER_GROWTH}\"}" "auth")"
-EMAIL_LOGIN_AID="$(printf '%s' "$EMAIL_LOGIN_REQUEST_RESP" | "$JQ_BIN" -r '.aid // empty')"
-if [[ -z "$EMAIL_LOGIN_AID" ]]; then
-  EMAIL_LOGIN_AID="$EMAIL_REGISTER_AID"
-fi
-LOGIN_CODE="$(fetch_remote_email_code "login" "$EMAIL_LOGIN_AID" "$EMAIL_WORKER_GROWTH")"
-assert_non_empty "$LOGIN_CODE" "Failed to fetch email login code from Redis"
-EMAIL_LOGIN_RESP="$(api_json POST "/v1/agents/email/login/complete" "" "{\"email\":\"${EMAIL_WORKER_GROWTH}\",\"code\":\"${LOGIN_CODE}\"}" "auth")"
-WORKER_GROWTH_EMAIL_TOKEN="$(printf '%s' "$EMAIL_LOGIN_RESP" | "$JQ_BIN" -r '.token')"
-assert_non_empty "$WORKER_GROWTH_EMAIL_TOKEN" "Email login did not return a token"
 
 echo "[7/24] Running autopilot and dojo loop for worker-growth"
-AUTOPILOT_RESP="$(api_json POST "/v1/agents/me/autopilot/advance" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+AUTOPILOT_RESP="$(api_json POST "/v1/agents/me/autopilot/advance" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 printf '%s' "$AUTOPILOT_RESP" > "${TMP_DIR}/autopilot.json"
 if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -re '
   (.applied[]? | select(.kind == "profile_bootstrap")) // empty
@@ -666,18 +577,18 @@ if ! printf '%s' "$AUTOPILOT_RESP" | "$JQ_BIN" -e '.diagnostic != null' >/dev/nu
   exit 1
 fi
 
-DIAGNOSTIC_RESP="$(api_json GET "/v1/dojo/me/diagnostic" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+DIAGNOSTIC_RESP="$(api_json GET "/v1/dojo/me/diagnostic" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 printf '%s' "$DIAGNOSTIC_RESP" > "${TMP_DIR}/dojo-diagnostic-initial.json"
 WEAK_DOJO_BODY="$(make_dojo_submission "${TMP_DIR}/dojo-diagnostic-initial.json" weak)"
-WEAK_DOJO_RESP="$(api_json POST "/v1/dojo/diagnostics/submit" "$WORKER_GROWTH_EMAIL_TOKEN" "$WEAK_DOJO_BODY" "api")"
+WEAK_DOJO_RESP="$(api_json POST "/v1/dojo/diagnostics/submit" "$WORKER_GROWTH_SESSION_TOKEN" "$WEAK_DOJO_BODY" "api")"
 printf '%s' "$WEAK_DOJO_RESP" > "${TMP_DIR}/dojo-diagnostic-weak.json"
 if ! printf '%s' "$WEAK_DOJO_RESP" | "$JQ_BIN" -e '.passed == false' >/dev/null; then
   echo "Weak dojo submission was expected to fail" >&2
   exit 1
 fi
 
-DOJO_MISTAKES_RESP="$(api_json GET "/v1/dojo/me/mistakes?limit=20" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
-DOJO_PLANS_RESP="$(api_json GET "/v1/dojo/me/remediation-plans?limit=20" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+DOJO_MISTAKES_RESP="$(api_json GET "/v1/dojo/me/mistakes?limit=20" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
+DOJO_PLANS_RESP="$(api_json GET "/v1/dojo/me/remediation-plans?limit=20" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 if [[ "$(printf '%s' "$DOJO_MISTAKES_RESP" | "$JQ_BIN" -r '.items | length')" -lt 1 ]]; then
   echo "Expected dojo mistakes after failed diagnostic" >&2
   exit 1
@@ -687,10 +598,10 @@ if [[ "$(printf '%s' "$DOJO_PLANS_RESP" | "$JQ_BIN" -r '.items | length')" -lt 1
   exit 1
 fi
 
-DIAGNOSTIC_RETRY_RESP="$(api_json GET "/v1/dojo/me/diagnostic" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+DIAGNOSTIC_RETRY_RESP="$(api_json GET "/v1/dojo/me/diagnostic" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 printf '%s' "$DIAGNOSTIC_RETRY_RESP" > "${TMP_DIR}/dojo-diagnostic-retry.json"
 STRONG_DOJO_BODY="$(make_dojo_submission "${TMP_DIR}/dojo-diagnostic-retry.json" strong)"
-STRONG_DOJO_RESP="$(api_json POST "/v1/dojo/diagnostics/submit" "$WORKER_GROWTH_EMAIL_TOKEN" "$STRONG_DOJO_BODY" "api")"
+STRONG_DOJO_RESP="$(api_json POST "/v1/dojo/diagnostics/submit" "$WORKER_GROWTH_SESSION_TOKEN" "$STRONG_DOJO_BODY" "api")"
 printf '%s' "$STRONG_DOJO_RESP" > "${TMP_DIR}/dojo-diagnostic-strong.json"
 if ! printf '%s' "$STRONG_DOJO_RESP" | "$JQ_BIN" -e '.passed == true' >/dev/null; then
   echo "Strong dojo submission was expected to pass" >&2
@@ -698,7 +609,7 @@ if ! printf '%s' "$STRONG_DOJO_RESP" | "$JQ_BIN" -e '.passed == true' >/dev/null
 fi
 
 echo "[8/24] Running forum flow and moderation"
-MAIN_POST_RESP="$(api_json POST "/v1/forum/posts" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"title\":\"${LABEL_PREFIX} forum post ${RUN_ID}\",\"content\":\"这是一次完整复杂验收中的主帖，用于验证论坛、评论、搜索、点赞和后台治理流程。\",\"category\":\"general\",\"tags\":[\"${LABEL_PREFIX}\",\"acceptance\"]}" "api")"
+MAIN_POST_RESP="$(api_json POST "/v1/forum/posts" "$WORKER_GROWTH_SESSION_TOKEN" "{\"title\":\"${LABEL_PREFIX} forum post ${RUN_ID}\",\"content\":\"这是一次完整复杂验收中的主帖，用于验证论坛、评论、搜索、点赞和后台治理流程。\",\"category\":\"general\",\"tags\":[\"${LABEL_PREFIX}\",\"acceptance\"]}" "api")"
 MAIN_POST_ID="$(printf '%s' "$MAIN_POST_RESP" | "$JQ_BIN" -r '.data.id // .id')"
 assert_non_empty "$MAIN_POST_ID" "Failed to create main forum post"
 CREATED_POST_IDS+=("$MAIN_POST_ID")
@@ -711,7 +622,7 @@ CREATED_POST_IDS+=("$DISPOSABLE_POST_ID")
 api_json GET "/v1/forum/posts" "" "" "api" >/dev/null
 api_json GET "/v1/forum/posts/search?q=$(printf '%s' "${RUN_ID}" | "$JQ_BIN" -sRr @uri)" "" "" "api" >/dev/null
 api_json GET "/v1/forum/posts/${MAIN_POST_ID}" "" "" "api" >/dev/null
-api_json PUT "/v1/forum/posts/${MAIN_POST_ID}" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"title\":\"${LABEL_PREFIX} forum post ${RUN_ID}\",\"content\":\"这是一次完整复杂验收后的主帖更新版本，用于验证论坛编辑功能。\",\"category\":\"general\",\"tags\":[\"${LABEL_PREFIX}\",\"acceptance\",\"updated\"]}" "api" >/dev/null
+api_json PUT "/v1/forum/posts/${MAIN_POST_ID}" "$WORKER_GROWTH_SESSION_TOKEN" "{\"title\":\"${LABEL_PREFIX} forum post ${RUN_ID}\",\"content\":\"这是一次完整复杂验收后的主帖更新版本，用于验证论坛编辑功能。\",\"category\":\"general\",\"tags\":[\"${LABEL_PREFIX}\",\"acceptance\",\"updated\"]}" "api" >/dev/null
 api_json POST "/v1/forum/posts/${MAIN_POST_ID}/like" "$EMPLOYER1_TOKEN" "{}" "api" >/dev/null
 
 MAIN_COMMENT_RESP="$(api_json POST "/v1/forum/posts/${MAIN_POST_ID}/comments" "$EMPLOYER1_TOKEN" "{\"content\":\"这是雇主对主帖的评论，用于验证评论创建与后续治理流程。\"}" "api")"
@@ -719,7 +630,7 @@ MAIN_COMMENT_ID="$(printf '%s' "$MAIN_COMMENT_RESP" | "$JQ_BIN" -r '.data.id // 
 assert_non_empty "$MAIN_COMMENT_ID" "Failed to create forum comment"
 CREATED_COMMENT_IDS+=("$MAIN_COMMENT_ID")
 api_json GET "/v1/forum/posts/${MAIN_POST_ID}/comments" "" "" "api" >/dev/null
-api_json POST "/v1/forum/comments/${MAIN_COMMENT_ID}/like" "$WORKER_GROWTH_EMAIL_TOKEN" "{}" "api" >/dev/null
+api_json POST "/v1/forum/comments/${MAIN_COMMENT_ID}/like" "$WORKER_GROWTH_SESSION_TOKEN" "{}" "api" >/dev/null
 api_json PUT "/v1/forum/comments/${MAIN_COMMENT_ID}" "$EMPLOYER1_TOKEN" "{\"content\":\"这是雇主更新后的评论内容，用于验证评论编辑功能。\"}" "api" >/dev/null
 
 DISPOSABLE_COMMENT_RESP="$(api_json POST "/v1/forum/posts/${MAIN_POST_ID}/comments" "$EMPLOYER2_TOKEN" "{\"content\":\"这是一个用于删除验证的临时评论。\"}" "api")"
@@ -786,9 +697,9 @@ record_open_task "$TASK1_ID" "EMPLOYER1"
 
 api_json PUT "/v1/marketplace/tasks/${TASK1_ID}" "$EMPLOYER1_TOKEN" "{\"description\":\"验证 revision、验收、经验沉淀、赠送法卷与模板生成，并覆盖任务更新流程。\",\"reward\":10}" "api" >/dev/null
 api_json GET "/v1/marketplace/tasks?status=open&limit=20" "" "" "api" >/dev/null
-api_json GET "/v1/marketplace/tasks/match?agent_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api" >/dev/null
+api_json GET "/v1/marketplace/tasks/match?agent_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "$WORKER_GROWTH_SESSION_TOKEN" "" "api" >/dev/null
 
-TASK1_APP_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/apply" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"applicant_aid\":\"${WORKER_GROWTH_AID}\",\"proposal\":\"我会先拆解目标，再给出可验收交付与复盘。\"}" "api")"
+TASK1_APP_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/apply" "$WORKER_GROWTH_SESSION_TOKEN" "{\"applicant_aid\":\"${WORKER_GROWTH_AID}\",\"proposal\":\"我会先拆解目标，再给出可验收交付与复盘。\"}" "api")"
 assert_non_empty "$(printf '%s' "$TASK1_APP_RESP" | "$JQ_BIN" -r '.id // empty')" "Task-1 application did not return id"
 TASK1_APPS_RESP="$(api_json GET "/v1/marketplace/tasks/${TASK1_ID}/applications" "$EMPLOYER1_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$TASK1_APPS_RESP" | "$JQ_BIN" -r '(try .items[0].applicant_aid catch empty) // (try .data[0].applicant_aid catch empty) // (try .[0].applicant_aid catch empty) // empty')" "Task-1 applications are empty"
@@ -796,9 +707,9 @@ assert_non_empty "$(printf '%s' "$TASK1_APPS_RESP" | "$JQ_BIN" -r '(try .items[0
 TASK1_ASSIGN_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/assign?worker_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)" "$EMPLOYER1_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$TASK1_ASSIGN_RESP" | "$JQ_BIN" -r '.escrow_id // empty')" "Task-1 assignment did not create escrow"
 
-api_json POST "/v1/marketplace/tasks/${TASK1_ID}/complete" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"第一版交付，等待雇主检查。\"}" "api" >/dev/null
+api_json POST "/v1/marketplace/tasks/${TASK1_ID}/complete" "$WORKER_GROWTH_SESSION_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"第一版交付，等待雇主检查。\"}" "api" >/dev/null
 api_json POST "/v1/marketplace/tasks/${TASK1_ID}/request-revision" "$EMPLOYER1_TOKEN" "" "api" >/dev/null
-api_json POST "/v1/marketplace/tasks/${TASK1_ID}/complete" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"第二版交付，已经补充验收清单、风险、澄清点和复盘沉淀。\"}" "api" >/dev/null
+api_json POST "/v1/marketplace/tasks/${TASK1_ID}/complete" "$WORKER_GROWTH_SESSION_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"第二版交付，已经补充验收清单、风险、澄清点和复盘沉淀。\"}" "api" >/dev/null
 TASK1_ACCEPT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/accept-completion" "$EMPLOYER1_TOKEN" "" "api")"
 printf '%s' "$TASK1_ACCEPT_RESP" > "${TMP_DIR}/task1-accept.json"
 TASK1_GROWTH_ASSETS_JSON="$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -c '.growth_assets // {}')"
@@ -818,9 +729,9 @@ if [[ -n "$TASK1_EMPLOYER_SKILL_GRANT_ID" && -z "$TASK1_PUBLISHED_SKILL_ID" ]]; 
 fi
 mark_task_completed "$TASK1_ID"
 
-WORKER_GROWTH_DRAFTS="$(api_json GET "/v1/marketplace/agents/me/skill-drafts?limit=20&offset=0" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
-WORKER_GROWTH_CARDS="$(api_json GET "/v1/marketplace/agents/me/experience-cards?limit=20&offset=0" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
-WORKER_GROWTH_RISKS="$(api_json GET "/v1/marketplace/agents/me/risk-memories?limit=20&offset=0" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_DRAFTS="$(api_json GET "/v1/marketplace/agents/me/skill-drafts?limit=20&offset=0" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
+WORKER_GROWTH_CARDS="$(api_json GET "/v1/marketplace/agents/me/experience-cards?limit=20&offset=0" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
+WORKER_GROWTH_RISKS="$(api_json GET "/v1/marketplace/agents/me/risk-memories?limit=20&offset=0" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 EMPLOYER1_TEMPLATES="$(api_json GET "/v1/marketplace/employers/me/templates?limit=20&offset=0" "$EMPLOYER1_TOKEN" "" "api")"
 EMPLOYER1_GRANTS="$(api_json GET "/v1/marketplace/employers/me/skill-grants?limit=20&offset=0" "$EMPLOYER1_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_DRAFTS" | "$JQ_BIN" -r '.items[0].draft_id // empty')" "Worker-growth skill drafts are empty"
@@ -850,29 +761,29 @@ TASK3_ID="$(printf '%s' "$TASK3_RESP" | "$JQ_BIN" -r '.task_id')"
 assert_non_empty "$TASK3_ID" "Failed to create task-3"
 record_open_task "$TASK3_ID" "EMPLOYER2"
 
-api_json POST "/v1/marketplace/tasks/${TASK3_ID}/apply" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"applicant_aid\":\"${WORKER_GROWTH_AID}\",\"proposal\":\"我会沿用同类任务模板，验证跨雇主复用。\"}" "api" >/dev/null
+api_json POST "/v1/marketplace/tasks/${TASK3_ID}/apply" "$WORKER_GROWTH_SESSION_TOKEN" "{\"applicant_aid\":\"${WORKER_GROWTH_AID}\",\"proposal\":\"我会沿用同类任务模板，验证跨雇主复用。\"}" "api" >/dev/null
 api_json POST "/v1/marketplace/tasks/${TASK3_ID}/assign?worker_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)" "$EMPLOYER2_TOKEN" "" "api" >/dev/null
-api_json POST "/v1/marketplace/tasks/${TASK3_ID}/complete" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"沿用模板完成第二位雇主的同类任务，并输出复盘。\"}" "api" >/dev/null
+api_json POST "/v1/marketplace/tasks/${TASK3_ID}/complete" "$WORKER_GROWTH_SESSION_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"沿用模板完成第二位雇主的同类任务，并输出复盘。\"}" "api" >/dev/null
 api_json POST "/v1/marketplace/tasks/${TASK3_ID}/accept-completion" "$EMPLOYER2_TOKEN" "" "api" >/dev/null
 mark_task_completed "$TASK3_ID"
 
-CROSS_EMPLOYER_CARDS="$(api_json GET "/v1/marketplace/agents/me/experience-cards?limit=20&offset=0" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+CROSS_EMPLOYER_CARDS="$(api_json GET "/v1/marketplace/agents/me/experience-cards?limit=20&offset=0" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 if ! printf '%s' "$CROSS_EMPLOYER_CARDS" | "$JQ_BIN" -re --arg title "$TASK1_TITLE" '.items[]? | select(.title == $title and .is_cross_employer_validated == true)' >/dev/null 2>&1; then
   echo "Cross-employer validation flag was expected after task-3" >&2
   exit 1
 fi
-WORKER_GROWTH_PROFILE_REFRESHED="$(api_json GET "/v1/agents/me/growth" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_PROFILE_REFRESHED="$(api_json GET "/v1/agents/me/growth" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 if ! printf '%s' "$WORKER_GROWTH_PROFILE_REFRESHED" | "$JQ_BIN" -re '.profile.current_maturity_pool | select(. == "observed" or . == "standard" or . == "preferred")' >/dev/null 2>&1; then
   echo "Worker-growth maturity pool was expected to be observed or above before sect application" >&2
   exit 1
 fi
 
 echo "[14/24] Running sect application withdraw and approval flow"
-SECT_APP_RESP_1="$(api_json POST "/v1/sect-applications" "$WORKER_GROWTH_EMAIL_TOKEN" '{"target_sect_key":"automation_ops"}' "api")"
+SECT_APP_RESP_1="$(api_json POST "/v1/sect-applications" "$WORKER_GROWTH_SESSION_TOKEN" '{"target_sect_key":"automation_ops"}' "api")"
 SECT_APP_ID_1="$(printf '%s' "$SECT_APP_RESP_1" | "$JQ_BIN" -r '.application_id')"
 assert_non_empty "$SECT_APP_ID_1" "Failed to submit first sect application"
-api_json POST "/v1/sect-applications/${SECT_APP_ID_1}/withdraw" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api" >/dev/null
-SECT_APP_RESP_2="$(api_json POST "/v1/sect-applications" "$WORKER_GROWTH_EMAIL_TOKEN" '{"target_sect_key":"automation_ops"}' "api")"
+api_json POST "/v1/sect-applications/${SECT_APP_ID_1}/withdraw" "$WORKER_GROWTH_SESSION_TOKEN" "" "api" >/dev/null
+SECT_APP_RESP_2="$(api_json POST "/v1/sect-applications" "$WORKER_GROWTH_SESSION_TOKEN" '{"target_sect_key":"automation_ops"}' "api")"
 SECT_APP_ID_2="$(printf '%s' "$SECT_APP_RESP_2" | "$JQ_BIN" -r '.application_id')"
 assert_non_empty "$SECT_APP_ID_2" "Failed to submit second sect application"
 ADMIN_SECT_LIST="$(admin_json GET "/v1/admin/sect-applications?limit=50&offset=0&status=submitted")"
@@ -881,7 +792,7 @@ if ! printf '%s' "$ADMIN_SECT_LIST" | "$JQ_BIN" -re --arg id "$SECT_APP_ID_2" '.
   exit 1
 fi
 admin_json POST "/v1/admin/sect-applications/${SECT_APP_ID_2}/review" '{"status":"approved","admin_notes":"复杂验收通过","reviewed_by":"codex-complex-acceptance"}' >/dev/null
-WORKER_GROWTH_SECTS="$(api_json GET "/v1/sect-applications/me?limit=20" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_SECTS="$(api_json GET "/v1/sect-applications/me?limit=20" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 if ! printf '%s' "$WORKER_GROWTH_SECTS" | "$JQ_BIN" -re --arg id "$SECT_APP_ID_2" '.[]? | select(.application_id == $id and .status == "approved") | .application_id' >/dev/null 2>&1; then
   if ! printf '%s' "$WORKER_GROWTH_SECTS" | "$JQ_BIN" -re --arg id "$SECT_APP_ID_2" '.items[]? | select(.application_id == $id and .status == "approved") | .application_id' >/dev/null 2>&1; then
     echo "Approved sect application was not visible in my applications" >&2
@@ -931,8 +842,8 @@ if [[ "$(printf '%s' "$EMPLOYER1_NOTIFICATIONS_AFTER" | "$JQ_BIN" -r '.data.unre
 fi
 
 echo "[17/24] Verifying current missions and growth snapshots"
-WORKER_GROWTH_MISSION="$(api_json GET "/v1/agents/me/mission" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
-WORKER_GROWTH_GROWTH="$(api_json GET "/v1/agents/me/growth" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_MISSION="$(api_json GET "/v1/agents/me/mission" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
+WORKER_GROWTH_GROWTH="$(api_json GET "/v1/agents/me/growth" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_MISSION" | "$JQ_BIN" -r '.summary // empty')" "Worker-growth mission is empty"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_GROWTH" | "$JQ_BIN" -r '.profile.aid // empty')" "Worker-growth growth snapshot is empty"
 
@@ -955,14 +866,14 @@ assert_non_empty "$(printf '%s' "$ADMIN_TASK1_APPS" | "$JQ_BIN" -r '(try .data[0
 
 echo "[20/24] Checking wallet balances after complex flows"
 EMPLOYER1_BALANCE_AFTER="$(api_json GET "/v1/credits/balance" "$EMPLOYER1_TOKEN" "" "api")"
-WORKER_GROWTH_BALANCE_AFTER="$(api_json GET "/v1/credits/balance" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_BALANCE_AFTER="$(api_json GET "/v1/credits/balance" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 WORKER_SKILL_BALANCE_AFTER="$(api_json GET "/v1/credits/balance" "$WORKER_SKILL_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$EMPLOYER1_BALANCE_AFTER" | "$JQ_BIN" -r '.balance // empty')" "Employer-1 balance missing"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_BALANCE_AFTER" | "$JQ_BIN" -r '.balance // empty')" "Worker-growth balance missing"
 assert_non_empty "$(printf '%s' "$WORKER_SKILL_BALANCE_AFTER" | "$JQ_BIN" -r '.balance // empty')" "Worker-skill balance missing"
 
 echo "[21/24] Checking worker-growth dojo overview after sect approval"
-WORKER_GROWTH_DOJO_OVERVIEW="$(api_json GET "/v1/dojo/me/overview" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
+WORKER_GROWTH_DOJO_OVERVIEW="$(api_json GET "/v1/dojo/me/overview" "$WORKER_GROWTH_SESSION_TOKEN" "" "api")"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_DOJO_OVERVIEW" | "$JQ_BIN" -r '.school_key // empty')" "Worker-growth dojo overview is empty"
 
 echo "[22/24] Checking sect application audit data"

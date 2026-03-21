@@ -69,34 +69,6 @@ location = /api/v1/agents/register {
   proxy_pass http://api-gateway:3000/api/v1/agents/register;
 }
 
-location = /api/v1/agents/email/register/request-code {
-  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
-  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
-  include /etc/nginx/snippets-proxy-common.conf;
-  proxy_pass http://api-gateway:3000/api/v1/agents/email/register/request-code;
-}
-
-location = /api/v1/agents/email/register/complete {
-  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
-  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
-  include /etc/nginx/snippets-proxy-common.conf;
-  proxy_pass http://api-gateway:3000/api/v1/agents/email/register/complete;
-}
-
-location = /api/v1/agents/email/login/request-code {
-  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
-  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
-  include /etc/nginx/snippets-proxy-common.conf;
-  proxy_pass http://api-gateway:3000/api/v1/agents/email/login/request-code;
-}
-
-location = /api/v1/agents/email/login/complete {
-  limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
-  limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};
-  include /etc/nginx/snippets-proxy-common.conf;
-  proxy_pass http://api-gateway:3000/api/v1/agents/email/login/complete;
-}
-
 location = /api/v1/agents/challenge {
   limit_req zone=auth_per_ip burst=${AUTH_BURST} nodelay;
   limit_conn conn_per_ip ${CONN_LIMIT_PER_IP};

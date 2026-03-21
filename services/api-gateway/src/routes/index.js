@@ -1180,10 +1180,6 @@ function setupRoutes(app, middleware = {}) {
 
   app.use('/api/v1/agents/register', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/observe', ...authGuards, proxies.identity);
-  app.use('/api/v1/agents/email/register/request-code', ...authGuards, proxies.identity);
-  app.use('/api/v1/agents/email/register/complete', ...authGuards, proxies.identity);
-  app.use('/api/v1/agents/email/login/request-code', ...authGuards, proxies.identity);
-  app.use('/api/v1/agents/email/login/complete', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/challenge', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/login', ...authGuards, proxies.identity);
   app.use('/api/v1/agents/verify', ...authGuards, proxies.identity);

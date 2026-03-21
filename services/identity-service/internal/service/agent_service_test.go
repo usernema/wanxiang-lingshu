@@ -45,22 +45,6 @@ func (m *MockAgentRepository) GetByAID(ctx context.Context, aid string) (*models
 	return args.Get(0).(*models.Agent), args.Error(1)
 }
 
-func (m *MockAgentRepository) GetByBindingKeyHash(ctx context.Context, bindingKeyHash string) (*models.Agent, error) {
-	args := m.Called(ctx, bindingKeyHash)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Agent), args.Error(1)
-}
-
-func (m *MockAgentRepository) GetByOwnerEmail(ctx context.Context, email string) (*models.Agent, error) {
-	args := m.Called(ctx, email)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Agent), args.Error(1)
-}
-
 func (m *MockAgentRepository) List(ctx context.Context, limit, offset int, status string) ([]*models.Agent, int, error) {
 	args := m.Called(ctx, limit, offset, status)
 	if args.Get(0) == nil {
@@ -72,14 +56,6 @@ func (m *MockAgentRepository) List(ctx context.Context, limit, offset int, statu
 func (m *MockAgentRepository) Update(ctx context.Context, agent *models.Agent) error {
 	args := m.Called(ctx, agent)
 	return args.Error(0)
-}
-
-func (m *MockAgentRepository) BindEmail(ctx context.Context, aid, email string, verifiedAt time.Time) (*models.Agent, error) {
-	args := m.Called(ctx, aid, email, verifiedAt)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Agent), args.Error(1)
 }
 
 func (m *MockAgentRepository) UpdateProfile(ctx context.Context, aid string, headline, bio, availabilityStatus string, capabilities models.Capabilities) (*models.Agent, error) {
@@ -224,7 +200,6 @@ func TestRegister(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, resp.AID)
-	assert.NotEmpty(t, resp.BindingKey)
 	assert.Equal(t, 120, resp.InitialCredits)
 	assert.Equal(t, 80, resp.Agent.Reputation)
 	assert.True(t, utils.ValidateAID(resp.AID))
@@ -232,7 +207,7 @@ func TestRegister(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
-func TestRegisterAllowsEmailOnlyAgents(t *testing.T) {
+func TestRegisterAllowsObserverOnlyAgentsWithoutPublicKey(t *testing.T) {
 	mockRepo := new(MockAgentRepository)
 	cfg := &config.Config{
 		Reputation: config.ReputationConfig{
@@ -255,251 +230,13 @@ func TestRegisterAllowsEmailOnlyAgents(t *testing.T) {
 	}
 
 	mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(agent *models.Agent) bool {
-		return agent.PublicKey == "" && agent.BindingKeyHash != ""
+		return agent.PublicKey == "" && agent.AID != ""
 	})).Return(nil).Once()
 
 	resp, err := svc.Register(context.Background(), req)
 
 	assert.NoError(t, err)
 	assert.NotEmpty(t, resp.AID)
-	assert.NotEmpty(t, resp.BindingKey)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestRequestEmailRegistrationCode(t *testing.T) {
-	redisClient, redisMock := redismock.NewClientMock()
-	mockRepo := new(MockAgentRepository)
-	agent := &models.Agent{
-		AID:    "agent://a2ahub/openclaw-1",
-		Status: "active",
-	}
-
-	cfg := &config.Config{
-		Server: config.ServerConfig{Env: "development"},
-		Email: config.EmailConfig{
-			CodeExpiration:       600,
-			AllowInlineCodeInDev: true,
-		},
-	}
-
-	svc := &agentService{
-		repo:   mockRepo,
-		redis:  &database.RedisClient{Client: redisClient},
-		config: cfg,
-	}
-
-	bindingKey := "bind_test_registration_key"
-	email := "owner@example.com"
-	redisKey := emailCodeKey(emailCodePurposeRegister, agent.AID, email)
-
-	mockRepo.On("GetByBindingKeyHash", mock.Anything, hashBindingKey(bindingKey)).Return(agent, nil).Once()
-	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(nil, fmt.Errorf("agent not found")).Once()
-	redisMock.Regexp().ExpectSet(redisKey, `^\d{6}$`, 600*time.Second).SetVal("OK")
-
-	resp, err := svc.RequestEmailRegistrationCode(context.Background(), &EmailRegistrationCodeRequest{
-		Email:      email,
-		BindingKey: bindingKey,
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, email, resp.Email)
-	assert.Equal(t, agent.AID, resp.AID)
-	assert.Equal(t, "inline", resp.Delivery)
-	assert.Len(t, resp.VerificationCode, 6)
-	require.NoError(t, redisMock.ExpectationsWereMet())
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCompleteEmailRegistration(t *testing.T) {
-	redisClient, redisMock := redismock.NewClientMock()
-	mockRepo := new(MockAgentRepository)
-	agent := &models.Agent{
-		AID:        "agent://a2ahub/openclaw-2",
-		Model:      "openclaw",
-		Provider:   "openclaw",
-		Status:     "active",
-		Reputation: 100,
-	}
-	boundAgent := &models.Agent{
-		AID:        agent.AID,
-		Model:      agent.Model,
-		Provider:   agent.Provider,
-		Status:     "active",
-		Reputation: 100,
-		OwnerEmail: "owner@example.com",
-	}
-	updatedAgent := &models.Agent{
-		AID:                agent.AID,
-		Model:              agent.Model,
-		Provider:           agent.Provider,
-		Status:             "active",
-		Reputation:         100,
-		OwnerEmail:         "owner@example.com",
-		Headline:           "OpenClaw 自动流转代理",
-		Bio:                "由 openclaw/openclaw 驱动，已接入 A2Ahub。默认按 mission 自动完成训练场诊断、真实流转与经验沉淀。",
-		AvailabilityStatus: "available",
-		Capabilities:       models.Capabilities{"automation", "planning", "execution"},
-	}
-	growthRepo := &fakeGrowthRepository{
-		profile: &models.AgentGrowthProfile{
-			AID:                agent.AID,
-			Model:              agent.Model,
-			Provider:           agent.Provider,
-			Status:             "active",
-			Reputation:         100,
-			OwnerEmail:         "owner@example.com",
-			AvailabilityStatus: "available",
-			CreatedAt:          time.Now().Add(-time.Hour),
-			UpdatedAt:          time.Now().Add(-time.Hour),
-			LastEvaluatedAt:    time.Now().Add(-time.Hour),
-		},
-		stats: &models.AgentGrowthStats{},
-	}
-
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:     "test-secret",
-			Expiration: time.Hour,
-		},
-		Reputation: config.ReputationConfig{
-			MinReputationThreshold: 0,
-		},
-	}
-
-	svc := &agentService{
-		repo:       mockRepo,
-		growthRepo: growthRepo,
-		redis:      &database.RedisClient{Client: redisClient},
-		config:     cfg,
-	}
-
-	bindingKey := "bind_test_complete_key"
-	email := "owner@example.com"
-	code := "123456"
-	redisKey := emailCodeKey(emailCodePurposeRegister, agent.AID, email)
-
-	mockRepo.On("GetByBindingKeyHash", mock.Anything, hashBindingKey(bindingKey)).Return(agent, nil).Once()
-	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(nil, fmt.Errorf("agent not found")).Once()
-	mockRepo.On("BindEmail", mock.Anything, agent.AID, email, mock.AnythingOfType("time.Time")).Return(boundAgent, nil).Once()
-	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(boundAgent, nil).Once()
-	mockRepo.On(
-		"UpdateProfile",
-		mock.Anything,
-		agent.AID,
-		"OpenClaw 自动流转代理",
-		"由 openclaw/openclaw 驱动，已接入 A2Ahub。默认按 mission 自动完成训练场诊断、真实流转与经验沉淀。",
-		"available",
-		models.Capabilities{"automation", "planning", "execution"},
-	).Return(updatedAgent, nil).Once()
-	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(updatedAgent, nil)
-	redisMock.ExpectGet(redisKey).SetVal(code)
-	redisMock.ExpectDel(redisKey).SetVal(1)
-
-	resp, err := svc.CompleteEmailRegistration(context.Background(), &CompleteEmailRegistrationRequest{
-		Email:      email,
-		BindingKey: bindingKey,
-		Code:       code,
-	})
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.Token)
-	assert.Equal(t, boundAgent.AID, resp.Agent.AID)
-	assert.Equal(t, "OpenClaw 自动流转代理", resp.Agent.Headline)
-	require.NotNil(t, resp.Mission)
-	assert.Equal(t, "start_market_loop", resp.Mission.NextAction.Key)
-	assert.Nil(t, findMissionStep(resp.Mission.Steps, "complete_profile"))
-	assert.Equal(t, 2, growthRepo.upsertCount)
-	require.NoError(t, redisMock.ExpectationsWereMet())
-	mockRepo.AssertExpectations(t)
-}
-
-func TestRequestEmailLoginCode(t *testing.T) {
-	redisClient, redisMock := redismock.NewClientMock()
-	mockRepo := new(MockAgentRepository)
-	agent := &models.Agent{
-		AID:        "agent://a2ahub/openclaw-3",
-		Status:     "active",
-		Reputation: 100,
-		OwnerEmail: "owner@example.com",
-	}
-
-	cfg := &config.Config{
-		Server: config.ServerConfig{Env: "development"},
-		Email: config.EmailConfig{
-			CodeExpiration:       600,
-			AllowInlineCodeInDev: true,
-		},
-	}
-
-	svc := &agentService{
-		repo:   mockRepo,
-		redis:  &database.RedisClient{Client: redisClient},
-		config: cfg,
-	}
-
-	email := "owner@example.com"
-	redisKey := emailCodeKey(emailCodePurposeLogin, agent.AID, email)
-
-	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(agent, nil).Once()
-	redisMock.Regexp().ExpectSet(redisKey, `^\d{6}$`, 600*time.Second).SetVal("OK")
-
-	resp, err := svc.RequestEmailLoginCode(context.Background(), &EmailLoginCodeRequest{
-		Email: email,
-	})
-
-	require.NoError(t, err)
-	assert.Equal(t, email, resp.Email)
-	assert.Equal(t, agent.AID, resp.AID)
-	assert.Equal(t, "inline", resp.Delivery)
-	assert.Len(t, resp.VerificationCode, 6)
-	require.NoError(t, redisMock.ExpectationsWereMet())
-	mockRepo.AssertExpectations(t)
-}
-
-func TestCompleteEmailLogin(t *testing.T) {
-	redisClient, redisMock := redismock.NewClientMock()
-	mockRepo := new(MockAgentRepository)
-	agent := &models.Agent{
-		AID:        "agent://a2ahub/openclaw-4",
-		Status:     "active",
-		Reputation: 100,
-		OwnerEmail: "owner@example.com",
-	}
-
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret:     "test-secret",
-			Expiration: time.Hour,
-		},
-		Reputation: config.ReputationConfig{
-			MinReputationThreshold: 0,
-		},
-	}
-
-	svc := &agentService{
-		repo:   mockRepo,
-		redis:  &database.RedisClient{Client: redisClient},
-		config: cfg,
-	}
-
-	email := "owner@example.com"
-	code := "654321"
-	redisKey := emailCodeKey(emailCodePurposeLogin, agent.AID, email)
-
-	mockRepo.On("GetByOwnerEmail", mock.Anything, email).Return(agent, nil).Once()
-	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(agent, nil)
-	redisMock.ExpectGet(redisKey).SetVal(code)
-	redisMock.ExpectDel(redisKey).SetVal(1)
-
-	resp, err := svc.CompleteEmailLogin(context.Background(), &CompleteEmailLoginRequest{
-		Email: email,
-		Code:  code,
-	})
-
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp.Token)
-	assert.Equal(t, agent.AID, resp.Agent.AID)
-	require.NoError(t, redisMock.ExpectationsWereMet())
 	mockRepo.AssertExpectations(t)
 }
 

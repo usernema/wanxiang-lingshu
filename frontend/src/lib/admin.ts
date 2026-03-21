@@ -239,7 +239,6 @@ export type AdminAgentGrowthOverview = {
 };
 
 export type AdminAgentGrowthProfile = AgentProfile & {
-  owner_email?: string;
   primary_domain: string;
   domain_scores: Record<string, number>;
   current_maturity_pool: string;

@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="a2ahub", description="A2Ahub SDK command line tools")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    register = subparsers.add_parser("register", help="Register an OpenClaw/AI agent and print the binding key")
+    register = subparsers.add_parser("register", help="Register an OpenClaw/AI agent and print the AID observer entry")
     register.add_argument("--api-endpoint", default="https://kelibing.shop/api/v1", help="API base URL, e.g. https://kelibing.shop/api/v1")
     register.add_argument("--model", required=True, help="Agent model identifier")
     register.add_argument("--provider", required=True, help="Agent provider name")
@@ -39,8 +39,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def build_binding_url(api_endpoint: str, aid: Optional[str], binding_key: Optional[str]) -> Optional[str]:
-    if not aid or not binding_key:
+def build_observer_url(api_endpoint: str, aid: Optional[str]) -> Optional[str]:
+    if not aid:
         return None
 
     parsed = urlsplit(api_endpoint)
@@ -52,7 +52,7 @@ def build_binding_url(api_endpoint: str, aid: Optional[str], binding_key: Option
         path = path[:-4]
 
     join_path = f"{path}/join" if path else "/join"
-    query = urlencode({"tab": "bind", "binding_key": binding_key, "aid": aid})
+    query = urlencode({"tab": "observe", "aid": aid})
     return urlunsplit((parsed.scheme, parsed.netloc, join_path, query, ""))
 
 
@@ -67,15 +67,14 @@ def main(argv: Optional[List[str]] = None) -> int:
             capabilities=args.capabilities,
         )
         aid = identity.register(args.api_endpoint, timeout=args.timeout)
-        binding_url = build_binding_url(args.api_endpoint, aid, identity.binding_key)
+        observer_url = build_observer_url(args.api_endpoint, aid)
 
         if args.output:
             identity.save_keys(args.output)
 
         payload = {
             "aid": aid,
-            "binding_key": identity.binding_key,
-            "binding_url": binding_url,
+            "observer_url": observer_url,
             "output": args.output,
             "mission": identity.mission,
         }
@@ -85,9 +84,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         else:
             print("注册成功。")
             print(f"AID: {aid}")
-            print(f"Binding key: {identity.binding_key}")
-            if binding_url:
-                print(f"Binding URL: {binding_url}")
+            if observer_url:
+                print(f"Observer URL: {observer_url}")
             if identity.mission:
                 print(f"Mission summary: {identity.mission.get('summary', '')}")
             if args.output:
@@ -95,9 +93,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             else:
                 print("Keys saved to: 未持久化（建议追加 --output ./agent_keys）")
             print("下一步:")
-            print("1. Agent 保管好本地私钥、metadata 与 binding key。")
-            print("2. 人类只需打开 Binding URL，用邮箱验证码完成注册/绑定。")
-            print("3. 绑定后继续运行 mission 或 autopilot，平台会下发后续主线。")
+            print("1. Agent 保管好本地私钥、metadata 与 AID。")
+            print("2. 观察者只需打开 Observer URL，或在 /join 输入 AID，进入只读看板。")
+            print("3. 继续运行 mission 或 autopilot，平台会下发后续主线。")
         return 0
 
     if args.command == "mission":

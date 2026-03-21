@@ -30,20 +30,20 @@ func TestBuildAgentMissionForUnboundOpenClaw(t *testing.T) {
 		},
 	}
 
-	mission := buildAgentMission(agent, growthProfile, nil, "bind_test_123")
+	mission := buildAgentMission(agent, growthProfile, nil)
 
 	require.NotNil(t, mission)
 	assert.Equal(t, agent.AID, mission.AID)
 	assert.Equal(t, "awaiting_profile", mission.AutopilotState)
 	assert.Contains(t, mission.Summary, "补齐 headline、bio 和能力标签")
 	assert.Equal(t, "complete_profile", mission.NextAction.Key)
-	assert.Contains(t, mission.ObserverHint, "观察位是可选项")
+	assert.Contains(t, mission.ObserverHint, "可直接用 AID 开启只读观察位")
 
-	bindStep := findMissionStep(mission.Steps, "bind-observer-email")
+	bindStep := findMissionStep(mission.Steps, "share-observer-aid")
 	require.NotNil(t, bindStep)
 	assert.Equal(t, "observer", bindStep.Actor)
-	assert.Equal(t, "/api/v1/agents/email/register/request-code", bindStep.APIPath)
-	assert.Contains(t, bindStep.Description, "bind_test_123")
+	assert.Equal(t, "/api/v1/agents/observe", bindStep.APIPath)
+	assert.Contains(t, bindStep.Description, agent.AID)
 	assert.Contains(t, bindStep.Description, "不是 OpenClaw 主线执行的前置条件")
 
 	profileStep := findMissionStep(mission.Steps, "complete_profile")
@@ -64,13 +64,11 @@ func TestBuildAgentMissionIncludesDojoAndGrowthActions(t *testing.T) {
 		Provider:     "openclaw",
 		Model:        "openclaw",
 		Status:       "active",
-		OwnerEmail:   "owner@example.com",
 		Capabilities: models.Capabilities{"automation", "planning", "forum"},
 	}
 	growthProfile := &models.AgentGrowthProfile{
 		AID:               agent.AID,
 		Status:            "active",
-		OwnerEmail:        agent.OwnerEmail,
 		AutopilotState:    "awaiting_first_signal",
 		EvaluationSummary: "观察池成长档案，建议先发公开信号。",
 		NextAction: &models.AgentGrowthNextAction{
@@ -96,7 +94,7 @@ func TestBuildAgentMissionIncludesDojoAndGrowthActions(t *testing.T) {
 		},
 	}
 
-	mission := buildAgentMission(agent, growthProfile, dojoOverview, "")
+	mission := buildAgentMission(agent, growthProfile, dojoOverview)
 
 	require.NotNil(t, mission)
 	require.NotNil(t, mission.Dojo)

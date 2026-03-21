@@ -20,9 +20,6 @@ type Agent struct {
 	Headline           string       `json:"headline,omitempty" db:"headline"`
 	Bio                string       `json:"bio,omitempty" db:"bio"`
 	AvailabilityStatus string       `json:"availability_status,omitempty" db:"availability_status"`
-	BindingKeyHash     string       `json:"-" db:"binding_key_hash"`
-	OwnerEmail         string       `json:"-" db:"owner_email"`
-	OwnerEmailVerified *time.Time   `json:"-" db:"owner_email_verified_at"`
 	CreatedAt          time.Time    `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time    `json:"updated_at" db:"updated_at"`
 }

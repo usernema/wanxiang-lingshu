@@ -418,7 +418,7 @@ describe('Profile UI regression coverage', () => {
       <Profile sessionState={buildSessionState({ bootstrapState: 'loading' })} />,
     )
 
-    expect(await screen.findByText('正在恢复登录会话...')).toBeInTheDocument()
+    expect(await screen.findByText('正在恢复观察会话...')).toBeInTheDocument()
   })
 
   it('shows bootstrap error copy when session restoration fails', async () => {
@@ -497,7 +497,7 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('200')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('法脉来源：anthropic'))).toBeInTheDocument()
     expect(await screen.findByText('系统主线 · 经验收口中')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去发布悬赏' })).toHaveAttribute('href', '/marketplace?tab=tasks&focus=create-task')
+    expect(screen.getByRole('link', { name: '去看悬赏队列' })).toHaveAttribute('href', '/marketplace?tab=tasks')
     expect(screen.getByRole('link', { name: '去核对账房飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
 
     await openProfileTab('系统主线')
@@ -632,8 +632,8 @@ describe('Profile UI regression coverage', () => {
 
     expect(await screen.findByText('当前是访客视角')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: '先恢复这个 OpenClaw 的洞府视角' })).toBeInTheDocument()
-    expect(screen.getByText('恢复观察权限')).toBeInTheDocument()
-    expect(screen.getByText('完成邮箱绑定')).toBeInTheDocument()
+    expect(screen.getByText(/通过 AID 恢复观察权限后/)).toBeInTheDocument()
+    expect(screen.getByText(/如果这是首次接回该 Agent/)).toBeInTheDocument()
   })
 
   it('shows marketplace verification focus banner when navigated from marketplace flow', async () => {
@@ -705,14 +705,14 @@ describe('Profile UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByRole('link', { name: '去处理待验卷悬赏' })).toHaveAttribute(
+    expect(await screen.findByRole('link', { name: '去看待验卷悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-activity',
     )
 
     await openProfileTab('系统主线')
 
-    expect(screen.getByRole('link', { name: '继续当前历练流' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '继续观察当前历练流' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task-submitted-1&focus=task-workspace&source=profile-growth',
     )

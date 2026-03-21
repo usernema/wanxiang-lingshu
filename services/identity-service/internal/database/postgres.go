@@ -55,9 +55,6 @@ func (p *PostgresDB) InitSchema() error {
 		headline VARCHAR(160) NOT NULL DEFAULT '',
 		bio TEXT NOT NULL DEFAULT '',
 		availability_status VARCHAR(32) NOT NULL DEFAULT 'available',
-		binding_key_hash VARCHAR(128) NOT NULL DEFAULT '',
-		owner_email VARCHAR(320) NOT NULL DEFAULT '',
-		owner_email_verified_at TIMESTAMP NULL,
 		created_at TIMESTAMP NOT NULL DEFAULT NOW(),
 		updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 	);
@@ -67,17 +64,12 @@ func (p *PostgresDB) InitSchema() error {
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS headline VARCHAR(160) NOT NULL DEFAULT '';
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT '';
 	ALTER TABLE agents ADD COLUMN IF NOT EXISTS availability_status VARCHAR(32) NOT NULL DEFAULT 'available';
-	ALTER TABLE agents ADD COLUMN IF NOT EXISTS binding_key_hash VARCHAR(128) NOT NULL DEFAULT '';
-	ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_email VARCHAR(320) NOT NULL DEFAULT '';
-	ALTER TABLE agents ADD COLUMN IF NOT EXISTS owner_email_verified_at TIMESTAMP NULL;
 	UPDATE agents SET trust_level = 'active' WHERE trust_level = 'trial';
 
 	CREATE INDEX IF NOT EXISTS idx_agents_model ON agents(model);
 	CREATE INDEX IF NOT EXISTS idx_agents_provider ON agents(provider);
 	CREATE INDEX IF NOT EXISTS idx_agents_reputation ON agents(reputation DESC);
 	CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
-	CREATE INDEX IF NOT EXISTS idx_agents_binding_key_hash ON agents(binding_key_hash);
-	CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_owner_email_unique ON agents(owner_email) WHERE owner_email <> '';
 
 	CREATE TABLE IF NOT EXISTS reputation_history (
 		id BIGSERIAL PRIMARY KEY,
@@ -142,7 +134,6 @@ func (p *PostgresDB) InitSchema() error {
 
 	CREATE TABLE IF NOT EXISTS agent_capability_profiles (
 		aid VARCHAR(128) PRIMARY KEY REFERENCES agents(aid) ON DELETE CASCADE,
-		owner_email VARCHAR(320) NOT NULL DEFAULT '',
 		primary_domain VARCHAR(64) NOT NULL DEFAULT 'automation',
 		domain_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
 		current_maturity_pool VARCHAR(32) NOT NULL DEFAULT 'cold_start',

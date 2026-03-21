@@ -5,10 +5,7 @@ import { renderWithProviders } from '@/test/renderWithProviders'
 import { buildSessionState } from '@/test/fixtures/marketplace'
 
 const mockNavigate = vi.fn()
-const mockRequestEmailRegistrationCode = vi.fn()
-const mockCompleteEmailRegistration = vi.fn()
-const mockRequestEmailLoginCode = vi.fn()
-const mockCompleteEmailLogin = vi.fn()
+const mockObserveAgentByAID = vi.fn()
 const mockGetActiveSession = vi.fn()
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -23,10 +20,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return {
     ...actual,
-    requestEmailRegistrationCode: (payload: unknown) => mockRequestEmailRegistrationCode(payload),
-    completeEmailRegistration: (payload: unknown) => mockCompleteEmailRegistration(payload),
-    requestEmailLoginCode: (payload: unknown) => mockRequestEmailLoginCode(payload),
-    completeEmailLogin: (payload: unknown) => mockCompleteEmailLogin(payload),
+    observeAgentByAID: (payload: unknown) => mockObserveAgentByAID(payload),
     getActiveSession: () => mockGetActiveSession(),
   }
 })
@@ -37,94 +31,29 @@ describe('Join page', () => {
     mockGetActiveSession.mockReturnValue(null)
   })
 
-  it('requests a binding code and shows the inline dev code', async () => {
-    mockRequestEmailRegistrationCode.mockResolvedValue({
-      email: 'owner@example.com',
-      aid: 'agent://a2ahub/openclaw-1',
-      delivery: 'inline',
-      verification_code: '123456',
-      expires_at: '2026-03-12T12:00:00.000Z',
-    })
-
-    renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
-
-    const emailInputs = screen.getAllByPlaceholderText('邮箱地址')
-
-    fireEvent.change(emailInputs[0], { target: { value: 'owner@example.com' } })
-    fireEvent.change(screen.getByPlaceholderText('绑定码（bind_...）'), { target: { value: 'bind_123456' } })
-    fireEvent.click(screen.getByText('发送绑定验证码'))
-
-    await waitFor(() => {
-      expect(mockRequestEmailRegistrationCode).toHaveBeenCalledWith({
-        email: 'owner@example.com',
-        binding_key: 'bind_123456',
-      })
-    })
-
-    expect(await screen.findByText('开发环境验证码：123456')).toBeInTheDocument()
-    expect(await screen.findByText('验证码已发送到 owner@example.com，验证后你将获得 agent://a2ahub/openclaw-1 的观察权限。')).toBeInTheDocument()
-  })
-
-  it('completes email binding and carries the handoff entry into onboarding', async () => {
+  it('observes an agent by AID and navigates into onboarding', async () => {
     const refreshSessions = vi.fn().mockResolvedValue(undefined)
-    mockCompleteEmailRegistration.mockResolvedValue({
+    mockObserveAgentByAID.mockResolvedValue({
       aid: 'agent://a2ahub/openclaw-1',
     })
 
-    renderWithProviders(
-      <Join sessionState={buildSessionState({ refreshSessions })} />,
-      { initialEntries: ['/join?binding_key=bind_123456'] },
-    )
+    renderWithProviders(<Join sessionState={buildSessionState({ refreshSessions })} />, { initialEntries: ['/join'] })
 
-    const emailInputs = screen.getAllByPlaceholderText('邮箱地址')
-    const codeInputs = screen.getAllByPlaceholderText('6 位验证码')
-
-    fireEvent.change(emailInputs[0], { target: { value: 'owner@example.com' } })
-    fireEvent.change(codeInputs[0], { target: { value: '123456' } })
-    fireEvent.click(screen.getByText('验证并开通看板'))
+    fireEvent.change(screen.getByPlaceholderText('agent://a2ahub/...'), {
+      target: { value: 'agent://a2ahub/openclaw-1' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '进入观察模式' }))
 
     await waitFor(() => {
-      expect(mockCompleteEmailRegistration).toHaveBeenCalledWith({
-        email: 'owner@example.com',
-        binding_key: 'bind_123456',
-        code: '123456',
+      expect(mockObserveAgentByAID).toHaveBeenCalledWith({
+        aid: 'agent://a2ahub/openclaw-1',
       })
     })
     await waitFor(() => expect(refreshSessions).toHaveBeenCalled())
-    expect(mockNavigate).toHaveBeenCalledWith('/onboarding?tab=next&entry=bound')
+    expect(mockNavigate).toHaveBeenCalledWith('/onboarding?entry=observe')
   })
 
-  it('completes email login and navigates to onboarding', async () => {
-    const refreshSessions = vi.fn().mockResolvedValue(undefined)
-    mockCompleteEmailLogin.mockResolvedValue({
-      aid: 'agent://a2ahub/openclaw-1',
-    })
-
-    renderWithProviders(
-      <Join sessionState={buildSessionState({ refreshSessions })} />,
-      { initialEntries: ['/join'] },
-    )
-
-    fireEvent.click(screen.getByRole('tab', { name: '邮箱登录' }))
-
-    const emailInputs = screen.getAllByPlaceholderText('邮箱地址')
-    const codeInputs = screen.getAllByPlaceholderText('6 位验证码')
-
-    fireEvent.change(emailInputs[0], { target: { value: 'owner@example.com' } })
-    fireEvent.change(codeInputs[0], { target: { value: '654321' } })
-    fireEvent.click(screen.getByText('邮箱登录并进入看板'))
-
-    await waitFor(() => {
-      expect(mockCompleteEmailLogin).toHaveBeenCalledWith({
-        email: 'owner@example.com',
-        code: '654321',
-      })
-    })
-    await waitFor(() => expect(refreshSessions).toHaveBeenCalled())
-    expect(mockNavigate).toHaveBeenCalledWith('/onboarding?tab=next&entry=login')
-  })
-
-  it('shows direct continue actions when a session already exists', async () => {
+  it('shows the current observer session summary when a session already exists', async () => {
     mockGetActiveSession.mockReturnValue({
       aid: 'agent://a2ahub/openclaw-1',
       token: 'token-1',
@@ -133,43 +62,38 @@ describe('Join page', () => {
 
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
-    expect(await screen.findByText('当前已绑定观察权限：agent://a2ahub/openclaw-1')).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: '查看代理看板' }).every((link) => link.getAttribute('href') === '/onboarding?tab=next')).toBe(true)
-    expect(screen.getByRole('link', { name: '查看洞府状态' })).toHaveAttribute('href', '/profile')
-    expect(screen.getByRole('link', { name: '查看账房状态' })).toHaveAttribute('href', '/wallet?focus=notifications&source=join')
+    expect(await screen.findByText(/当前已经接入 agent:\/\/a2ahub\/openclaw-1 的观察会话/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看代理看板' })).toHaveAttribute('href', '/onboarding?tab=next')
+    expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw?tab=autopilot')
   })
 
-  it('renders the public self-registration instructions for OpenClaw', async () => {
+  it('renders the public machine-side registration instructions for OpenClaw', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
-    fireEvent.click(screen.getByRole('tab', { name: 'OpenClaw 接入' }))
+    fireEvent.click(screen.getByRole('tab', { name: '机器入口' }))
 
-    expect(screen.getByText('OpenClaw 自助注册入口')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw?tab=autopilot')
+    expect(screen.getByText('OpenClaw 机器端入口')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看完整接入文档' })).toHaveAttribute('href', '/help/openclaw?tab=toolkit')
-    expect(screen.getByText(/平台不会在网页里直接生成绑定码/)).toBeInTheDocument()
     expect(screen.getAllByText(/POST \/api\/v1\/agents\/register/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/https:\/\/kelibing\.shop\/api\/v1\/agents\/register/).length).toBeGreaterThan(0)
     expect(screen.getByText(/python -m a2ahub register/)).toBeInTheDocument()
-    expect(screen.getByText(/https:\/\/kelibing\.shop\/join\?tab=bind&binding_key=/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '我已拿到 AID，去观察入口' })).toBeInTheDocument()
   })
 
-  it('supports direct deep linking to the machine registration tab', async () => {
+  it('supports direct deep linking to the machine tab', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join?tab=machine'] })
 
-    expect(await screen.findByRole('tab', { name: 'OpenClaw 接入' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('OpenClaw 自助注册入口')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '我已拿到 binding_key，去绑定看板' })).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '机器入口' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('OpenClaw 机器端入口')).toBeInTheDocument()
   })
 
-  it('prefills binding handoff data from the query string', async () => {
+  it('prefills AID handoff data from the query string', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, {
-      initialEntries: ['/join?binding_key=bind_direct_123&aid=agent%3A%2F%2Fa2ahub%2Fopenclaw-direct'],
+      initialEntries: ['/join?tab=observe&aid=agent%3A%2F%2Fa2ahub%2Fopenclaw-direct'],
     })
 
-    expect(await screen.findByRole('tab', { name: '绑定看板' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('OpenClaw 已经把交接材料带进来了')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('bind_direct_123')).toBeInTheDocument()
-    expect(screen.getByText(/当前待绑定身份：agent:\/\/a2ahub\/openclaw-direct/)).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '观察入口' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByDisplayValue('agent://a2ahub/openclaw-direct')).toBeInTheDocument()
+    expect(screen.getByText('通过 AID 进入观察模式')).toBeInTheDocument()
   })
 })

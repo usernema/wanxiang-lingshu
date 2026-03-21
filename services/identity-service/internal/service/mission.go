@@ -12,7 +12,6 @@ import (
 
 type missionBuildOptions struct {
 	includeDojo bool
-	bindingKey  string
 }
 
 func (s *agentService) GetMission(ctx context.Context, aid string) (*models.AgentMissionResponse, error) {
@@ -47,14 +46,13 @@ func (s *agentService) buildMissionSnapshot(ctx context.Context, agent *models.A
 		}
 	}
 
-	return buildAgentMission(agent, growthProfile, dojoOverview, options.bindingKey)
+	return buildAgentMission(agent, growthProfile, dojoOverview)
 }
 
 func buildAgentMission(
 	agent *models.Agent,
 	growthProfile *models.AgentGrowthProfile,
 	dojoOverview *models.AgentDojoOverview,
-	bindingKey string,
 ) *models.AgentMissionResponse {
 	if agent == nil {
 		return nil
@@ -89,7 +87,7 @@ func buildAgentMission(
 
 	appendMissionStep(&mission.Steps, buildDojoMissionStep(dojoOverview))
 	appendMissionStep(&mission.Steps, buildGrowthMissionStep(agent, growthProfile))
-	appendMissionStep(&mission.Steps, buildBindingMissionStep(agent, bindingKey))
+	appendMissionStep(&mission.Steps, buildBindingMissionStep(agent))
 	appendMissionStep(&mission.Steps, buildObserverMissionStep(agent, growthProfile))
 
 	if len(mission.Steps) == 0 {
@@ -114,7 +112,7 @@ func buildAgentMission(
 		})
 	}
 
-	mission.Summary = buildMissionSummary(agent, growthProfile, dojoOverview, bindingKey)
+	mission.Summary = buildMissionSummary(agent, growthProfile, dojoOverview)
 	if mission.ObserverHint == "" {
 		mission.ObserverHint = buildMissionObserverHint(agent, dojoOverview)
 	}
@@ -141,7 +139,7 @@ func appendMissionStep(target *[]models.AgentMissionStep, step *models.AgentMiss
 	*target = append(*target, *step)
 }
 
-func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.AgentMissionStep {
+func buildBindingMissionStep(agent *models.Agent) *models.AgentMissionStep {
 	if agent == nil {
 		return nil
 	}
@@ -169,7 +167,7 @@ func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.Age
 			},
 			Notes: []string{
 				"这是可选观察入口，不是 OpenClaw 主线前置条件。",
-				"观察者只需要 AID，不再需要邮箱、binding_key 或验证码。",
+				"观察者只需要 AID，不再需要邮箱或验证码。",
 				"网页端拿到的是只读观察会话，不会接管 OpenClaw 主线。",
 			},
 		},
@@ -359,7 +357,7 @@ func buildGrowthMissionStep(agent *models.Agent, growthProfile *models.AgentGrow
 }
 
 func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGrowthProfile) *models.AgentMissionStep {
-	if agent == nil || strings.TrimSpace(agent.OwnerEmail) == "" {
+	if agent == nil {
 		return nil
 	}
 
@@ -388,7 +386,7 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 	}
 }
 
-func buildMissionSummary(agent *models.Agent, growthProfile *models.AgentGrowthProfile, dojoOverview *models.AgentDojoOverview, bindingKey string) string {
+func buildMissionSummary(agent *models.Agent, growthProfile *models.AgentGrowthProfile, dojoOverview *models.AgentDojoOverview) string {
 	if growthProfile != nil && growthProfile.NextAction != nil {
 		summary := growthProfile.NextAction.Description
 		if dojoOverview != nil && dojoOverview.SuggestedNextAction == "start_diagnostic" {

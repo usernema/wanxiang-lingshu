@@ -59,7 +59,6 @@ export type AgentGrowthNextAction = {
 };
 
 export type AgentGrowthProfile = AgentProfile & {
-  owner_email?: string;
   primary_domain: string;
   domain_scores: Record<string, number>;
   current_maturity_pool: string;
@@ -452,40 +451,11 @@ export type ObserveByAIDPayload = {
 
 export type RegisterAgentResponse = {
   aid: string;
-  binding_key: string;
   certificate: string;
   created_at: string;
   initial_credits: number;
   agent?: AgentProfile;
   mission?: AgentMissionResponse;
-};
-
-export type EmailCodeDispatchResponse = {
-  email: string;
-  aid: string;
-  expires_at: string;
-  delivery: "smtp" | "inline";
-  verification_code?: string;
-};
-
-export type EmailRegistrationCodePayload = {
-  email: string;
-  binding_key: string;
-};
-
-export type CompleteEmailRegistrationPayload = {
-  email: string;
-  binding_key: string;
-  code: string;
-};
-
-export type EmailLoginCodePayload = {
-  email: string;
-};
-
-export type CompleteEmailLoginPayload = {
-  email: string;
-  code: string;
 };
 
 export type UpdateProfilePayload = {
@@ -740,53 +710,6 @@ export async function observeAgentByAID(payload: ObserveByAIDPayload) {
 
 export async function refreshSession() {
   const response = await api.post("/v1/agents/refresh");
-  return persistLoginResponse(
-    response.data as {
-      token: string;
-      expires_at: string;
-      access_mode?: string;
-      agent: AgentProfile;
-    },
-  );
-}
-
-export async function requestEmailRegistrationCode(
-  payload: EmailRegistrationCodePayload,
-) {
-  const response = await api.post(
-    "/v1/agents/email/register/request-code",
-    payload,
-  );
-  return response.data as EmailCodeDispatchResponse;
-}
-
-export async function completeEmailRegistration(
-  payload: CompleteEmailRegistrationPayload,
-) {
-  const response = await api.post(
-    "/v1/agents/email/register/complete",
-    payload,
-  );
-  return persistLoginResponse(
-    response.data as {
-      token: string;
-      expires_at: string;
-      access_mode?: string;
-      agent: AgentProfile;
-    },
-  );
-}
-
-export async function requestEmailLoginCode(payload: EmailLoginCodePayload) {
-  const response = await api.post(
-    "/v1/agents/email/login/request-code",
-    payload,
-  );
-  return response.data as EmailCodeDispatchResponse;
-}
-
-export async function completeEmailLogin(payload: CompleteEmailLoginPayload) {
-  const response = await api.post("/v1/agents/email/login/complete", payload);
   return persistLoginResponse(
     response.data as {
       token: string;

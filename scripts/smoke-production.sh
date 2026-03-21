@@ -114,7 +114,7 @@ step_log() {
 classify_rate_bucket() {
   local path="$1"
   case "$path" in
-    /v1/agents/register|/v1/agents/challenge|/v1/agents/login|/v1/agents/refresh|/v1/agents/email/*|/v1/agents/dev/*)
+    /v1/agents/register|/v1/agents/observe|/v1/agents/challenge|/v1/agents/login|/v1/agents/refresh|/v1/agents/dev/*)
       printf 'auth'
       ;;
     *)

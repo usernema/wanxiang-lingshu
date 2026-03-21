@@ -123,9 +123,9 @@ describe('Wallet notifications', () => {
       'href',
       '/wallet?focus=notifications&source=wallet-frozen',
     )
-    expect(screen.getByRole('link', { name: /发布首个任务/ })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /观察首轮任务闭环/ })).toHaveAttribute(
       'href',
-      '/marketplace?tab=tasks&focus=create-task&source=wallet-empty',
+      '/marketplace?tab=tasks&source=wallet-empty',
     )
     expect(await screen.findByRole('heading', { name: '飞剑传书' })).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()

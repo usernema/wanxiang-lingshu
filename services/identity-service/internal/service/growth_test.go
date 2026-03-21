@@ -69,8 +69,7 @@ func (f *fakeGrowthRepository) GetOverview(ctx context.Context) (*models.AgentGr
 
 func TestApplyGrowthRuntimeStateAwaitingProfile(t *testing.T) {
 	profile := &models.AgentGrowthProfile{
-		Status:     "active",
-		OwnerEmail: "observer@example.com",
+		Status: "active",
 	}
 
 	applyGrowthRuntimeState(profile)
@@ -83,11 +82,10 @@ func TestApplyGrowthRuntimeStateAwaitingProfile(t *testing.T) {
 
 func TestApplyGrowthRuntimeStateStartsMarketLoopBeforeFirstSignal(t *testing.T) {
 	profile := &models.AgentGrowthProfile{
-		Status:         "active",
-		OwnerEmail:     "observer@example.com",
-		Headline:       "自动化修士",
-		Bio:            "能完成真实交付。",
-		Capabilities:   models.Capabilities{"automation", "planning"},
+		Status:       "active",
+		Headline:     "自动化修士",
+		Bio:          "能完成真实交付。",
+		Capabilities: models.Capabilities{"automation", "planning"},
 		ForumPostCount: 0,
 	}
 
@@ -100,14 +98,13 @@ func TestApplyGrowthRuntimeStateStartsMarketLoopBeforeFirstSignal(t *testing.T) 
 
 func TestApplyGrowthRuntimeStateAwaitingFirstSignalAfterClosedLoop(t *testing.T) {
 	profile := &models.AgentGrowthProfile{
-		Status:              "active",
-		OwnerEmail:          "observer@example.com",
-		Headline:            "自动化修士",
-		Bio:                 "能完成真实交付。",
-		Capabilities:        models.Capabilities{"automation", "planning"},
-		ForumPostCount:      0,
-		TotalTaskCount:      1,
-		CompletedTaskCount:  1,
+		Status:             "active",
+		Headline:           "自动化修士",
+		Bio:                "能完成真实交付。",
+		Capabilities:       models.Capabilities{"automation", "planning"},
+		ForumPostCount:     0,
+		TotalTaskCount:     1,
+		CompletedTaskCount: 1,
 		PublishedDraftCount: 1,
 	}
 
@@ -121,7 +118,6 @@ func TestApplyGrowthRuntimeStateAwaitingFirstSignalAfterClosedLoop(t *testing.T)
 func TestApplyGrowthRuntimeStateAwaitingAssetConsolidation(t *testing.T) {
 	profile := &models.AgentGrowthProfile{
 		Status:             "active",
-		OwnerEmail:         "observer@example.com",
 		Headline:           "自动化修士",
 		Bio:                "能完成真实交付。",
 		Capabilities:       models.Capabilities{"automation", "planning"},
@@ -156,7 +152,7 @@ func TestApplyGrowthRuntimeStateAddsObserverInterventionHint(t *testing.T) {
 	assert.Nil(t, profile.InterventionReason)
 }
 
-func TestDeriveRiskFlagsDoesNotTreatMissingOwnerEmailAsRisk(t *testing.T) {
+func TestDeriveRiskFlagsDoesNotTreatMissingObserverProfileAsRisk(t *testing.T) {
 	agent := &models.Agent{
 		Status:       "active",
 		Headline:     "自动化修士",
@@ -170,10 +166,10 @@ func TestDeriveRiskFlagsDoesNotTreatMissingOwnerEmailAsRisk(t *testing.T) {
 
 	flags := deriveRiskFlags(agent, stats)
 
-	assert.NotContains(t, flags, "unbound_owner_email")
+	assert.Equal(t, models.StringList{"missing_experience_cards"}, flags)
 }
 
-func TestPromotionReadinessScoreDoesNotDependOnObserverEmail(t *testing.T) {
+func TestPromotionReadinessScoreDoesNotDependOnObserverMetadata(t *testing.T) {
 	baseAgent := &models.Agent{
 		Status:       "active",
 		Headline:     "自动化修士",
@@ -188,16 +184,8 @@ func TestPromotionReadinessScoreDoesNotDependOnObserverEmail(t *testing.T) {
 		CrossEmployerValidatedCount: 1,
 	}
 
-	withoutObserver := calculatePromotionReadinessScore(baseAgent, stats, "standard", nil, 70, 0)
-
-	withObserver := *baseAgent
-	withObserver.OwnerEmail = "observer@example.com"
-	now := time.Now()
-	withObserver.OwnerEmailVerified = &now
-
-	withObserverScore := calculatePromotionReadinessScore(&withObserver, stats, "standard", nil, 70, 0)
-
-	assert.Equal(t, withoutObserver, withObserverScore)
+	score := calculatePromotionReadinessScore(baseAgent, stats, "standard", nil, 70, 0)
+	assert.Equal(t, score, calculatePromotionReadinessScore(baseAgent, stats, "standard", nil, 70, 0))
 }
 
 func TestGetGrowthProfileReevaluatesWhenStatsDrift(t *testing.T) {
@@ -214,7 +202,6 @@ func TestGetGrowthProfileReevaluatesWhenStatsDrift(t *testing.T) {
 		Headline:           "自动化修士",
 		Bio:                "能持续完成真实交付。",
 		AvailabilityStatus: "available",
-		OwnerEmail:         "observer@example.com",
 	}
 	mockRepo.On("GetByAID", mock.Anything, agent.AID).Return(agent, nil).Once()
 
@@ -231,7 +218,6 @@ func TestGetGrowthProfileReevaluatesWhenStatsDrift(t *testing.T) {
 			Headline:            agent.Headline,
 			Bio:                 agent.Bio,
 			AvailabilityStatus:  agent.AvailabilityStatus,
-			OwnerEmail:          agent.OwnerEmail,
 			PrimaryDomain:       "automation",
 			CurrentMaturityPool: "cold_start",
 			LastEvaluatedAt:     time.Now().Add(-time.Hour),

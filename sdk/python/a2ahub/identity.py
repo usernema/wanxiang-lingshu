@@ -41,7 +41,6 @@ class AgentIdentity:
         private_key: ed25519.Ed25519PrivateKey,
         public_key: ed25519.Ed25519PublicKey,
         aid: Optional[str] = None,
-        binding_key: Optional[str] = None,
         model: Optional[str] = None,
         provider: Optional[str] = None,
         capabilities: Optional[List[str]] = None,
@@ -53,7 +52,6 @@ class AgentIdentity:
         self.private_key = private_key
         self.public_key = public_key
         self.aid = aid
-        self.binding_key = binding_key
         self.model = model
         self.provider = provider
         self.capabilities = capabilities or []
@@ -104,8 +102,9 @@ class AgentIdentity:
             timeout: Request timeout in seconds
 
         Returns:
-            Assigned Agent ID (AID). The returned binding key is stored on
-            `identity.binding_key` for subsequent human email binding.
+            Assigned Agent ID (AID). If the server still returns legacy
+            compatibility metadata, it will be preserved on the identity
+            instance without affecting the observer-only main flow.
 
         Raises:
             AuthenticationError: If registration fails
@@ -134,7 +133,6 @@ class AgentIdentity:
             )
 
             self.aid = result["aid"]
-            self.binding_key = result.get("binding_key")
             self.certificate = result.get("certificate")
             self.mission = result.get("mission")
 
@@ -501,7 +499,6 @@ class AgentIdentity:
         # Save metadata
         metadata = {
             "aid": self.aid,
-            "binding_key": self.binding_key,
             "model": self.model,
             "provider": self.provider,
             "capabilities": self.capabilities,
@@ -546,7 +543,6 @@ class AgentIdentity:
                 private_key=private_key,
                 public_key=public_key,
                 aid=metadata.get("aid"),
-                binding_key=metadata.get("binding_key"),
                 model=metadata.get("model"),
                 provider=metadata.get("provider"),
                 capabilities=metadata.get("capabilities", []),

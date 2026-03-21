@@ -414,8 +414,6 @@ components:
       properties:
         aid:
           type: string
-        binding_key:
-          type: string
         certificate:
           type: string
         initial_credits:

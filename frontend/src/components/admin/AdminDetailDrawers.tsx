@@ -213,7 +213,6 @@ export function AdminDetailDrawers({
                   <p>自动沉淀：<span className="font-medium text-slate-900">{selectedGrowthProfile.auto_growth_eligible ? '已就绪' : '待触发'}</span></p>
                   <p>上次评估：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.last_evaluated_at)}</span></p>
                   <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.updated_at)}</span></p>
-                  <p>绑定邮箱：<span className="font-medium text-slate-900">{selectedGrowthProfile.owner_email || '未绑定'}</span></p>
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">

@@ -181,33 +181,33 @@ function getTaskHiringSummary(task: MarketplaceTask, applications: TaskApplicati
 }
 
 function getTaskOwnershipLabel(task: MarketplaceTask, employerSession: ReturnType<typeof getSession>, workerSession: ReturnType<typeof getSession>) {
-  if (employerSession && task.employer_aid === employerSession.aid) return '你是该悬赏的发榜人'
-  if (workerSession && task.worker_aid === workerSession.aid) return '你是该悬赏的已点将行脚人'
-  if (workerSession && task.employer_aid !== workerSession.aid && task.status === 'open') return '你可以作为行脚人接榜此悬赏'
-  return '你当前在观摩这道悬赏'
+  if (employerSession && task.employer_aid === employerSession.aid) return '这道悬赏由当前 Agent 发起'
+  if (workerSession && task.worker_aid === workerSession.aid) return '当前 Agent 是这道悬赏的已锁定执行者'
+  if (workerSession && task.employer_aid !== workerSession.aid && task.status === 'open') return '当前 Agent 正在观察这道公开悬赏的申请机会'
+  return '当前正在观摩这道悬赏'
 }
 
 function getWorkerTaskActionSummary(task: MarketplaceTask, applications: TaskApplication[], workerSession: ReturnType<typeof getSession>) {
-  if (!workerSession) return '当前没有行脚人身份可用。'
+  if (!workerSession) return '当前没有交付侧身份可用于解释该节点。'
   const hasApplied = applications.some((application) => application.applicant_aid === workerSession.aid)
-  if (task.status === 'open' && !hasApplied) return '你可以提交接榜玉简，争取被点将。'
-  if (task.status === 'open' && hasApplied) return '你已提交接榜玉简，等待发榜人决策。'
+  if (task.status === 'open' && !hasApplied) return '这道悬赏仍在公开招贤，若机器侧决定参与，会先提交接榜玉简。'
+  if (task.status === 'open' && hasApplied) return '当前 Agent 已提交接榜玉简，下一步观察是否被锁定执行。'
   if ((task.status === 'assigned' || task.status === 'in_progress') && task.worker_aid === workerSession.aid) {
-    return task.status === 'assigned' ? '你已被点将，悬赏已分配，接下来可以开始历练交卷。' : '你已被点将，可以开始交卷并完成这道悬赏。'
+    return task.status === 'assigned' ? '当前 Agent 已被锁定执行，接下来观察交付是否开始推进。' : '当前 Agent 正在执行这道悬赏，接下来观察何时交卷候验。'
   }
-  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '你已交卷，等待发榜人验卷或打回重修。'
-  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '你已完成此悬赏，建议去灵石账房查看收入流水。'
-  return '当前这道悬赏没有分配给你。'
+  if (task.status === 'submitted' && task.worker_aid === workerSession.aid) return '当前 Agent 已交卷，下一步观察验卷与放款。'
+  if (task.status === 'completed' && task.worker_aid === workerSession.aid) return '当前 Agent 已完成此悬赏，建议去灵石账房核对收入流水。'
+  return '当前这道悬赏没有分配给当前 Agent。'
 }
 
 function getEmployerTaskActionSummary(task: MarketplaceTask, applications: TaskApplication[], employerSession: ReturnType<typeof getSession>) {
-  if (!employerSession || task.employer_aid !== employerSession.aid) return '当前不是你的悬赏，无法进行点将决策。'
-  if (task.status === 'open' && applications.length === 0) return '悬赏已挂榜，下一步是等待或引导行脚人接榜。'
-  if (task.status === 'open' && applications.length > 0) return '悬赏已收到接榜申请，下一步是查看玉简并点将。'
+  if (!employerSession || task.employer_aid !== employerSession.aid) return '当前这道悬赏不属于当前 Agent，无法代表它作出决策。'
+  if (task.status === 'open' && applications.length === 0) return '悬赏仍在公开招贤，下一步观察是否出现合格申请。'
+  if (task.status === 'open' && applications.length > 0) return '悬赏已收到接榜申请，下一步观察系统锁定哪位执行者。'
   if (task.status === 'assigned' || task.status === 'in_progress') {
-    return task.status === 'assigned' ? '悬赏已完成点将，下一步重点是确认行脚人已开始历练。' : '悬赏已进入历练中，下一步重点是等待行脚人交卷。'
+    return task.status === 'assigned' ? '悬赏已锁定执行者，下一步观察交付是否开始推进。' : '悬赏已进入交付中，下一步观察何时交卷候验。'
   }
-  if (task.status === 'submitted') return '行脚人已交卷，下一步是验卷通过或打回重修。'
+  if (task.status === 'submitted') return '执行者已交卷，下一步观察验卷通过或打回重修。'
   if (task.status === 'completed') return '悬赏已闭环完成，建议核对托管和余额变化。'
   return '当前悬赏已撤下。'
 }
@@ -255,7 +255,7 @@ function getTaskQuickFacts(task: MarketplaceTask, applications: TaskApplication[
   return [
     { label: '榜单状态', value: getTaskDecisionState(task, applications), tone: getTaskDecisionStateTone(getTaskDecisionState(task, applications)) },
     { label: '接榜人数', value: getApplicantCountLabel(applications.length), tone: 'bg-slate-100 text-slate-700' },
-    { label: '已点将行脚人', value: task.worker_aid || '尚未点将', tone: 'bg-slate-100 text-slate-700' },
+    { label: '已锁定执行者', value: task.worker_aid || '尚未锁定', tone: 'bg-slate-100 text-slate-700' },
     { label: '灵石托管', value: task.escrow_id ? '托管已建立' : '托管尚未建立', tone: 'bg-slate-100 text-slate-700' },
   ]
 }
@@ -426,8 +426,8 @@ function buildMarketplaceObserverSignals({
 
   return [
     {
-      label: '当前视角',
-      value: role === 'worker' ? '行脚人观察' : '发榜人观察',
+      label: '当前观察面',
+      value: role === 'worker' ? '交付观察面' : '招贤观察面',
       tone: 'primary',
     },
     {
@@ -561,7 +561,7 @@ function getTaskQueueLabel(queue: TaskQueue, role: Role) {
 }
 
 function getTaskQueueBannerCopy(queue: TaskQueue, role: Role, count: number) {
-  const roleLabel = role === 'worker' ? '行脚人视角' : '发榜人视角'
+  const roleLabel = role === 'worker' ? '交付观察面' : '招贤观察面'
   const stageLabel = getTaskQueueLabel(queue, role)
   if (count > 0) {
     return `已定位到${roleLabel}的「${stageLabel}」队列，共 ${count} 个任务。`
@@ -815,8 +815,8 @@ function getAssignedApplicationCopy(task: MarketplaceTask, applications: TaskApp
   const assigned = getAssignedApplication(task, applications)
   if (!assigned) {
     return {
-      title: '尚未点将行脚人',
-      meta: '点将后这里会显示被选中行脚人的接榜玉简摘要。',
+      title: '尚未锁定执行者',
+      meta: '锁定执行者后，这里会显示被选中提案的摘要。',
       body: '当前还没有被分配的申请人。',
       badge: null as string | null,
     }
@@ -1256,14 +1256,14 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const taskPanelTabs = useMemo(
     () => [
       { key: 'overview', label: '任务总览', badge: selectedTask ? getTaskDecisionState(selectedTask, currentApplications) : visibleTasks.length || '待选' },
-      { key: 'publish', label: '悬赏观察区', badge: observerOnly ? '只读' : employerSession ? '可用' : '访客' },
+      { key: 'publish', label: observerOnly ? '招贤观察区' : '悬赏观察区', badge: observerOnly ? '只读' : employerSession ? '可用' : '访客' },
     ],
     [currentApplications, employerSession, observerOnly, selectedTask, visibleTasks.length],
   )
   const skillPanelTabs = useMemo(
     () => [
       { key: 'catalog', label: '卷面市集', badge: skillsQuery.data?.length || 0 },
-      { key: 'publish', label: '法卷观察区', badge: observerOnly ? '只读' : currentSession ? '可用' : '访客' },
+      { key: 'publish', label: observerOnly ? '沉淀观察区' : '法卷观察区', badge: observerOnly ? '只读' : currentSession ? '可用' : '访客' },
     ],
     [currentSession, observerOnly, skillsQuery.data?.length],
   )
@@ -1580,7 +1580,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <p className="mb-4 line-clamp-2 text-sm text-gray-600">{task.description}</p>
             <div className="grid gap-2 text-sm text-gray-500 md:grid-cols-2">
               <div>雇主：{task.employer_aid}</div>
-              <div>行脚人：{task.worker_aid || '未点将'}</div>
+              <div>执行者：{task.worker_aid || '未锁定'}</div>
               <div>赏格：{task.reward} 灵石</div>
               <div>托管：{task.escrow_id || '未创建'}</div>
             </div>
@@ -1593,8 +1593,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const createTaskPanel = (
     <div ref={createTaskRef} className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold">悬赏观察区</h2>
-        <p className="mt-1 text-sm text-gray-600">这里单独收口悬赏结果与状态观察，避免任务总览与系统结论挤在同一个工作台里。</p>
+        <h2 className="text-xl font-semibold">招贤观察区</h2>
+        <p className="mt-1 text-sm text-gray-600">这里单独收口挂榜、申请覆盖度、锁定执行者与结果回看，避免和总工作台挤在一起。</p>
       </div>
       {observerOnly ? (
         <ObserverLockNotice
@@ -1640,7 +1640,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           )}
           <div className="grid gap-3 md:grid-cols-2">
             <InfoCard icon={<Briefcase className="h-4 w-4" />} label="雇主" value={selectedTask.employer_aid} />
-            <InfoCard icon={<UserCheck className="h-4 w-4" />} label="行脚人" value={selectedTask.worker_aid || '未点将'} />
+            <InfoCard icon={<UserCheck className="h-4 w-4" />} label="执行者" value={selectedTask.worker_aid || '未锁定'} />
             <InfoCard icon={<CheckCircle2 className="h-4 w-4" />} label="赏格" value={`${selectedTask.reward} 灵石`} />
             <InfoCard icon={<Star className="h-4 w-4" />} label="托管" value={selectedTask.escrow_id || '未创建'} />
           </div>
@@ -1697,7 +1697,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
           <TaskWorkspaceStageSection
             eyebrow="阶段一"
-            title="招贤与点将"
+            title="招贤与锁定执行者"
             description="这一段只关心接榜玉简质量、申请覆盖度，以及是否已经锁定执行者。"
           >
             <div className="space-y-3">
@@ -1708,7 +1708,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               )}
 
               {assignedApplicationCopy && (
-                <SectionHint title="当前被雇佣 / 已锁定接榜玉简">
+                <SectionHint title="当前锁定执行提案">
                   <div className="space-y-2">
                     <div className="font-medium text-gray-900">{assignedApplicationCopy.title}</div>
                     <div className="text-xs text-gray-500">{assignedApplicationCopy.meta}</div>
@@ -1751,15 +1751,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
           <TaskWorkspaceStageSection
             eyebrow="阶段二"
-            title="行脚执行"
-            description="这一段只关心执行者是否已经接榜、是否进入托管执行、以及何时交卷候验。"
+            title="交付进度"
+            description="这一段只关心执行者是否已经接榜、是否进入托管执行，以及何时交卷候验。"
           >
             <div className="space-y-3">
-              <h4 className="font-medium">行脚人操作</h4>
+              <h4 className="font-medium">交付信号</h4>
               {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
               {observerOnly ? (
                 <ObserverLockNotice
-                  title="行脚执行保持自动化"
+                  title="交付推进保持自动化"
                   body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。人工在这里仅观察当前提案质量、托管状态和执行进展。"
                 />
               ) : (
@@ -1794,15 +1794,15 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
           <TaskWorkspaceStageSection
             eyebrow="阶段三"
-            title="发榜人验卷 / 结案"
-            description="这一段只关心发榜人是否验卷放款、是否打回重修，以及结案后沉淀出了什么。"
+            title="验卷与结案观察"
+            description="这一段只关心是否验卷放款、是否打回重修，以及结案后沉淀出了什么。"
           >
             <div className="space-y-4">
               <div>
-                <h4 className="mb-3 font-medium">发榜人操作</h4>
+                <h4 className="mb-3 font-medium">验卷信号</h4>
                 {observerOnly ? (
                   <ObserverLockNotice
-                    title="发榜决策改为只读观察"
+                    title="验卷决策改为只读观察"
                     body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。人工只保留对结果、阻塞和账房信号的观察位。"
                   />
                 ) : (
@@ -1975,8 +1975,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="发榜人视角" aid={employerSession?.aid} />
-            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="行脚人视角" aid={workerSession?.aid} />
+            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="招贤观察面" aid={employerSession?.aid} />
+            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="交付观察面" aid={workerSession?.aid} />
             <span className="rounded-full bg-gray-100 px-3 py-2 text-gray-600">当前身份：{currentSession?.aid || '访客'}</span>
           </div>
         </div>

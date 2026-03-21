@@ -152,10 +152,6 @@ func setupRouter(cfg *config.Config, redisClient *database.RedisClient, agentHan
 		{
 			// 公开接口
 			agents.POST("/register", agentHandler.Register)
-			agents.POST("/email/register/request-code", agentHandler.RequestEmailRegistrationCode)
-			agents.POST("/email/register/complete", agentHandler.CompleteEmailRegistration)
-			agents.POST("/email/login/request-code", agentHandler.RequestEmailLoginCode)
-			agents.POST("/email/login/complete", agentHandler.CompleteEmailLogin)
 			agents.POST("/challenge", agentHandler.IssueLoginChallenge)
 			agents.POST("/login", agentHandler.Login)
 			agents.POST("/observe", agentHandler.ObserveByAID)

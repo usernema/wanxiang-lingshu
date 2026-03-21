@@ -52,7 +52,7 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByRole('link', { name: '入世领道籍' })).toHaveAttribute('href', '/join')
+    expect(await screen.findByRole('link', { name: '进入观察入口' })).toHaveAttribute('href', '/join?tab=observe')
     expect(await screen.findByText('已入驻 Agent：128')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'OpenClaw 自助接入' })).toHaveAttribute('href', '/join?tab=machine')
     expect(screen.queryByText('代理当前主线')).not.toBeInTheDocument()
@@ -243,10 +243,10 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     expect(await screen.findByText('代理当前主线')).toBeInTheDocument()
-    expect(screen.getByText('当前修行身份')).toBeInTheDocument()
+    expect(screen.getByText('当前观察重心')).toBeInTheDocument()
     expect(screen.getByText('系统驾驶舱结论')).toBeInTheDocument()
     expect(await screen.findByText((_, node) => node?.textContent === '自动流转：首轮流转中')).toBeInTheDocument()
-    expect(screen.getAllByText('行脚人视角').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('交付观察面').length).toBeGreaterThan(0)
     expect(screen.getByRole('tab', { name: '系统驾驶舱' })).toHaveAttribute('aria-selected', 'true')
     const taskActionTitles = await screen.findAllByText('推进首轮真实流转')
     expect(taskActionTitles.length).toBeGreaterThan(0)
@@ -255,9 +255,10 @@ describe('Home page', () => {
     taskWorkspaceLinks.forEach((link) => {
       expect(link).toHaveAttribute('href', '/marketplace?tab=tasks&source=growth-autopilot')
     })
-    expect(screen.getAllByRole('link', { name: '去看飞剑传书' }).every((link) => (
-      link.getAttribute('href') === '/wallet?focus=notifications&source=home'
-    ))).toBe(true)
+    expect(screen.getByRole('link', { name: '查看账房飞剑' })).toHaveAttribute(
+      'href',
+      '/wallet?focus=notifications&source=home',
+    )
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
@@ -271,7 +272,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('tab', { name: '成长沉淀' }))
     expect(screen.getByText('系统成长刻度')).toBeInTheDocument()
     expect(screen.getByText('第七日')).toBeInTheDocument()
-    expect(screen.getByText('沉淀并发布首卷法卷')).toBeInTheDocument()
+    expect(screen.getByText('观察首卷法卷沉淀')).toBeInTheDocument()
     expect(mockSetActiveRole).toHaveBeenCalledWith('worker')
   })
 
@@ -407,9 +408,9 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '发榜人视角' }))
+    await user.click(await screen.findByRole('button', { name: '招贤观察面' }))
 
-    expect(screen.getAllByText('发榜人视角').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('招贤观察面').length).toBeGreaterThan(0)
     expect((await screen.findAllByText('继续推进当前悬赏')).length).toBeGreaterThan(0)
     const employerWorkspaceLinks = screen.getAllByRole('link', { name: '回到发榜工作台' })
     expect(employerWorkspaceLinks.length).toBeGreaterThan(0)
@@ -545,12 +546,12 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     expect((await screen.findAllByText('继续运营已沉淀法卷')).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '去看法卷运营' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
     ))).toBe(true)
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
-    expect(screen.getAllByRole('link', { name: '去运营法卷' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '去看法卷运营' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
     ))).toBe(true)
     expect(screen.queryByText('去历练榜接首单')).not.toBeInTheDocument()
@@ -672,7 +673,7 @@ describe('Home page', () => {
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('button', { name: '发榜人视角' }))
+    await user.click(await screen.findByRole('button', { name: '招贤观察面' }))
 
     expect((await screen.findAllByText('复盘模板并继续放大复购')).length).toBeGreaterThan(0)
     expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (

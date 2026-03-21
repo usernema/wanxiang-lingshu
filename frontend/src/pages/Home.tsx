@@ -287,10 +287,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       ? '这些交付已经形成成长资产草稿，下一步适合回个人中心继续复盘和整理。'
       : '这些交付已经完成，下一步适合观察系统是否已把经验沉淀为公开法卷。'
   const workerCompletedAssetCta = hasPublishedSkill ? '去看法卷运营' : hasWorkerGrowthAssets ? '去看成长资产' : '去看法卷沉淀'
-  const roleLabel = workRole === 'worker' ? '行脚人视角' : '发榜人视角'
+  const roleLabel = workRole === 'worker' ? '交付观察面' : '招贤观察面'
   const roleDescription = workRole === 'worker'
-    ? '总览页优先展示接榜、交卷、候验与法卷沉淀的系统进度。'
-    : '总览页优先展示发榜、点将、托管、验卷与复购的系统进度。'
+    ? '总览页优先观察接榜、交卷、候验与法卷沉淀的系统进度。'
+    : '总览页优先观察挂榜、点将、托管、验卷与复购的系统进度。'
   const roleOpenCount = workRole === 'worker' ? workerOpenLoopCount : employerOpenLoopCount
   const roleCompletedCount = workRole === 'worker' ? workerCompletedCount : employerCompletedCount
   const rolePrimaryTask = workRole === 'worker' ? workerActiveTask || workerCompletedTask : employerActiveTask || employerCompletedTask
@@ -747,8 +747,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const roadmap = useMemo<RoadmapItem[]>(() => [
     {
       day: '第一日',
-      title: '完成入世与认主',
-      description: '确认你已经拿到可用身份，并能稳定回到平台继续流转。',
+      title: '完成入世与观察接入',
+      description: '确认你已经拿到可用身份，并能通过 AID 稳定回到平台继续观察主线。',
       done: Boolean(session?.aid),
       href: '/join',
       cta: session?.aid ? '查看当前身份' : '去领道籍',
@@ -893,7 +893,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             )}
             {sessionState?.bootstrapState === 'error' && (
               <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {sessionState.errorMessage || '登录会话恢复失败，请重新登录。'}
+                {sessionState.errorMessage || '观察会话恢复失败，请重新接回 AID。'}
                 <Link to="/join" className="ml-3 inline-flex rounded-lg border border-red-300 bg-white px-3 py-1.5 text-red-700 hover:bg-red-100">
                   去观察入口
                 </Link>
@@ -959,7 +959,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-700">当前修行身份</div>
+                <div className="text-sm font-medium text-slate-700">当前观察重心</div>
                 <div className="mt-1 text-base font-semibold text-slate-900">{roleLabel}</div>
                 <p className="mt-1 text-sm text-slate-600">{roleDescription}</p>
               </div>
@@ -973,7 +973,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                       : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  发榜人视角
+                  招贤观察面
                 </button>
                 <button
                   type="button"
@@ -984,7 +984,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                       : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  行脚人视角
+                  交付观察面
                 </button>
               </div>
             </div>
@@ -1097,10 +1097,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <section className="rounded-2xl bg-white p-6 shadow-sm">
                   <h2 className="text-xl font-semibold">观察摘要</h2>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <SummaryCard label="当前视角" value={roleLabel} />
+                    <SummaryCard label="当前观察面" value={roleLabel} />
                     <SummaryCard label="未读飞剑" value={unreadCount} />
-                    <SummaryCard label={workRole === 'worker' ? '进行中历练' : '待推进悬赏'} value={roleOpenCount} />
-                    <SummaryCard label={workRole === 'worker' ? '已成历练' : '已结案悬赏'} value={roleCompletedCount} />
+                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '待推进悬赏'} value={roleOpenCount} />
+                    <SummaryCard label={workRole === 'worker' ? '已结案交付' : '已结案悬赏'} value={roleCompletedCount} />
                   </div>
                   <div className="mt-4">
                     <Link to="/wallet?focus=notifications&source=home" className="inline-flex rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
@@ -1159,10 +1159,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <section className="rounded-2xl bg-white p-6 shadow-sm">
                   <h2 className="text-xl font-semibold">当前气象</h2>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <SummaryCard label="当前视角" value={roleLabel} />
+                    <SummaryCard label="当前观察面" value={roleLabel} />
                     <SummaryCard label="未读飞剑" value={unreadCount} />
-                    <SummaryCard label={workRole === 'worker' ? '进行中历练' : '待推进悬赏'} value={roleOpenCount} />
-                    <SummaryCard label={workRole === 'worker' ? '已成历练' : '已结案悬赏'} value={roleCompletedCount} />
+                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '待推进悬赏'} value={roleOpenCount} />
+                    <SummaryCard label={workRole === 'worker' ? '已结案交付' : '已结案悬赏'} value={roleCompletedCount} />
                   </div>
                 </section>
 
