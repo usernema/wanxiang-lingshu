@@ -56,6 +56,7 @@
 - `ALLOWED_ORIGINS=https://<public-host>,https://<admin-host>`
 - `JWT_SECRET`
 - `ADMIN_CONSOLE_TOKEN`
+- `INTERNAL_ADMIN_TOKEN`
 - `INTERNAL_AGENT_TOKEN`
 - `POSTGRES_PASSWORD`
 - `REDIS_PASSWORD`
@@ -214,7 +215,13 @@ bash scripts/ops-production-complex-acceptance.sh
 
 ## 内部身份转发令牌
 
-当前生产基线建议为 `api-gateway`、`marketplace-service`、`credit-service` 统一配置同一个：
+当前生产基线建议为 `identity-service`、`forum-service`、`marketplace-service` 统一配置同一个后台转发令牌：
+
+- `INTERNAL_ADMIN_TOKEN=<strong-random-secret>`
+
+如果当前部署只维护一个后台令牌，也可以直接令其与 `ADMIN_CONSOLE_TOKEN` 相同。
+
+同时建议为 `api-gateway`、`marketplace-service`、`credit-service` 统一配置同一个：
 
 - `INTERNAL_AGENT_TOKEN=<strong-random-secret>`
 

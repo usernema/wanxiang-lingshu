@@ -326,6 +326,7 @@ create_agent() {
   local key="$1"
   local model="$2"
   local capabilities_json="$3"
+  local provider="${4:-openclaw}"
   local paths private_key_path public_key_path public_key register_resp token aid binding_key
 
   paths="$(create_keypair "$key")"
@@ -334,7 +335,7 @@ create_agent() {
   public_key="$(cat "$public_key_path")"
 
   register_resp="$(api_json POST "/v1/agents/register" "" "$(cat <<EOF
-{"model":"${model}","provider":"openclaw","capabilities":${capabilities_json},"public_key":$(printf '%s' "$public_key" | "$JQ_BIN" -Rs .),"proof_of_capability":{"challenge":"ops-production-complex","response":"self-attested"}}
+{"model":"${model}","provider":"${provider}","capabilities":${capabilities_json},"public_key":$(printf '%s' "$public_key" | "$JQ_BIN" -Rs .),"proof_of_capability":{"challenge":"ops-production-complex","response":"self-attested"}}
 EOF
 )" "auth")"
 
@@ -595,10 +596,10 @@ echo "[1/24] Checking public readiness"
 curl_request GET "${HEALTH_BASE_URL}/health/ready" "api" | "$JQ_BIN" >/dev/null
 
 echo "[2/24] Creating employer-1"
-create_agent "EMPLOYER1" "${LABEL_PREFIX}-employer-1-${RUN_ID}" '["planning","forum","marketplace","review"]'
+create_agent "EMPLOYER1" "${LABEL_PREFIX}-employer-1-${RUN_ID}" '["planning","forum","marketplace","review"]' "anthropic"
 
 echo "[3/24] Creating employer-2"
-create_agent "EMPLOYER2" "${LABEL_PREFIX}-employer-2-${RUN_ID}" '["planning","forum","marketplace","review"]'
+create_agent "EMPLOYER2" "${LABEL_PREFIX}-employer-2-${RUN_ID}" '["planning","forum","marketplace","review"]' "anthropic"
 
 echo "[4/24] Creating worker-skill"
 create_agent "WORKER_SKILL" "${LABEL_PREFIX}-worker-skill-${RUN_ID}" '["code","forum","delivery"]'
@@ -800,10 +801,21 @@ api_json POST "/v1/marketplace/tasks/${TASK1_ID}/request-revision" "$EMPLOYER1_T
 api_json POST "/v1/marketplace/tasks/${TASK1_ID}/complete" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"worker_aid\":\"${WORKER_GROWTH_AID}\",\"result\":\"第二版交付，已经补充验收清单、风险、澄清点和复盘沉淀。\"}" "api" >/dev/null
 TASK1_ACCEPT_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/accept-completion" "$EMPLOYER1_TOKEN" "" "api")"
 printf '%s' "$TASK1_ACCEPT_RESP" > "${TMP_DIR}/task1-accept.json"
+TASK1_GROWTH_ASSETS_JSON="$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -c '.growth_assets // {}')"
+TASK1_EMPLOYER_SKILL_GRANT_ID="$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.employer_skill_grant_id // empty')"
+TASK1_PUBLISHED_SKILL_ID="$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.published_skill_id // empty')"
 assert_non_empty "$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.skill_draft_id // empty')" "Task-1 did not generate skill draft"
 assert_non_empty "$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.employer_template_id // empty')" "Task-1 did not generate employer template"
-assert_non_empty "$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.employer_skill_grant_id // empty')" "Task-1 did not generate employer skill grant"
-assert_non_empty "$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -r '.growth_assets.published_skill_id // empty')" "Task-1 did not auto-publish first success skill"
+assert_non_empty "$TASK1_EMPLOYER_SKILL_GRANT_ID" "Task-1 did not generate employer skill grant"
+assert_non_empty "$TASK1_PUBLISHED_SKILL_ID" "Task-1 did not auto-publish first success skill"
+if [[ -n "$TASK1_PUBLISHED_SKILL_ID" && -z "$TASK1_EMPLOYER_SKILL_GRANT_ID" ]]; then
+  echo "Task-1 auto-published a skill without generating the paired employer grant" >&2
+  exit 1
+fi
+if [[ -n "$TASK1_EMPLOYER_SKILL_GRANT_ID" && -z "$TASK1_PUBLISHED_SKILL_ID" ]]; then
+  echo "Task-1 generated an employer grant without the paired published skill" >&2
+  exit 1
+fi
 mark_task_completed "$TASK1_ID"
 
 WORKER_GROWTH_DRAFTS="$(api_json GET "/v1/marketplace/agents/me/skill-drafts?limit=20&offset=0" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api")"
@@ -815,7 +827,9 @@ assert_non_empty "$(printf '%s' "$WORKER_GROWTH_DRAFTS" | "$JQ_BIN" -r '.items[0
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_CARDS" | "$JQ_BIN" -r '.items[0].card_id // empty')" "Worker-growth experience cards are empty"
 assert_non_empty "$(printf '%s' "$WORKER_GROWTH_RISKS" | "$JQ_BIN" -r '.items[0].risk_id // empty')" "Worker-growth risk memories are empty"
 assert_non_empty "$(printf '%s' "$EMPLOYER1_TEMPLATES" | "$JQ_BIN" -r '.items[0].template_id // empty')" "Employer-1 templates are empty"
-assert_non_empty "$(printf '%s' "$EMPLOYER1_GRANTS" | "$JQ_BIN" -r '.items[0].grant_id // empty')" "Employer-1 grants are empty"
+if [[ -n "$TASK1_EMPLOYER_SKILL_GRANT_ID" ]]; then
+  assert_non_empty "$(printf '%s' "$EMPLOYER1_GRANTS" | "$JQ_BIN" -r --arg grant_id "$TASK1_EMPLOYER_SKILL_GRANT_ID" '.items[]? | select(.grant_id == $grant_id) | .grant_id' | head -n 1)" "Employer-1 grants did not include the expected grant"
+fi
 
 echo "[12/24] Reusing employer template into a second task and cancelling it"
 TEMPLATE_ID="$(printf '%s' "$EMPLOYER1_TEMPLATES" | "$JQ_BIN" -r '.items[0].template_id')"
@@ -900,7 +914,9 @@ assert_non_empty "$(printf '%s' "$ADMIN_SKILL_DRAFTS" | "$JQ_BIN" -r '.data.item
 assert_non_empty "$(printf '%s' "$ADMIN_EXPERIENCE_CARDS" | "$JQ_BIN" -r '.data.items[0].card_id // empty')" "Admin experience cards are empty"
 assert_non_empty "$(printf '%s' "$ADMIN_RISK_MEMORIES" | "$JQ_BIN" -r '.data.items[0].risk_id // empty')" "Admin risk memories are empty"
 assert_non_empty "$(printf '%s' "$ADMIN_EMPLOYER_TEMPLATES" | "$JQ_BIN" -r '.data.items[0].template_id // empty')" "Admin employer templates are empty"
-assert_non_empty "$(printf '%s' "$ADMIN_EMPLOYER_GRANTS" | "$JQ_BIN" -r '.data.items[0].grant_id // empty')" "Admin employer grants are empty"
+if [[ -n "$TASK1_EMPLOYER_SKILL_GRANT_ID" ]]; then
+  assert_non_empty "$(printf '%s' "$ADMIN_EMPLOYER_GRANTS" | "$JQ_BIN" -r --arg grant_id "$TASK1_EMPLOYER_SKILL_GRANT_ID" '.data.items[]? | select(.grant_id == $grant_id) | .grant_id' | head -n 1)" "Admin employer grants did not include the expected grant"
+fi
 
 echo "[16/24] Verifying notifications and read operations"
 EMPLOYER1_NOTIFICATIONS="$(api_json GET "/v1/notifications?limit=20&offset=0" "$EMPLOYER1_TOKEN" "" "api")"
@@ -958,7 +974,7 @@ SUMMARY_FILE="${TMP_DIR}/summary.json"
 "$PYTHON_BIN" - <<'PY' "$SUMMARY_FILE" \
   "$RUN_ID" "$EMPLOYER1_AID" "$EMPLOYER2_AID" "$WORKER_SKILL_AID" "$WORKER_GROWTH_AID" \
   "$TASK1_ID" "$TASK2_ID" "$TASK3_ID" "$SKILL_ID" "$SECT_APP_ID_2" \
-  "$(printf '%s' "$TASK1_ACCEPT_RESP" | "$JQ_BIN" -c '.growth_assets')" \
+  "$TASK1_GROWTH_ASSETS_JSON" \
   "$(printf '%s' "$WORKER_GROWTH_MISSION" | "$JQ_BIN" -r '.summary')" \
   "$(printf '%s' "$WORKER_GROWTH_DOJO_OVERVIEW" | "$JQ_BIN" -r '.school_key')" \
   "$(printf '%s' "$CROSS_EMPLOYER_CARDS" | "$JQ_BIN" -c '.items')" \
