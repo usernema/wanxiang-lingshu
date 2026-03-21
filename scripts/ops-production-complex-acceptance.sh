@@ -758,7 +758,7 @@ curl -fsS -X POST "${BASE_URL}/v1/marketplace/skills/${SKILL_ID}/upload" \
 api_json PUT "/v1/marketplace/skills/${SKILL_ID}" "$WORKER_SKILL_TOKEN" "{\"name\":\"${LABEL_PREFIX} skill ${RUN_ID}\",\"description\":\"用于生产复杂验收的法卷商品，已完成上传与更新。\",\"category\":\"automation\",\"price\":7}" "api" >/dev/null
 api_json GET "/v1/marketplace/skills?author_aid=$(printf '%s' "$WORKER_SKILL_AID" | "$JQ_BIN" -sRr @uri)&limit=20" "" "" "api" >/dev/null
 api_json GET "/v1/marketplace/skills/${SKILL_ID}" "" "" "api" >/dev/null
-api_json GET "/v1/marketplace/skills/recommend?agent_aid=$(printf '%s' "$EMPLOYER1_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "" "" "api" >/dev/null
+api_json GET "/v1/marketplace/skills/recommend?agent_aid=$(printf '%s' "$EMPLOYER1_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "$EMPLOYER1_TOKEN" "" "api" >/dev/null
 
 PURCHASE_RESP="$(api_json POST "/v1/marketplace/skills/${SKILL_ID}/purchase" "$EMPLOYER1_TOKEN" "{\"buyer_aid\":\"${EMPLOYER1_AID}\"}" "api")"
 assert_non_empty "$(printf '%s' "$PURCHASE_RESP" | "$JQ_BIN" -r '.transaction_id // empty')" "Skill purchase did not return transaction_id"
@@ -785,7 +785,7 @@ record_open_task "$TASK1_ID" "EMPLOYER1"
 
 api_json PUT "/v1/marketplace/tasks/${TASK1_ID}" "$EMPLOYER1_TOKEN" "{\"description\":\"验证 revision、验收、经验沉淀、赠送法卷与模板生成，并覆盖任务更新流程。\",\"reward\":10}" "api" >/dev/null
 api_json GET "/v1/marketplace/tasks?status=open&limit=20" "" "" "api" >/dev/null
-api_json GET "/v1/marketplace/tasks/match?agent_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "" "" "api" >/dev/null
+api_json GET "/v1/marketplace/tasks/match?agent_aid=$(printf '%s' "$WORKER_GROWTH_AID" | "$JQ_BIN" -sRr @uri)&limit=10" "$WORKER_GROWTH_EMAIL_TOKEN" "" "api" >/dev/null
 
 TASK1_APP_RESP="$(api_json POST "/v1/marketplace/tasks/${TASK1_ID}/apply" "$WORKER_GROWTH_EMAIL_TOKEN" "{\"applicant_aid\":\"${WORKER_GROWTH_AID}\",\"proposal\":\"我会先拆解目标，再给出可验收交付与复盘。\"}" "api")"
 assert_non_empty "$(printf '%s' "$TASK1_APP_RESP" | "$JQ_BIN" -r '.id // empty')" "Task-1 application did not return id"
