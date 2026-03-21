@@ -1,8 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +15,14 @@ import (
 )
 
 const autopilotAdvanceLimit = 4
+const defaultForumServiceURL = "http://localhost:3002"
+
+type missionForumCreatePostRequest struct {
+	Title    string   `json:"title"`
+	Content  string   `json:"content"`
+	Tags     []string `json:"tags,omitempty"`
+	Category string   `json:"category,omitempty"`
+}
 
 func (s *agentService) AdvanceAutopilot(ctx context.Context, aid string) (*models.AgentAutopilotAdvanceResponse, error) {
 	normalizedAID := strings.TrimSpace(aid)
@@ -109,6 +122,8 @@ func autopilotActionPriority(kind string) (int, bool) {
 		return 10, true
 	case "dojo_start_diagnostic":
 		return 20, true
+	case "forum_create_post":
+		return 30, true
 	default:
 		return 0, false
 	}
@@ -149,9 +164,76 @@ func (s *agentService) applyAutopilotMissionStep(
 			Status:  "applied",
 			Summary: "已自动启动训练场入门诊断。",
 		}, session, nil
+	case "forum_create_post":
+		postTitle, err := s.publishForumPostFromMissionAction(ctx, aid, step.Action)
+		if err != nil {
+			return nil, nil, err
+		}
+		summary := "已自动发布首个公开信号。"
+		if postTitle != "" {
+			summary = fmt.Sprintf("已自动发布首个公开信号：《%s》。", postTitle)
+		}
+		return &models.AgentAutopilotAdvanceAction{
+			StepKey: step.Key,
+			Kind:    step.Action.Kind,
+			Status:  "applied",
+			Summary: summary,
+		}, nil, nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported autopilot action kind: %s", step.Action.Kind)
 	}
+}
+
+func (s *agentService) publishForumPostFromMissionAction(ctx context.Context, aid string, action *models.AgentMissionAction) (string, error) {
+	reqBody, err := missionForumCreatePostRequestFromAction(action)
+	if err != nil {
+		return "", err
+	}
+
+	payload, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal forum post payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(resolveForumServiceURL(), "/")+"/api/v1/forum/posts",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return "", fmt.Errorf("failed to build forum post request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-agent-id", strings.TrimSpace(aid))
+
+	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to publish forum post: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if err != nil {
+		return "", fmt.Errorf("failed to read forum post response: %w", err)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("forum post publish failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	type forumPostCreateResponse struct {
+		Success bool `json:"success"`
+		Data    struct {
+			Title string `json:"title"`
+		} `json:"data"`
+	}
+
+	var decoded forumPostCreateResponse
+	if len(body) > 0 && json.Unmarshal(body, &decoded) == nil && strings.TrimSpace(decoded.Data.Title) != "" {
+		return strings.TrimSpace(decoded.Data.Title), nil
+	}
+
+	return reqBody.Title, nil
 }
 
 func missionProfileUpdateRequestFromAction(action *models.AgentMissionAction) (*UpdateProfileRequest, error) {
@@ -170,6 +252,32 @@ func missionProfileUpdateRequestFromAction(action *models.AgentMissionAction) (*
 		AvailabilityStatus: stringFromMissionBody(body["availability_status"]),
 		Capabilities:       stringSliceFromMissionBody(body["capabilities"]),
 	}, nil
+}
+
+func missionForumCreatePostRequestFromAction(action *models.AgentMissionAction) (*missionForumCreatePostRequest, error) {
+	if action == nil {
+		return nil, fmt.Errorf("mission action is required")
+	}
+
+	body := action.Body
+	if body == nil {
+		return nil, fmt.Errorf("forum post payload is missing")
+	}
+
+	req := &missionForumCreatePostRequest{
+		Title:    stringFromMissionBody(body["title"]),
+		Content:  stringFromMissionBody(body["content"]),
+		Tags:     stringSliceFromMissionBody(body["tags"]),
+		Category: stringFromMissionBody(body["category"]),
+	}
+	if req.Title == "" {
+		return nil, fmt.Errorf("forum post title is required")
+	}
+	if req.Content == "" {
+		return nil, fmt.Errorf("forum post content is required")
+	}
+
+	return req, nil
 }
 
 func stringFromMissionBody(value interface{}) string {
@@ -209,4 +317,11 @@ func shouldAttachDiagnosticSession(mission *models.AgentMissionResponse) bool {
 	default:
 		return false
 	}
+}
+
+func resolveForumServiceURL() string {
+	if value := strings.TrimSpace(os.Getenv("FORUM_SERVICE_URL")); value != "" {
+		return value
+	}
+	return defaultForumServiceURL
 }

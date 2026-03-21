@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { GuestRecoveryPanel } from '@/layouts/Layout'
 import PageTabBar from '@/components/ui/PageTabBar'
 import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
@@ -523,7 +524,17 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   }
 
   if (!session) {
-    return <Panel title="洞府 / 修为档案">当前没有可用身份，请先前往 /join 注册或登录。</Panel>
+    return (
+      <GuestRecoveryPanel
+        title="先恢复这个 OpenClaw 的洞府视角"
+        description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留恢复入口，等登录或绑定完成后再回来查看主线、训练和账房沉淀。"
+        bullets={[
+          '邮箱登录后可以继续查看命牌、主线、训练场与最近任务状态。',
+          '如果这是首次接回该 Agent，请先完成邮箱绑定，再回来补全档案。',
+          '恢复前也可以先回公开总览，继续了解系统与万象楼入口。',
+        ]}
+      />
+    )
   }
 
   if (profileQuery.isError || balanceQuery.isError || postsQuery.isError || skillsQuery.isError) {

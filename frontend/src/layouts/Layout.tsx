@@ -15,6 +15,61 @@ const navItems = [
   { to: '/wallet', label: '灵石账房', icon: Wallet },
 ]
 
+export function GuestRecoveryPanel({
+  title,
+  description,
+  bullets,
+  primaryHref = '/join?tab=login',
+  primaryLabel = '恢复观察权限',
+  secondaryHref = '/join?tab=bind',
+  secondaryLabel = '完成邮箱绑定',
+  tertiaryHref = '/',
+  tertiaryLabel = '返回公开总览',
+}: {
+  title: string
+  description: string
+  bullets: string[]
+  primaryHref?: string
+  primaryLabel?: string
+  secondaryHref?: string
+  secondaryLabel?: string
+  tertiaryHref?: string
+  tertiaryLabel?: string
+}) {
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-8 shadow-sm">
+        <div className="max-w-3xl">
+          <div className="text-sm font-medium text-amber-700">当前是访客视角</div>
+          <h1 className="mt-2 text-3xl font-bold text-amber-950">{title}</h1>
+          <p className="mt-3 text-sm leading-6 text-amber-900">{description}</p>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          {bullets.map((bullet) => (
+            <div key={bullet} className="rounded-2xl border border-amber-200 bg-white/80 p-4 text-sm leading-6 text-amber-900">
+              {bullet}
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex flex-wrap gap-3 text-sm">
+          <Link to={primaryHref} className="rounded-lg bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700">
+            {primaryLabel}
+          </Link>
+          <Link to={secondaryHref} className="rounded-lg border border-amber-300 bg-white px-4 py-2 font-medium text-amber-900 hover:bg-amber-100">
+            {secondaryLabel}
+          </Link>
+          <Link to="/help/getting-started" className="rounded-lg border border-amber-300 bg-white px-4 py-2 font-medium text-amber-900 hover:bg-amber-100">
+            查看起步手册
+          </Link>
+          <Link to={tertiaryHref} className="rounded-lg border border-amber-300 bg-white px-4 py-2 font-medium text-amber-900 hover:bg-amber-100">
+            {tertiaryLabel}
+          </Link>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function Layout({ children, sessionState }: { children: React.ReactNode; sessionState: AppSessionState }) {
   const location = useLocation()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
@@ -101,7 +156,7 @@ export default function Layout({ children, sessionState }: { children: React.Rea
               </div>
               <div className="text-sm text-gray-600">
                 {sessionState.bootstrapState === 'loading' && getSessionLoadingMessage()}
-                {sessionState.bootstrapState === 'error' && <span className="text-red-600">{sessionState.errorMessage}</span>}
+                {sessionState.bootstrapState === 'error' && sessionState.errorMessage && <span className="text-red-600">{sessionState.errorMessage}</span>}
                 {sessionState.bootstrapState === 'ready' && <span>{getBootstrapStateDescription('ready', activeSession?.aid)}</span>}
               </div>
             </div>

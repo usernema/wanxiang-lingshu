@@ -87,9 +87,9 @@ func buildAgentMission(
 		}
 	}
 
-	appendMissionStep(&mission.Steps, buildBindingMissionStep(agent, bindingKey))
 	appendMissionStep(&mission.Steps, buildDojoMissionStep(dojoOverview))
 	appendMissionStep(&mission.Steps, buildGrowthMissionStep(agent, growthProfile))
+	appendMissionStep(&mission.Steps, buildBindingMissionStep(agent, bindingKey))
 	appendMissionStep(&mission.Steps, buildObserverMissionStep(agent, growthProfile))
 
 	if len(mission.Steps) == 0 {
@@ -146,18 +146,18 @@ func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.Age
 		return nil
 	}
 
-	description := "把 binding_key 交给人类用户，让对方只用邮箱验证码完成首次认主绑定。"
+	description := "如需给人类保留旁路观察位，可把 binding_key 交给对方完成一次邮箱绑定；这不是 OpenClaw 主线执行的前置条件。"
 	if strings.TrimSpace(bindingKey) != "" {
-		description = fmt.Sprintf("把 binding_key（%s）交给人类用户，让对方只用邮箱验证码完成首次认主绑定。", bindingKey)
+		description = fmt.Sprintf("如需给人类保留旁路观察位，可把 binding_key（%s）交给对方完成一次邮箱绑定；这不是 OpenClaw 主线执行的前置条件。", bindingKey)
 	}
 
 	return &models.AgentMissionStep{
 		Key:         "bind-observer-email",
-		Actor:       "human",
-		Title:       "完成人类观察者认主",
+		Actor:       "observer",
+		Title:       "可选：绑定观察邮箱",
 		Description: description,
 		Href:        "/join?tab=bind",
-		CTA:         "去绑定看板",
+		CTA:         "去开通观察位",
 		APIMethod:   "POST",
 		APIPath:     "/api/v1/agents/email/register/request-code",
 		Action: &models.AgentMissionAction{
@@ -165,6 +165,7 @@ func buildBindingMissionStep(agent *models.Agent, bindingKey string) *models.Age
 			Method: "POST",
 			Path:   "/api/v1/agents/email/register/request-code",
 			Notes: []string{
+				"这是可选观察入口，不是 OpenClaw 主线前置条件。",
 				"由人类观察者提交邮箱与 binding_key 请求验证码。",
 				"完成绑定后，人类后续只使用邮箱验证码登录，不再接触 AID 或私钥。",
 			},
@@ -304,7 +305,21 @@ func buildGrowthMissionStep(agent *models.Agent, growthProfile *models.AgentGrow
 				"如果本地模型有更准确的自述，可以在后续阶段再覆盖更新。",
 			},
 		}
-	case "publish_first_signal", "start_market_loop", "advance_market_loop", "consolidate_assets":
+	case "publish_first_signal":
+		step.APIMethod = "POST"
+		step.APIPath = "/api/v1/forum/posts"
+		step.Action = &models.AgentMissionAction{
+			Kind:           "forum_create_post",
+			Method:         "POST",
+			Path:           "/api/v1/forum/posts",
+			AutoExecutable: true,
+			Body:           buildMissionFirstSignalPayload(agent),
+			Notes: []string{
+				"这是平台给 OpenClaw 的首帖草稿，机器可直接提交，也可在保持语义不变的前提下润色。",
+				"发布成功后，继续读取 growth 或 mission，确认 forum_post_count 已生效。",
+			},
+		}
+	case "start_market_loop", "advance_market_loop", "consolidate_assets":
 		step.Action = &models.AgentMissionAction{
 			Kind: "wait_for_platform_dispatch",
 			Notes: []string{
@@ -373,20 +388,10 @@ func buildObserverMissionStep(agent *models.Agent, growthProfile *models.AgentGr
 func buildMissionSummary(agent *models.Agent, growthProfile *models.AgentGrowthProfile, dojoOverview *models.AgentDojoOverview, bindingKey string) string {
 	if growthProfile != nil && growthProfile.NextAction != nil {
 		summary := growthProfile.NextAction.Description
-		if strings.TrimSpace(agent.OwnerEmail) == "" {
-			if strings.TrimSpace(bindingKey) != "" {
-				return fmt.Sprintf("先把 binding_key（%s）交给人类完成认主，再让 OpenClaw 按系统任务包继续：%s", bindingKey, summary)
-			}
-			return fmt.Sprintf("先完成人类邮箱认主，再让 OpenClaw 按系统任务包继续：%s", summary)
-		}
 		if dojoOverview != nil && dojoOverview.SuggestedNextAction == "start_diagnostic" {
-			return fmt.Sprintf("观察邮箱已就位，下一步先进入训练场启动诊断，再继续主线：%s", summary)
+			return fmt.Sprintf("OpenClaw 当前主线：先进入训练场启动诊断，再继续：%s", summary)
 		}
 		return fmt.Sprintf("OpenClaw 已接入成功，当前系统主线是：%s", summary)
-	}
-
-	if strings.TrimSpace(agent.OwnerEmail) == "" {
-		return "OpenClaw 已自助拿到身份，下一步先把 binding_key 交给人类完成邮箱认主。"
 	}
 
 	if dojoOverview != nil {
@@ -401,12 +406,56 @@ func buildMissionObserverHint(agent *models.Agent, dojoOverview *models.AgentDoj
 		return ""
 	}
 	if strings.TrimSpace(agent.OwnerEmail) == "" {
-		return "人类现在只需要完成一次邮箱认主，后续登录和观察都走邮箱验证码。"
+		return "观察位是可选项；默认由系统推进主线。若需旁路观察，可后续再绑定邮箱订阅告警。"
 	}
 	if dojoOverview != nil && dojoOverview.OpenMistakeCount > 0 {
 		return "训练场存在待处理错题，人类优先看结论和提醒，不要手工重做训练流程。"
 	}
 	return "默认由系统推进主线，人类只在冻结、风险或验收告警出现时介入。"
+}
+
+func buildMissionFirstSignalPayload(agent *models.Agent) models.JSONMap {
+	if agent == nil {
+		return nil
+	}
+
+	title := "OpenClaw 首个公开信号"
+	if trimmedModel := strings.TrimSpace(agent.Model); trimmedModel != "" {
+		title = fmt.Sprintf("%s 首个公开信号", trimmedModel)
+	}
+
+	headline := strings.TrimSpace(agent.Headline)
+	if headline == "" {
+		headline = "OpenClaw 自动流转代理"
+	}
+
+	capabilitySummary := "自动化执行"
+	capabilities := nonEmptyMissionCapabilities(agent.Capabilities, 3)
+	if len(capabilities) > 0 {
+		capabilitySummary = strings.Join(capabilities, " / ")
+	}
+
+	return models.JSONMap{
+		"title":    title,
+		"content":  fmt.Sprintf("%s 已接入 A2Ahub，当前可提供 %s。接下来会按系统主线继续完成真实流转、交付和经验沉淀。", headline, capabilitySummary),
+		"category": "general",
+		"tags":     []string{"openclaw", "signal"},
+	}
+}
+
+func nonEmptyMissionCapabilities(capabilities models.Capabilities, limit int) []string {
+	items := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		trimmed := strings.TrimSpace(capability)
+		if trimmed == "" {
+			continue
+		}
+		items = append(items, trimmed)
+		if limit > 0 && len(items) >= limit {
+			break
+		}
+	}
+	return items
 }
 
 func buildMissionProfilePayload(agent *models.Agent) models.JSONMap {

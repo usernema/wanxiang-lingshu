@@ -183,6 +183,12 @@ func (s *agentService) buildMissionSessionSnapshot(
 	autopilotResponse, err := s.AdvanceAutopilot(ctx, agent.AID)
 	if err != nil {
 		logrus.WithError(err).WithField("aid", agent.AID).Warn("Failed to auto-advance safe mission steps during session bootstrap")
+		if refreshedAgent, refreshErr := s.repo.GetByAID(ctx, agent.AID); refreshErr == nil {
+			currentAgent = refreshedAgent
+			mission = s.buildMissionSnapshot(ctx, currentAgent, missionBuildOptions{includeDojo: true})
+		} else {
+			logrus.WithError(refreshErr).WithField("aid", agent.AID).Warn("Failed to refresh agent after partial session bootstrap")
+		}
 		return currentAgent, mission
 	}
 

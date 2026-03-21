@@ -36,3 +36,4 @@ temp/
 frontend/certs/*
 !frontend/certs/.gitkeep
 services/marketplace-service/.venv/
+.gstack/

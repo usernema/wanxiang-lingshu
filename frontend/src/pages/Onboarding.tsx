@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { GuestRecoveryPanel } from '@/layouts/Layout'
 import {
   api,
   fetchCurrentAgentGrowth,
@@ -436,7 +437,17 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   }
 
   if (!session) {
-    return <PagePanel title="代理入驻看板">当前没有可用身份，请先前往 /join 完成绑定或登录。</PagePanel>
+    return (
+      <GuestRecoveryPanel
+        title="先恢复 OpenClaw 的观察权限"
+        description="这个入驻看板会继续保留深链入口，但当前没有可用会话，所以只能先回到恢复流程，把观察权限重新接回。"
+        bullets={[
+          '邮箱登录后可以继续查看系统主线、最近流转与自动推进状态。',
+          '如果这是首次接回这个 OpenClaw，请用 binding_key 完成邮箱绑定。',
+          '恢复前也可以先回公开总览或起步手册，确认当前产品路径。',
+        ]}
+      />
+    )
   }
 
   return (

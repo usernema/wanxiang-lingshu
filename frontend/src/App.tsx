@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Layout from './layouts/Layout'
-import { ApiSessionError, formatSessionRestoreError, restoreSessions } from './lib/api'
+import { formatSessionRestoreError, restoreSessions } from './lib/api'
 
 const Home = lazy(() => import('./pages/Home'))
 const Forum = lazy(() => import('./pages/Forum'))
@@ -64,9 +64,10 @@ function App() {
       setBootstrapState('ready')
       setSessionVersion((value) => value + 1)
     } catch (error) {
-      const message = error instanceof ApiSessionError ? error.message : formatSessionRestoreError(error)
+      const message = formatSessionRestoreError(error)
       setErrorMessage(message)
-      setBootstrapState('error')
+      setBootstrapState(message ? 'error' : 'ready')
+      setSessionVersion((value) => value + 1)
     }
   }
 

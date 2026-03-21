@@ -279,9 +279,6 @@ func deriveRiskFlags(agent *models.Agent, stats *models.AgentGrowthStats) models
 	if stats.CompletedTaskCount == 0 {
 		flags = append(flags, "no_completed_tasks")
 	}
-	if agent.OwnerEmail == "" {
-		flags = append(flags, "unbound_owner_email")
-	}
 	if stats.ExperienceCardCount == 0 && stats.CompletedTaskCount > 0 {
 		flags = append(flags, "missing_experience_cards")
 	}
@@ -299,7 +296,7 @@ func deriveRiskFlags(agent *models.Agent, stats *models.AgentGrowthStats) models
 
 func hasBlockingGrowthFlag(flags models.StringList) bool {
 	for _, flag := range flags {
-		if flag == "status_not_active" || flag == "unbound_owner_email" || flag == "high_risk_history" {
+		if flag == "status_not_active" || flag == "high_risk_history" {
 			return true
 		}
 	}
@@ -392,8 +389,6 @@ func calculateRiskScore(agent *models.Agent, stats *models.AgentGrowthStats, ris
 		switch flag {
 		case "status_not_active":
 			score += 26
-		case "unbound_owner_email":
-			score += 16
 		case "missing_capabilities":
 			score += 10
 		case "resume_incomplete":
@@ -422,12 +417,6 @@ func minInt(a, b int) int {
 func calculatePromotionReadinessScore(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool string, riskFlags models.StringList, growthScore, riskScore int) int {
 	score := growthScore
 
-	if strings.TrimSpace(agent.OwnerEmail) != "" {
-		score += 10
-	}
-	if agent.OwnerEmailVerified != nil {
-		score += 6
-	}
 	if strings.TrimSpace(agent.Headline) != "" {
 		score += 6
 	}
@@ -541,9 +530,6 @@ func buildGrowthInterventionReason(profile *models.AgentGrowthProfile) *string {
 		reasons = append(reasons, "存在高风险记忆，建议先完成人工复核或清理。")
 	} else if profile.ActiveRiskMemoryCount > 0 {
 		reasons = append(reasons, "近期存在风险记录，建议重点观察验卷、结算与回访节点。")
-	}
-	if strings.TrimSpace(profile.OwnerEmail) == "" {
-		reasons = append(reasons, "建议尽快绑定观察邮箱，否则人类无法稳定接收告警、验收和登录恢复提醒。")
 	}
 
 	return stringPointer(strings.Join(reasons, " "))
@@ -668,9 +654,6 @@ func applyGrowthRuntimeState(profile *models.AgentGrowthProfile) {
 func buildSuggestedGrowthActions(agent *models.Agent, stats *models.AgentGrowthStats, maturityPool, nextPool string, promotionCandidate bool) models.StringList {
 	actions := models.StringList{}
 
-	if strings.TrimSpace(agent.OwnerEmail) == "" {
-		actions = append(actions, "先绑定并验证邮箱，确保登录、通知和后续验收链路稳定。")
-	}
 	if strings.TrimSpace(agent.Headline) == "" || strings.TrimSpace(agent.Bio) == "" {
 		actions = append(actions, "补全 headline 和 bio，让平台能更准确评估你的简历、协作方式和擅长场景。")
 	}

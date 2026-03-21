@@ -492,14 +492,17 @@ export type UpdateProfilePayload = {
 
 export class ApiSessionError extends Error {
   code: "UNAUTHORIZED" | "SESSION_EXPIRED" | "BOOTSTRAP_FAILED";
+  recoverableAsGuest: boolean;
 
   constructor(
     message: string,
     code: "UNAUTHORIZED" | "SESSION_EXPIRED" | "BOOTSTRAP_FAILED",
+    options?: { recoverableAsGuest?: boolean },
   ) {
     super(message);
     this.name = "ApiSessionError";
     this.code = code;
+    this.recoverableAsGuest = options?.recoverableAsGuest ?? false;
   }
 }
 
@@ -631,9 +634,38 @@ export function getSessionRestoreErrorMessage() {
 }
 
 export function formatSessionRestoreError(error: unknown) {
-  return error instanceof ApiSessionError
-    ? error.message
-    : getSessionRestoreErrorMessage();
+  if (error instanceof ApiSessionError) {
+    return error.recoverableAsGuest ? null : error.message;
+  }
+
+  return getSessionRestoreErrorMessage();
+}
+
+function isAuthInvalidationError(error: unknown) {
+  return error instanceof ApiSessionError && error.code === "UNAUTHORIZED";
+}
+
+function toGuestFallbackError() {
+  return new ApiSessionError("Session expired or invalid", "SESSION_EXPIRED", {
+    recoverableAsGuest: true,
+  });
+}
+
+function applyProfileToSession(session: Session, profile: AgentProfile) {
+  return {
+    ...session,
+    aid: profile.aid,
+    reputation: profile.reputation,
+    status: profile.status,
+    model: profile.model,
+    provider: profile.provider,
+    capabilities: profile.capabilities,
+    membershipLevel: profile.membership_level,
+    trustLevel: profile.trust_level,
+    headline: profile.headline,
+    bio: profile.bio,
+    availabilityStatus: profile.availability_status,
+  };
 }
 
 export function getBootstrapStateDescription(
@@ -939,26 +971,29 @@ export async function restoreSessions() {
   }
 
   if (isSessionExpired(session)) {
-    return refreshSession();
+    try {
+      return await refreshSession();
+    } catch (error) {
+      if (isAuthInvalidationError(error)) {
+        clearSession();
+        throw toGuestFallbackError();
+      }
+      throw error;
+    }
   }
 
-  const profile = await fetchCurrentAgent();
-  const nextSession = {
-    ...session,
-    aid: profile.aid,
-    reputation: profile.reputation,
-    status: profile.status,
-    model: profile.model,
-    provider: profile.provider,
-    capabilities: profile.capabilities,
-    membershipLevel: profile.membership_level,
-    trustLevel: profile.trust_level,
-    headline: profile.headline,
-    bio: profile.bio,
-    availabilityStatus: profile.availability_status,
-  };
-  setSession(nextSession);
-  return nextSession;
+  try {
+    const profile = await fetchCurrentAgent();
+    const nextSession = applyProfileToSession(session, profile);
+    setSession(nextSession);
+    return nextSession;
+  } catch (error) {
+    if (isAuthInvalidationError(error)) {
+      clearSession();
+      throw toGuestFallbackError();
+    }
+    throw error;
+  }
 }
 
 export async function ensureSession() {

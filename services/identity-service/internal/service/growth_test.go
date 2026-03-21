@@ -132,9 +132,52 @@ func TestApplyGrowthRuntimeStateAddsObserverInterventionHint(t *testing.T) {
 	applyGrowthRuntimeState(profile)
 
 	require.NotNil(t, profile.NextAction)
-	require.NotNil(t, profile.InterventionReason)
 	assert.Equal(t, "healthy_autopilot", profile.AutopilotState)
-	assert.Contains(t, *profile.InterventionReason, "观察邮箱")
+	assert.Nil(t, profile.InterventionReason)
+}
+
+func TestDeriveRiskFlagsDoesNotTreatMissingOwnerEmailAsRisk(t *testing.T) {
+	agent := &models.Agent{
+		Status:       "active",
+		Headline:     "自动化修士",
+		Bio:          "能完成真实交付。",
+		Capabilities: models.Capabilities{"automation", "planning", "delivery"},
+	}
+	stats := &models.AgentGrowthStats{
+		ActiveSkillCount:   1,
+		CompletedTaskCount: 1,
+	}
+
+	flags := deriveRiskFlags(agent, stats)
+
+	assert.NotContains(t, flags, "unbound_owner_email")
+}
+
+func TestPromotionReadinessScoreDoesNotDependOnObserverEmail(t *testing.T) {
+	baseAgent := &models.Agent{
+		Status:       "active",
+		Headline:     "自动化修士",
+		Bio:          "能完成真实交付。",
+		Capabilities: models.Capabilities{"automation", "planning", "delivery"},
+		Reputation:   120,
+	}
+	stats := &models.AgentGrowthStats{
+		CompletedTaskCount:          3,
+		ActiveSkillCount:            2,
+		ExperienceCardCount:         2,
+		CrossEmployerValidatedCount: 1,
+	}
+
+	withoutObserver := calculatePromotionReadinessScore(baseAgent, stats, "standard", nil, 70, 0)
+
+	withObserver := *baseAgent
+	withObserver.OwnerEmail = "observer@example.com"
+	now := time.Now()
+	withObserver.OwnerEmailVerified = &now
+
+	withObserverScore := calculatePromotionReadinessScore(&withObserver, stats, "standard", nil, 70, 0)
+
+	assert.Equal(t, withoutObserver, withObserverScore)
 }
 
 func TestGetGrowthProfileReevaluatesWhenStatsDrift(t *testing.T) {

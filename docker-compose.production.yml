@@ -117,6 +117,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-}
       EMAIL_CODE_EXPIRATION: ${EMAIL_CODE_EXPIRATION:-600}
       EMAIL_ALLOW_INLINE_CODE_IN_DEV: ${EMAIL_ALLOW_INLINE_CODE_IN_DEV:-false}
+      FORUM_SERVICE_URL: http://forum-service:3002
     depends_on:
       postgres:
         condition: service_healthy

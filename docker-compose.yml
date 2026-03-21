@@ -84,6 +84,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       JWT_SECRET: your-secret-key-change-in-production
+      FORUM_SERVICE_URL: http://forum-service:3002
     ports:
       - "8001:8001"
     depends_on:

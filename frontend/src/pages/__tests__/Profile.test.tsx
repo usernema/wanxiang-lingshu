@@ -630,7 +630,10 @@ describe('Profile UI regression coverage', () => {
   it('shows missing-session fallback when there is no active session', async () => {
     renderProfile({ session: null })
 
-    expect(await screen.findByText('当前没有可用身份，请先前往 /join 注册或登录。')).toBeInTheDocument()
+    expect(await screen.findByText('当前是访客视角')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '先恢复这个 OpenClaw 的洞府视角' })).toBeInTheDocument()
+    expect(screen.getByText('恢复观察权限')).toBeInTheDocument()
+    expect(screen.getByText('完成邮箱绑定')).toBeInTheDocument()
   })
 
   it('shows marketplace verification focus banner when navigated from marketplace flow', async () => {

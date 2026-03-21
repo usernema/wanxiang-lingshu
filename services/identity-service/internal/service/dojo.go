@@ -30,6 +30,55 @@ type SubmitDojoDiagnosticsRequest struct {
 	Answers   []DojoDiagnosticAnswerInput `json:"answers"`
 }
 
+func shouldSuppressDojoDiagnosticFlow(stage string, openMistakes int) bool {
+	if openMistakes > 0 {
+		return false
+	}
+
+	switch normalizeDojoStage(stage) {
+	case "practice", "training", "arena_ready", "arena":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeDojoDiagnosticState(
+	stage string,
+	openMistakes int,
+	activePlan *models.AgentRemediationPlan,
+	lastAttempt *models.AgentTrainingAttempt,
+	pendingPlanCount int,
+) (*models.AgentRemediationPlan, *models.AgentTrainingAttempt, int) {
+	if !shouldSuppressDojoDiagnosticFlow(stage, openMistakes) {
+		return activePlan, lastAttempt, pendingPlanCount
+	}
+
+	return nil, nil, 0
+}
+
+func deriveDojoSuggestedNextAction(
+	stage string,
+	lastAttempt *models.AgentTrainingAttempt,
+	activePlan *models.AgentRemediationPlan,
+	openMistakes int,
+) string {
+	if shouldSuppressDojoDiagnosticFlow(stage, openMistakes) {
+		return ""
+	}
+
+	switch {
+	case lastAttempt != nil && (lastAttempt.ResultStatus == "queued" || lastAttempt.ResultStatus == "in_progress"):
+		return "complete_diagnostic"
+	case activePlan != nil:
+		return "follow_remediation_plan"
+	case openMistakes > 0:
+		return "review_mistakes"
+	default:
+		return "start_diagnostic"
+	}
+}
+
 func (s *agentService) GetDojoOverview(ctx context.Context, aid string) (*models.AgentDojoOverview, error) {
 	if s.dojoRepo == nil {
 		return nil, fmt.Errorf("dojo repository is not configured")
@@ -75,15 +124,14 @@ func (s *agentService) GetDojoOverview(ctx context.Context, aid string) (*models
 		}
 	}
 
-	suggestedNextAction := "start_diagnostic"
-	switch {
-	case lastAttempt != nil && (lastAttempt.ResultStatus == "queued" || lastAttempt.ResultStatus == "in_progress"):
-		suggestedNextAction = "complete_diagnostic"
-	case activePlan != nil:
-		suggestedNextAction = "follow_remediation_plan"
-	case openMistakes > 0:
-		suggestedNextAction = "review_mistakes"
-	}
+	activePlan, lastAttempt, pendingPlanCount = sanitizeDojoDiagnosticState(
+		binding.Stage,
+		openMistakes,
+		activePlan,
+		lastAttempt,
+		pendingPlanCount,
+	)
+	suggestedNextAction := deriveDojoSuggestedNextAction(binding.Stage, lastAttempt, activePlan, openMistakes)
 
 	return &models.AgentDojoOverview{
 		AID:                   aid,
@@ -116,34 +164,25 @@ func (s *agentService) GetCurrentDojoDiagnostic(ctx context.Context, aid string)
 		return nil, err
 	}
 
-	questions, err := s.dojoRepo.ListQuestionsBySetID(ctx, set.SetID)
+	overview, err := s.GetDojoOverview(ctx, aid)
 	if err != nil {
 		return nil, err
 	}
-
-	var plan *models.AgentRemediationPlan
-	if activePlan, planErr := s.dojoRepo.GetActiveRemediationPlan(ctx, aid); planErr == nil {
-		plan = activePlan
-	} else if planErr.Error() != "remediation plan not found" {
-		return nil, planErr
+	if shouldSuppressDojoDiagnosticFlow(overview.Stage, overview.OpenMistakeCount) {
+		return &models.DojoDiagnosticSessionResponse{
+			Overview: overview,
+		}, nil
 	}
 
-	var attempt *models.AgentTrainingAttempt
-	if latestAttempt, attemptErr := s.dojoRepo.GetLatestTrainingAttempt(ctx, aid, "diagnostic"); attemptErr == nil {
-		attempt = latestAttempt
-	} else if attemptErr.Error() != "training attempt not found" {
-		return nil, attemptErr
-	}
-
-	overview, err := s.GetDojoOverview(ctx, aid)
+	questions, err := s.dojoRepo.ListQuestionsBySetID(ctx, set.SetID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.DojoDiagnosticSessionResponse{
 		Overview:    overview,
-		Plan:        plan,
-		Attempt:     attempt,
+		Plan:        overview.ActivePlan,
+		Attempt:     overview.LastDiagnosticAttempt,
 		QuestionSet: set,
 		Questions:   questions,
 	}, nil
@@ -162,6 +201,20 @@ func (s *agentService) StartDojoDiagnostics(ctx context.Context, aid string) (*m
 	binding, _, set, err := s.ensureDojoScaffold(ctx, agent, growthProfile)
 	if err != nil {
 		return nil, err
+	}
+
+	_, openMistakes, err := s.dojoRepo.CountMistakeItems(ctx, aid)
+	if err != nil {
+		return nil, err
+	}
+	if shouldSuppressDojoDiagnosticFlow(binding.Stage, openMistakes) {
+		overview, overviewErr := s.GetDojoOverview(ctx, aid)
+		if overviewErr != nil {
+			return nil, overviewErr
+		}
+		return &models.DojoDiagnosticStartResponse{
+			Overview: overview,
+		}, nil
 	}
 
 	questions, err := s.dojoRepo.ListQuestionsBySetID(ctx, set.SetID)
