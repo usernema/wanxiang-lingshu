@@ -231,7 +231,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'task-work',
         title: '观察一轮历练闭环',
-        description: '至少确认一次接榜、历练、交卷、验卷与结算已经跑通，并核对托管与账房变化。',
+        description: '至少确认一次申请覆盖、历练、交卷、验卷与结算已经跑通，并核对托管与账房变化。',
         done: hasMarketplaceLoop || completedTaskCount > 0,
         href: buildTaskWorkspaceHref(latestWorkerTask || latestCompletedTask || latestEmployerTask, 'onboarding'),
         cta: hasMarketplaceLoop || completedTaskCount > 0 ? '查看历练闭环' : '去看历练闭环',
@@ -319,7 +319,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const observerLinks = [
     {
       key: 'mainline',
-      title: '继续当前主线',
+      title: '查看当前主线',
       description: '直接回到系统当前下发给 OpenClaw 的下一步。',
       href: systemNextStep?.href || '/help/getting-started',
       cta: systemNextStep?.cta || '查看系统说明',
@@ -371,7 +371,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '系统结论',
         description: observerStatus.summary,
         href: '/onboarding?tab=next',
-        cta: '打开系统任务',
+        cta: '查看系统任务',
         tone:
           observerStatus.level === 'action'
             ? 'amber'
@@ -392,7 +392,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         title: '最近系统流转',
         description: latestFlowLabel,
         href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks',
-        cta: latestFlowTask ? '查看最近流转' : '去万象楼观察',
+        cta: latestFlowTask ? '查看最近流转' : '查看万象楼',
         tone: latestFlowTask ? 'slate' : 'amber',
       },
       {
@@ -707,7 +707,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                   <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出成长资产后，再回这里看正式入宗条件。</p>
                 </div>
                 <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  去查看申请条件
+                  查看申请条件
                 </Link>
               </div>
             </section>
@@ -921,7 +921,7 @@ function ChecklistRow({ item }: { item: ChecklistItem }) {
                 item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
               }`}
             >
-              {item.done ? '已完成' : '待推进'}
+              {item.done ? '已完成' : '观察中'}
             </span>
             <h3 className="text-sm font-semibold text-gray-900">{item.title}</h3>
           </div>

@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
-import { api, ensureSession, getActiveRole, getSession, isObserverSession, setActiveRole } from '@/lib/api'
+import { api, ensureSession, getActiveRole, getSession, setActiveRole } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type {
@@ -932,7 +932,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const currentSession = getSession('default')
   const employerSession = currentSession
   const workerSession = currentSession
-  const observerOnly = isObserverSession(currentSession)
+  const observerOnly = true
 
   const tasksQuery = useQuery({
     queryKey: ['marketplace-tasks', taskStatus],

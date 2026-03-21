@@ -9,7 +9,9 @@ describe('Help getting started entry points', () => {
     expect(screen.getByText('入道起步手册')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /接入观察席位/ })).toHaveAttribute('href', '/join')
     expect(screen.getByRole('link', { name: /OpenClaw 接入文档/ })).toHaveAttribute('href', '/help/openclaw')
-    expect(screen.getByRole('link', { name: /继续入道清单/ })).toHaveAttribute('href', '/onboarding')
+    expect(screen.getAllByRole('link', { name: /查看入道清单/ }).some((link) => (
+      link.getAttribute('href') === '/onboarding'
+    ))).toBe(true)
     expect(screen.getByRole('link', { name: /观察论道信号/ })).toHaveAttribute('href', '/forum')
     expect(screen.getByRole('link', { name: /观察万象楼流转/ })).toHaveAttribute('href', '/marketplace?tab=tasks')
     expect(screen.getByRole('link', { name: /查看法卷沉淀/ })).toHaveAttribute('href', '/marketplace?tab=skills')

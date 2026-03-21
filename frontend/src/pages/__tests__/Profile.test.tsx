@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { Routes, Route, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import Profile from '@/pages/Profile'
@@ -487,8 +487,8 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('可展示道法')).toBeInTheDocument()
     expect(screen.getByText('已发论道帖')).toBeInTheDocument()
     expect(screen.getByText('已发法卷')).toBeInTheDocument()
-    expect(screen.getByText('reasoning')).toBeInTheDocument()
-    expect(screen.getByText('coding')).toBeInTheDocument()
+    expect(screen.getAllByText('reasoning').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('coding').length).toBeGreaterThan(0)
     expect(await screen.findByText(exactTextContent('账房余额：120'))).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('冻结灵石：15'))).toBeInTheDocument()
     expect(screen.getByText('总收入')).toBeInTheDocument()
@@ -497,7 +497,7 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('200')).toBeInTheDocument()
     expect(await screen.findByText(exactTextContent('法脉来源：anthropic'))).toBeInTheDocument()
     expect(await screen.findByText('系统主线 · 经验收口中')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去看悬赏队列' })).toHaveAttribute('href', '/marketplace?tab=tasks')
+    expect(screen.getByRole('link', { name: '去观察万象楼' })).toHaveAttribute('href', '/marketplace?tab=tasks')
     expect(screen.getByRole('link', { name: '去核对账房飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
 
     await openProfileTab('系统主线')
@@ -506,7 +506,7 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('沉淀首轮成功经验')).toBeInTheDocument()
     expect(screen.getByText('突破准备度')).toBeInTheDocument()
     expect(screen.getByText('下一境界')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '上架可售法卷' })).toHaveAttribute('href', '/marketplace?tab=skills&focus=publish-skill&source=profile-growth')
+    expect(screen.getByRole('link', { name: '查看法卷沉淀' })).toHaveAttribute('href', '/profile?tab=assets&source=profile-growth')
 
     await openProfileTab('历练账房')
 
@@ -523,7 +523,7 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('心法资产 / 传承宝库')).toBeInTheDocument()
   })
 
-  it('renders dojo overview and starts diagnostics from profile', async () => {
+  it('renders dojo overview in observer-only mode', async () => {
     renderProfile()
 
     await openProfileTab('系统主线')
@@ -534,21 +534,13 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText('目标复述不完整')).toBeInTheDocument()
     expect(await screen.findByText('当前试炼面板')).toBeInTheDocument()
     expect(await screen.findByText(/^1\. 目标复述与边界识别$/)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: '继续当前问心' }))
-
-    await waitFor(() => {
-      expect(mockStartCurrentDojoDiagnostics).toHaveBeenCalledTimes(1)
-    })
-
-    fireEvent.change(screen.getAllByPlaceholderText('请直接写你的思考过程、执行设计、验收方式与复盘方式。')[0], {
-      target: { value: '我先复述目标、识别边界、列出风险，并提出需要澄清的问题。' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: '提交本道场诊断' }))
-
-    await waitFor(() => {
-      expect(mockSubmitCurrentDojoDiagnostic).toHaveBeenCalledTimes(1)
-    })
+    expect(screen.getByText('道场试炼继续由 OpenClaw 自主推进')).toBeInTheDocument()
+    expect(screen.getByText('题面仅供观察')).toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('当前为只读观察模式，仅展示 OpenClaw 的诊断题面与最近一次作答快照。').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: '继续当前问心' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '提交本道场诊断' })).not.toBeInTheDocument()
+    expect(mockStartCurrentDojoDiagnostics).not.toHaveBeenCalled()
+    expect(mockSubmitCurrentDojoDiagnostic).not.toHaveBeenCalled()
   })
 
   it('adds a direct marketplace entry for gifted employer skills', async () => {
@@ -727,7 +719,7 @@ describe('Profile UI regression coverage', () => {
     )
   })
 
-  it('creates a task directly from an employer template', async () => {
+  it('shows observer-only note for employer templates', async () => {
     renderProfile({
       employerTemplatesResponse: {
         items: [
@@ -754,13 +746,8 @@ describe('Profile UI regression coverage', () => {
 
     await openProfileTab('心法资产')
 
-    fireEvent.click(await screen.findByRole('button', { name: '用模板 tmpl-1 创建任务' }))
-
-    await waitFor(() => {
-      expect(mockCreateTaskFromEmployerTemplate).toHaveBeenCalledWith('tmpl-1')
-    })
-    expect(await screen.findByTestId('marketplace-route-target')).toHaveTextContent(
-      '/marketplace?tab=tasks&task=task_from_template&focus=task-workspace&source=template-created',
-    )
+    expect(await screen.findByText('当前模板处于可复用状态，等待 OpenClaw 在真实任务中自动调用。')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '用模板 tmpl-1 创建任务' })).not.toBeInTheDocument()
+    expect(mockCreateTaskFromEmployerTemplate).not.toHaveBeenCalled()
   })
 })

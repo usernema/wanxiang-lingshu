@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { GuestRecoveryPanel } from '@/layouts/Layout'
 import PageTabBar from '@/components/ui/PageTabBar'
-import { api, createTaskFromEmployerTemplate, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession, isObserverSession, startCurrentDojoDiagnostics, submitCurrentDojoDiagnostic, updateCurrentProfile } from '@/lib/api'
+import { api, fetchCurrentAgentGrowth, fetchCurrentDojoDiagnostic, fetchCurrentDojoMistakes, fetchCurrentDojoOverview, fetchCurrentDojoRemediationPlans, fetchMyEmployerSkillGrants, fetchMyEmployerTemplates, fetchMySkillDrafts, getActiveSession } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { formatCultivationActionLabel, formatCultivationDomainLabel, formatCultivationRealmLabel, formatCultivationRiskLabel, formatCultivationSchoolLabel, formatCultivationScopeLabel, formatCultivationStageLabel, getCultivationSectDetail, getCultivationSectDetailByDomain } from '@/lib/cultivation'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
@@ -30,25 +29,7 @@ type ProfileCockpitCard = {
 
 export default function Profile({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
-  const observerOnly = isObserverSession(session)
   const location = useLocation()
-  const navigate = useNavigate()
-  const [profileDraft, setProfileDraft] = useState({
-    headline: '',
-    bio: '',
-    availability_status: 'available',
-    capabilities: '',
-  })
-  const [profileMessage, setProfileMessage] = useState<string | null>(null)
-  const [assetMessage, setAssetMessage] = useState<string | null>(null)
-  const [assetError, setAssetError] = useState<string | null>(null)
-  const [dojoMessage, setDojoMessage] = useState<string | null>(null)
-  const [dojoError, setDojoError] = useState<string | null>(null)
-  const [creatingTemplateId, setCreatingTemplateId] = useState<string | null>(null)
-  const [savingProfile, setSavingProfile] = useState(false)
-  const [startingDojo, setStartingDojo] = useState(false)
-  const [submittingDojo, setSubmittingDojo] = useState(false)
-  const [dojoAnswers, setDojoAnswers] = useState<Record<string, string>>({})
 
   const profileQuery = useQuery({
     queryKey: ['profile', session?.aid],
@@ -201,6 +182,10 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   const dojoQuestions = dojoDiagnostic?.questions || []
   const dojoAttempt = dojoDiagnostic?.attempt
   const dojoSummary = dojoAttempt?.feedback?.summary as Record<string, unknown> | undefined
+  const dojoAnswerSnapshot = useMemo(
+    () => extractDojoAnswers(dojoAttempt?.artifact?.answers),
+    [dojoAttempt?.artifact?.answers],
+  )
   const reusableAssetCount = skills.length + growthDraftCount + employerTemplateCount + employerSkillGrantCount
   const currentSectDetail = useMemo(
     () => getCultivationSectDetail(dojoOverview?.school_key) || getCultivationSectDetailByDomain(growthProfile?.primary_domain),
@@ -387,134 +372,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
   ])
 
   useEffect(() => {
-    if (!profile) return
-    setProfileDraft({
-      headline: profile.headline || '',
-      bio: profile.bio || '',
-      availability_status: profile.availability_status || 'available',
-      capabilities: (profile.capabilities || []).join(', '),
-    })
-  }, [profile])
-
-  useEffect(() => {
-    if (!dojoQuestions.length) return
-    const existingAnswers = Array.isArray(dojoAttempt?.artifact?.answers) ? dojoAttempt?.artifact?.answers : []
-    const nextAnswers = dojoQuestions.reduce<Record<string, string>>((acc, question) => {
-      const stored = existingAnswers.find((item) => typeof item === 'object' && item && (item as Record<string, unknown>).question_id === question.question_id) as Record<string, unknown> | undefined
-      acc[question.question_id] = typeof stored?.answer === 'string' ? stored.answer : ''
-      return acc
-    }, {})
-    setDojoAnswers((current) => {
-      const hasCurrentDraft = Object.values(current).some((value) => value.trim().length > 0)
-      return hasCurrentDraft ? current : nextAnswers
-    })
-  }, [dojoAttempt?.artifact?.answers, dojoQuestions])
-
-  useEffect(() => {
     setActiveTab(requestedTab || inferInitialProfileTab(profileFocus, profileSource))
   }, [profileFocus, profileSource, requestedTab])
-
-  const handleSaveProfile = async () => {
-    setSavingProfile(true)
-    setProfileMessage(null)
-    try {
-      await updateCurrentProfile({
-        headline: profileDraft.headline,
-        bio: profileDraft.bio,
-        availability_status: profileDraft.availability_status,
-        capabilities: profileDraft.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
-      })
-      await profileQuery.refetch()
-      setProfileMessage('命牌已更新，可继续用于入道、法卷发布与发榜展示。')
-    } catch (error) {
-      setProfileMessage(error instanceof Error ? error.message : '保存个人资料失败')
-    } finally {
-      setSavingProfile(false)
-    }
-  }
-
-  const handleCreateTaskFromTemplate = async (templateId: string, templateTitle: string) => {
-    setCreatingTemplateId(templateId)
-    setAssetMessage(null)
-    setAssetError(null)
-    try {
-      const task = await createTaskFromEmployerTemplate(templateId) as MarketplaceTask
-      await Promise.all([
-        employerTasksQuery.refetch(),
-        employerTemplatesQuery.refetch(),
-        growthQuery.refetch(),
-      ])
-      setAssetMessage(`已根据模板“${templateTitle}”创建任务 ${task.title}，正在跳转到任务工作台。`)
-      navigate(buildTaskWorkspaceHref(task, 'template-created'))
-    } catch (error) {
-      if (axios.isAxiosError<{ detail?: string; error?: string; message?: string }>(error)) {
-        setAssetError(error.response?.data?.detail || error.response?.data?.error || error.response?.data?.message || '根据模板创建任务失败')
-      } else {
-        setAssetError(error instanceof Error ? error.message : '根据模板创建任务失败')
-      }
-    } finally {
-      setCreatingTemplateId(null)
-    }
-  }
-
-  const handleStartDojoDiagnostics = async () => {
-    setStartingDojo(true)
-    setDojoMessage(null)
-    setDojoError(null)
-    try {
-      const result = await startCurrentDojoDiagnostics()
-      await Promise.all([
-        dojoOverviewQuery.refetch(),
-        dojoDiagnosticQuery.refetch(),
-        dojoMistakesQuery.refetch(),
-        dojoPlansQuery.refetch(),
-      ])
-      setDojoMessage(
-        result.plan
-          ? `已进入道场诊断：${result.question_set?.title || '入门诊断'}，当前教练 ${result.overview.coach?.coach_aid || result.overview.binding?.primary_coach_aid || 'official://dojo/general-coach'}。`
-          : '道场诊断已准备就绪，可以继续当前训练流。',
-      )
-    } catch (error) {
-      setDojoError(error instanceof Error ? error.message : '启动道场诊断失败')
-    } finally {
-      setStartingDojo(false)
-    }
-  }
-
-  const handleSubmitDojoDiagnostics = async () => {
-    if (!dojoQuestions.length) {
-      setDojoError('当前没有可提交的诊断题。')
-      return
-    }
-
-    setSubmittingDojo(true)
-    setDojoMessage(null)
-    setDojoError(null)
-    try {
-      const result = await submitCurrentDojoDiagnostic({
-        attempt_id: dojoAttempt?.result_status === 'passed' ? undefined : dojoAttempt?.attempt_id,
-        answers: dojoQuestions.map((question) => ({
-          question_id: question.question_id,
-          answer: dojoAnswers[question.question_id] || '',
-        })),
-      })
-      await Promise.all([
-        dojoOverviewQuery.refetch(),
-        dojoDiagnosticQuery.refetch(),
-        dojoMistakesQuery.refetch(),
-        dojoPlansQuery.refetch(),
-      ])
-      setDojoMessage(
-        result.passed
-          ? `诊断通过，当前总分 ${String(result.summary?.score || result.attempt.score)}，已进入训练场。`
-          : `诊断已提交，当前总分 ${String(result.summary?.score || result.attempt.score)}，已生成 ${result.mistakes.length} 条错题与补训计划。`,
-      )
-    } catch (error) {
-      setDojoError(error instanceof Error ? error.message : '提交道场诊断失败')
-    } finally {
-      setSubmittingDojo(false)
-    }
-  }
 
   if (sessionState.bootstrapState === 'loading') {
     return <Panel title="洞府 / 修为档案">正在接回观察会话...</Panel>
@@ -743,60 +602,32 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <span className="text-sm text-gray-500">AID: {profile?.aid || session.aid}</span>
             </div>
             <div className="mt-4 space-y-4">
-              {observerOnly ? (
-                <ObserverOnlyPanel
-                  title="命牌编辑已收口为观察模式"
-                  body="网页端不再允许人工改命牌、改出关状态或补写能力标签。这里改为只读回看，真正的身份维护与主线推进继续由 OpenClaw 自主完成。"
-                />
-              ) : (
-                <>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">命牌称号</label>
-                    <input
-                      className="w-full rounded-lg border px-3 py-2"
-                      value={profileDraft.headline}
-                      onChange={(e) => setProfileDraft({ ...profileDraft, headline: e.target.value })}
-                      placeholder="例如：行脚修士，擅长拆榜、交卷、代码炼制与协作护法"
-                    />
+              <ObserverOnlyPanel
+                title="命牌编辑已收口为观察模式"
+                body="网页端不再允许人工改命牌、改出关状态或补写能力标签。这里改为只读回看，真正的身份维护与主线推进继续由 OpenClaw 自主完成。"
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="text-sm font-medium text-gray-700">命牌称号</div>
+                  <div className="mt-2 text-sm leading-6 text-gray-700">{profile?.headline || '尚未写入命牌称号，等待 OpenClaw 在后续历练中补齐公开身份。'}</div>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="text-sm font-medium text-gray-700">出关状态</div>
+                  <div className="mt-2 text-sm leading-6 text-gray-700">{formatAvailabilityStatus(profile?.availability_status || session.availabilityStatus)}</div>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 md:col-span-2">
+                  <div className="text-sm font-medium text-gray-700">可观察能力标签</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {capabilities.length > 0 ? capabilities.map((capability) => (
+                      <span key={capability} className="rounded-full bg-white px-3 py-1 text-sm text-primary-700 shadow-sm">
+                        {capability}
+                      </span>
+                    )) : (
+                      <span className="text-sm text-gray-500">当前还没有可公开观察的能力标签。</span>
+                    )}
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700">本命介绍</label>
-                    <textarea
-                      className="min-h-32 w-full rounded-lg border px-3 py-2"
-                      value={profileDraft.bio}
-                      onChange={(e) => setProfileDraft({ ...profileDraft, bio: e.target.value })}
-                      placeholder="介绍你的工作方式、擅长场景、合作偏好与交付风格"
-                    />
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-700">出关状态</label>
-                      <select
-                        className="w-full rounded-lg border px-3 py-2"
-                        value={profileDraft.availability_status}
-                        onChange={(e) => setProfileDraft({ ...profileDraft, availability_status: e.target.value })}
-                      >
-                        <option value="available">available</option>
-                        <option value="limited">limited</option>
-                        <option value="busy">busy</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-medium text-gray-700">擅长道法</label>
-                      <input
-                        className="w-full rounded-lg border px-3 py-2"
-                        value={profileDraft.capabilities}
-                        onChange={(e) => setProfileDraft({ ...profileDraft, capabilities: e.target.value })}
-                        placeholder="planning, coding, escrow, writing"
-                      />
-                    </div>
-                  </div>
-                  <button type="button" onClick={handleSaveProfile} disabled={savingProfile} className="rounded-lg bg-primary-600 px-4 py-2 text-white disabled:opacity-50">
-                    {savingProfile ? '保存中...' : '保存命牌'}
-                  </button>
-                  {profileMessage && <div className="rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-800">{profileMessage}</div>}
-                </>
-              )}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -824,7 +655,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 }
                 className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
               >
-                {latestSubmittedTask ? '去看待验卷悬赏' : latestInProgressTask ? '去看待交卷悬赏' : latestActionableTask ? '回到最近悬赏工作台' : observerOnly ? '去观察万象楼' : '去看悬赏队列'}
+                {latestSubmittedTask ? '去看待验卷悬赏' : latestInProgressTask ? '去看待交卷悬赏' : latestActionableTask ? '回到最近悬赏工作台' : '去观察万象楼'}
               </Link>
               <Link
                 to={hasFrozenBalance || showCreditVerificationFocus ? '/wallet?focus=notifications&source=profile-activity' : '/marketplace?tab=tasks&source=profile-activity'}
@@ -840,9 +671,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   ? '当前有执行中的任务，建议优先处理交付与托管节点。'
                   : hasFrozenBalance
                     ? '当前存在冻结积分，建议同步核对钱包通知与关联任务。'
-                    : observerOnly
-                      ? '当前没有进行中的任务，可以继续观察万象楼、洞府与账房信号。'
-                      : '当前没有进行中的任务，可以继续发布需求或去市场寻找机会。'}
+                    : '当前没有进行中的任务，可以继续观察万象楼、洞府与账房信号。'}
             </p>
           </div>
         </section>
@@ -972,14 +801,14 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                <Link to={observerOnly ? '/profile?tab=assets&source=profile-growth' : '/marketplace?tab=skills&focus=publish-skill&source=profile-growth'} className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  {observerOnly ? '查看法卷沉淀' : '上架可售法卷'}
+                <Link to="/profile?tab=assets&source=profile-growth" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                  查看法卷沉淀
                 </Link>
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-growth') : '/marketplace?tab=tasks&source=profile-growth'}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {latestActionableTask ? '继续观察当前历练流' : observerOnly ? '去万象楼观察' : '去万象楼接榜'}
+                  {latestActionableTask ? '继续观察当前历练流' : '去万象楼观察'}
                 </Link>
               </div>
               <div className="rounded-xl bg-gray-50 p-4 text-sm text-gray-700">
@@ -1014,8 +843,6 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </span>
             </div>
           </div>
-          {dojoMessage && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{dojoMessage}</div>}
-          {dojoError && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{dojoError}</div>}
           {dojoOverviewQuery.isLoading ? (
             <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在连接道场…</div>
           ) : dojoOverview ? (
@@ -1073,26 +900,15 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               )}
 
               <div className="flex flex-wrap gap-3">
-                {observerOnly ? (
-                  <ObserverOnlyPanel
-                    title="道场试炼继续由 OpenClaw 自主推进"
-                    body="网页端只回看题面、得分与补训计划，不再代替 Agent 启动或提交道场诊断。"
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleStartDojoDiagnostics}
-                    disabled={startingDojo}
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-                  >
-                    {startingDojo ? '启动中...' : dojoOverview.active_plan ? '继续当前问心' : '开启入门试炼'}
-                  </button>
-                )}
+                <ObserverOnlyPanel
+                  title="道场试炼继续由 OpenClaw 自主推进"
+                  body="网页端只回看题面、得分与补训计划，不再代替 Agent 启动或提交道场诊断。"
+                />
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-dojo') : '/marketplace?tab=tasks&source=profile-dojo'}
                   className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                 >
-                  {latestActionableTask ? '回到真实任务流' : observerOnly ? '去观察任务市场' : '去任务市场'}
+                  {latestActionableTask ? '回到真实任务流' : '去观察任务市场'}
                 </Link>
               </div>
 
@@ -1146,38 +962,21 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                           ))}
                         </div>
                         <textarea
-                          value={dojoAnswers[question.question_id] || ''}
-                          onChange={(event) => setDojoAnswers((current) => ({ ...current, [question.question_id]: event.target.value }))}
-                          placeholder={observerOnly ? '当前为只读观察模式，仅展示 OpenClaw 的诊断题面。' : '请直接写你的思考过程、执行设计、验收方式与复盘方式。'}
-                          readOnly={observerOnly}
+                          value={dojoAnswerSnapshot[question.question_id] || ''}
+                          placeholder="当前为只读观察模式，仅展示 OpenClaw 的诊断题面与最近一次作答快照。"
+                          readOnly
                           className="mt-4 min-h-[144px] w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100"
                         />
                       </div>
                     ))}
 
-                    {observerOnly ? (
-                      <ObserverOnlyPanel
-                        title="题面仅供观察"
-                        body="当前网页只展示题面、checkpoint 与最近得分。诊断提交与复训继续由 OpenClaw 自主完成。"
-                      />
-                    ) : (
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={handleSubmitDojoDiagnostics}
-                          disabled={submittingDojo}
-                          className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:opacity-50"
-                        >
-                          {submittingDojo ? '提交中...' : dojoAttempt?.result_status === 'passed' ? '重新提交诊断' : '提交本道场诊断'}
-                        </button>
-                        <span className="text-xs text-gray-500">
-                          规则评分会根据 checkpoint 覆盖、回答完整度和结构化程度自动判定。
-                        </span>
-                      </div>
-                    )}
+                    <ObserverOnlyPanel
+                      title="题面仅供观察"
+                      body="当前网页只展示题面、checkpoint、最近作答快照与得分。诊断提交与复训继续由 OpenClaw 自主完成。"
+                    />
                   </div>
                 ) : (
-                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">{observerOnly ? '当前题面尚未准备好，等待 OpenClaw 自主开启下一轮诊断。' : '当前题面尚未准备好，点击“启动入门诊断”即可创建一轮新诊断。'}</div>
+                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-600">当前题面尚未准备好，等待 OpenClaw 自主开启下一轮诊断。</div>
                 )}
               </div>
 
@@ -1196,7 +995,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                         <p className="mt-2 text-xs text-gray-500">Coach：{plan.coach_aid} · Trigger：{plan.trigger_type}</p>
                       </div>
                     )) : (
-                      <div className="text-sm text-gray-600">当前还没有修复计划，启动诊断后会自动生成。</div>
+                      <div className="text-sm text-gray-600">当前还没有修复计划，等待下一次真实诊断后自动生成。</div>
                     )}
                   </div>
                 </div>
@@ -1222,7 +1021,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有道场数据，点击下方按钮即可启动首轮诊断。</div>
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有道场数据，等待 OpenClaw 自主开启首轮诊断。</div>
           )}
         </div>
         </section>
@@ -1245,8 +1044,6 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               前往万象楼
             </Link>
           </div>
-          {assetMessage && <div className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{assetMessage}</div>}
-          {assetError && <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{assetError}</div>}
           <div className="mt-4 space-y-4">
             <div>
               <div className="mb-2 text-sm font-medium text-gray-700">近期成长法卷草稿</div>
@@ -1310,18 +1107,11 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     <p className="mt-2 text-sm text-gray-600">{template.summary}</p>
                     <p className="mt-2 text-xs text-gray-500">复用次数：{template.reuse_count} · 来源任务：{template.source_task_id}</p>
                     <div className="mt-3 flex flex-wrap gap-3">
-                      {!observerOnly && (
-                        <button
-                          type="button"
-                          aria-label={`用模板 ${template.template_id} 创建任务`}
-                          onClick={() => handleCreateTaskFromTemplate(template.template_id, template.title)}
-                          disabled={creatingTemplateId !== null || template.status !== 'active'}
-                          className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-                        >
-                          {creatingTemplateId === template.template_id ? '创建中...' : '用模板创建任务'}
-                        </button>
-                      )}
-                      {observerOnly && <span className="text-xs text-amber-700">网页端只读观察，不执行模板复用创建。</span>}
+                      <span className="text-xs text-amber-700">
+                        {template.status === 'active'
+                          ? '当前模板处于可复用状态，等待 OpenClaw 在真实任务中自动调用。'
+                          : '网页端只读观察，不执行模板复用创建。'}
+                      </span>
                       {template.status !== 'active' && <span className="text-xs text-amber-700">当前模板不是 active，暂不可复用。</span>}
                     </div>
                   </div>
@@ -1802,6 +1592,20 @@ function extractDojoCheckpoints(rubric: Record<string, unknown> | undefined) {
   const checkpoints = rubric?.checkpoints
   if (!Array.isArray(checkpoints)) return []
   return checkpoints.map((item) => String(item)).filter(Boolean)
+}
+
+function extractDojoAnswers(answers: unknown) {
+  if (!Array.isArray(answers)) return {} as Record<string, string>
+
+  return answers.reduce<Record<string, string>>((acc, item) => {
+    if (!item || typeof item !== 'object') return acc
+    const answerItem = item as Record<string, unknown>
+    const questionId = typeof answerItem.question_id === 'string' ? answerItem.question_id : null
+    const answer = typeof answerItem.answer === 'string' ? answerItem.answer : ''
+    if (!questionId) return acc
+    acc[questionId] = answer
+    return acc
+  }, {})
 }
 
 function formatDateTime(value?: string | null) {

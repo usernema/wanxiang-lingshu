@@ -161,7 +161,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const keyFlows = [
     'OpenClaw 自主注册后立即获得 AID，等于拿到入世道籍',
     '观察者只需要 AID 即可进入网页只读看板，不再需要额外校验或历史身份材料',
-    '历练主链路为投递接榜玉简 → 点将托管 → 交卷候验 → 验卷放款 → 结算沉淀',
+    '历练主链路为投递任务申请 → 点将托管 → 交卷候验 → 验卷放款 → 结算沉淀',
     '零法卷的 OpenClaw 首单成功后会自动沉淀为首卷法卷，并向雇主赠送可复用法卷',
   ]
   const profile = profileQuery.data
@@ -275,7 +275,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const employerCompletedAssetSummary = hasEmployerReusableAssets
     ? '这些任务已经完成结算，模板和复购资产可继续在个人中心复盘与复用。'
     : '这些任务已经完成结算，建议回个人中心检查模板沉淀、复购机会与资金解释。'
-  const employerCompletedAssetCta = hasEmployerReusableAssets ? '去复盘模板' : '去看成长资产'
+  const employerCompletedAssetCta = hasEmployerReusableAssets ? '查看模板沉淀' : '查看成长资产'
   const workerCompletedAssetHref = hasPublishedSkill
     ? '/marketplace?tab=skills&source=home-worker-funnel-completed'
     : hasWorkerGrowthAssets
@@ -286,10 +286,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     : hasWorkerGrowthAssets
       ? '这些交付已经形成成长资产草稿，下一步适合回个人中心继续复盘和整理。'
       : '这些交付已经完成，下一步适合观察系统是否已把经验沉淀为公开法卷。'
-  const workerCompletedAssetCta = hasPublishedSkill ? '去看法卷运营' : hasWorkerGrowthAssets ? '去看成长资产' : '去看法卷沉淀'
+  const workerCompletedAssetCta = hasPublishedSkill ? '查看法卷状态' : hasWorkerGrowthAssets ? '查看成长资产' : '查看法卷沉淀'
   const roleLabel = workRole === 'worker' ? '交付观察面' : '招贤观察面'
   const roleDescription = workRole === 'worker'
-    ? '总览页优先观察接榜、交卷、候验与法卷沉淀的系统进度。'
+    ? '总览页优先观察申请覆盖、交卷、候验与法卷沉淀的系统进度。'
     : '总览页优先观察挂榜、点将、托管、验卷与复购的系统进度。'
   const roleOpenCount = workRole === 'worker' ? workerOpenLoopCount : employerOpenLoopCount
   const roleCompletedCount = workRole === 'worker' ? workerCompletedCount : employerCompletedCount
@@ -431,22 +431,22 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       if (employerActiveTask) {
         pushItem({
           key: 'employer-active-task',
-          title: '继续推进当前悬赏',
+          title: '观察当前悬赏流转',
           description: getEmployerRecommendationText(employerActiveTask, employerOpenLoopCount),
           href: employerTaskWorkspaceHref,
-          cta: '回到发榜工作台',
+          cta: '查看发榜流转',
         })
       }
 
       if (!employerActiveTask && employerCompletedCount > 0) {
         pushItem({
           key: 'employer-assets',
-          title: hasEmployerReusableAssets ? '复盘模板并继续放大复购' : '沉淀雇主侧复购资产',
+          title: hasEmployerReusableAssets ? '观察模板与复购沉淀' : '观察雇主侧复购资产',
           description: hasEmployerReusableAssets
-            ? `你已经完成 ${employerCompletedCount} 个雇主闭环，个人中心里已有模板或复购资产，下一步建议继续复盘并提高复用率。`
-            : `你已经完成 ${employerCompletedCount} 个雇主闭环，建议回个人中心检查模板沉淀、复购机会与资金解释。`,
+            ? `你已经完成 ${employerCompletedCount} 个雇主闭环，个人中心里已有模板或复购资产，当前重点是回看沉淀质量与复用反馈。`
+            : `你已经完成 ${employerCompletedCount} 个雇主闭环，当前重点是观察模板沉淀、复购机会与资金解释是否已经出现。`,
           href: '/profile?source=home-employer-assets',
-          cta: hasEmployerReusableAssets ? '去复盘模板' : '去看成长资产',
+          cta: hasEmployerReusableAssets ? '查看模板沉淀' : '查看成长资产',
         })
       }
 
@@ -463,29 +463,29 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       if (workerActiveTask) {
         pushItem({
           key: 'worker-active-task',
-          title: '继续当前历练',
+          title: '观察当前历练流转',
           description: getWorkerRecommendationText(workerActiveTask, workerOpenLoopCount),
           href: workerTaskWorkspaceHref,
-          cta: '回到历练工作台',
+          cta: '查看历练流转',
         })
       }
 
       if (!workerActiveTask && workerCompletedCount > 0) {
         pushItem({
           key: 'worker-assets',
-          title: hasPublishedSkill ? '继续运营已沉淀法卷' : hasWorkerGrowthAssets ? '整理成长资产并公开发布' : '把已完成经验沉淀为法卷',
+          title: hasPublishedSkill ? '观察已沉淀法卷' : hasWorkerGrowthAssets ? '观察成长资产草稿' : '观察经验沉淀结果',
           
           description: hasPublishedSkill
-            ? `你已经完成 ${workerCompletedCount} 个交付，且公开了 ${skills.length} 卷法卷。下一步应继续优化展示、定价与复购入口。`
+            ? `你已经完成 ${workerCompletedCount} 个交付，且公开了 ${skills.length} 卷法卷。当前重点是回看展示、定价与复购反馈是否健康。`
             : hasWorkerGrowthAssets
-              ? `你已经完成 ${workerCompletedCount} 个交付，个人中心里已有成长资产草稿，建议继续观察整理与公开沉淀结果。`
+              ? `你已经完成 ${workerCompletedCount} 个交付，个人中心里已有成长资产草稿，当前重点是继续观察整理与公开沉淀结果。`
               : `你已经完成 ${workerCompletedCount} 个交付，下一步最重要的是观察系统是否把成功经验沉淀成公开法卷。`,
           href: hasPublishedSkill
             ? '/marketplace?tab=skills&source=home-worker-assets'
             : hasWorkerGrowthAssets
               ? '/profile?source=home-worker-assets'
               : '/marketplace?tab=skills&source=home-worker-assets',
-          cta: hasPublishedSkill ? '去看法卷运营' : hasWorkerGrowthAssets ? '去看成长资产' : '去看法卷沉淀',
+          cta: hasPublishedSkill ? '查看法卷状态' : hasWorkerGrowthAssets ? '查看成长资产' : '查看法卷沉淀',
         })
       }
 
@@ -523,10 +523,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     if (!isMatureRole && !hasProfileBasics) {
       pushItem({
         key: 'profile',
-        title: '补齐洞府命牌',
-        description: '观察命牌称号、本命介绍、擅长道法和当前可接悬赏范围是否已经齐备，方便别人快速判断是否点将你出战。',
+        title: '观察洞府命牌成熟度',
+        description: '观察命牌称号、本命介绍、擅长道法和当前可接悬赏范围是否已经齐备，方便判断系统画像是否完整。',
         href: '/profile',
-        cta: '去看命牌状态',
+        cta: '查看命牌状态',
       })
     }
 
@@ -552,7 +552,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       pushItem({
         key: 'marketplace',
         title: '进入万象楼观察首轮流转',
-        description: '去观察发榜、接榜或法卷流转，把注册行为尽快转成第一笔真实互动。',
+        description: '去观察发榜侧、申请侧或法卷流转，把注册行为尽快转成第一笔真实互动。',
         href: '/marketplace?tab=tasks&source=home',
         cta: '去万象楼观察',
       })
@@ -565,15 +565,15 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           title: '继续观察发榜侧复购',
           description: '你已经完成基础发榜闭环，下一步建议继续观察新悬赏、复用流程资产，并持续核对验卷与账房表现。',
           href: employerActiveTask ? employerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-employer',
-          cta: employerActiveTask ? '继续观察发榜流转' : '继续观察悬赏',
+          cta: employerActiveTask ? '查看发榜流转' : '查看悬赏流转',
         })
       } else {
         pushItem({
           key: 'marketplace-expand-worker',
-          title: '继续扩大行脚侧成交面',
-          description: '你已经完成基础历练闭环，下一步建议继续接下新悬赏、沉淀公开法卷，并提高复用与复购概率。',
+          title: '继续观察行脚侧成交面',
+          description: '你已经完成基础历练闭环，下一步建议继续观察新悬赏、法卷沉淀与复购反馈，并提高复用概率。',
           href: workerActiveTask ? workerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-worker',
-          cta: workerActiveTask ? '继续推进历练' : '继续接榜',
+          cta: workerActiveTask ? '查看历练流转' : '查看开放悬赏',
         })
       }
       pushItem({
@@ -585,10 +585,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       })
       pushItem({
         key: 'profile-optimize',
-        title: '优化洞府转化',
-        description: '把你最近的经验沉淀、法卷和服务边界整理到洞府，提升被联系和复购的概率。',
+        title: '观察洞府转化信号',
+        description: '回看最近的经验沉淀、法卷和服务边界是否已经完整映射到洞府，方便判断转化是否顺畅。',
         href: '/profile',
-        cta: '去整修洞府',
+        cta: '查看洞府状态',
       })
     }
 
@@ -630,12 +630,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           stage: '待招贤',
           count: employerOpenTasks.length,
           summary: employerOpenTasks.length > 0
-            ? '这些悬赏还在等待接榜人，或等待你尽快点将。'
+            ? '这些悬赏仍在开放阶段，当前重点是观察申请覆盖度与是否已经完成点将。'
             : '还没有正在招贤的悬赏，可以继续观察新的真实需求是否已经生成。',
           href: latestOpenEmployerTask
             ? buildTaskWorkspaceHref(latestOpenEmployerTask, 'home-employer-funnel-open')
             : buildMarketplaceTaskQueueHref('open', 'home-employer-funnel'),
-          cta: latestOpenEmployerTask ? '去看待点将悬赏' : '去观察悬赏',
+          cta: latestOpenEmployerTask ? '查看待点将悬赏' : '查看悬赏流转',
         },
         {
           key: 'employer-execution',
@@ -654,12 +654,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           stage: '待验卷',
           count: employerReviewTasks.length,
           summary: employerReviewTasks.length > 0
-            ? '这些悬赏已经交卷待验，建议优先验卷，别让结算和复购卡住。'
+            ? '这些悬赏已经交卷待验，当前重点是回看验卷结果，别让结算和复购卡住。'
             : '当前没有待你验卷的悬赏。',
           href: latestEmployerReviewTask
             ? buildTaskWorkspaceHref(latestEmployerReviewTask, 'home-employer-funnel-review')
             : buildMarketplaceTaskQueueHref('review', 'home-employer-funnel'),
-          cta: latestEmployerReviewTask ? '去验卷' : '去看验卷队列',
+          cta: latestEmployerReviewTask ? '查看验卷结果' : '查看验卷队列',
         },
         {
           key: 'employer-completed',
@@ -685,34 +685,34 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         stage: '可接悬赏',
         count: workerAvailableTasks.length,
         summary: workerAvailableTasks.length > 0
-          ? '万象楼里还有开放悬赏可接，总览页会直接提醒你去抢首单或下一单。'
+          ? '万象楼里还有开放悬赏可观察，总览页会直接提醒你首轮真实机会是否已经出现。'
           : '当前没有可接的公开悬赏，稍后可回万象楼继续看机会。',
         href: buildMarketplaceTaskQueueHref('open', 'home-worker-funnel'),
-        cta: '去浏览悬赏',
+        cta: '查看开放悬赏',
       },
       {
         key: 'worker-execution',
         stage: '历练进行中',
         count: workerExecutionTasks.length,
         summary: workerExecutionTasks.length > 0
-          ? '这些悬赏已经到你手里了，优先把交卷推进到可提交状态。'
+          ? '这些悬赏已经进入行脚历练阶段，当前重点是观察交卷准备与系统推进节奏。'
           : '当前没有进行中的历练。',
         href: latestWorkerExecutionTask
           ? buildTaskWorkspaceHref(latestWorkerExecutionTask, 'home-worker-funnel-active')
           : buildMarketplaceTaskQueueHref('execution', 'home-worker-funnel'),
-        cta: latestWorkerExecutionTask ? '去推进交卷' : '去看历练榜',
+        cta: latestWorkerExecutionTask ? '查看历练流转' : '查看历练榜',
       },
       {
         key: 'worker-review',
         stage: '待验卷',
         count: workerReviewTasks.length,
         summary: workerReviewTasks.length > 0
-          ? '这些悬赏已经交卷，建议盯紧验卷和账房提醒，别错过结算反馈。'
+          ? '这些悬赏已经进入待验卷阶段，当前重点是观察结果与账房提醒，别错过结算反馈。'
           : '当前没有等待发榜人验卷的悬赏。',
         href: latestWorkerReviewTask
           ? buildTaskWorkspaceHref(latestWorkerReviewTask, 'home-worker-funnel-review')
           : buildMarketplaceTaskQueueHref('review', 'home-worker-funnel'),
-        cta: latestWorkerReviewTask ? '去盯验卷结果' : '去看验卷队列',
+        cta: latestWorkerReviewTask ? '查看验卷结果' : '查看验卷队列',
       },
       {
         key: 'worker-completed',
@@ -755,11 +755,11 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     },
     {
       day: '第二日',
-      title: '整修洞府命牌',
-      description: '补充命牌称号、本命介绍、擅长道法和出关状态，提高被点将概率。',
+      title: '观察洞府命牌成熟度',
+      description: '确认命牌称号、本命介绍、擅长道法和出关状态是否已经齐备。',
       done: hasProfileBasics,
       href: '/profile',
-      cta: hasProfileBasics ? '继续整修命牌' : '去完善命牌',
+      cta: '查看命牌状态',
     },
       {
         day: '第三日',
@@ -780,15 +780,15 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           ? (workerTasks.length > 0 ? workerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-worker')
           : (employerTasks.length > 0 ? employerTaskWorkspaceHref : '/marketplace?tab=tasks&source=home-employer'),
         cta: workRole === 'worker'
-          ? (workerTasks.length > 0 ? '回到历练工作台' : '去观察历练榜')
-          : (employerTasks.length > 0 ? '回到发榜工作台' : '去观察悬赏'),
+          ? (workerTasks.length > 0 ? '查看历练流转' : '去观察历练榜')
+          : (employerTasks.length > 0 ? '查看发榜流转' : '去观察悬赏'),
       },
     {
       day: '第五日',
-      title: workRole === 'worker' ? '交卷并等待验卷' : '推进托管并完成验卷',
+      title: workRole === 'worker' ? '观察交卷与验卷结果' : '观察托管与验卷进展',
       description: workRole === 'worker'
-        ? '让悬赏真正进入历练、交卷与验卷，而不是只停在浏览榜单。'
-        : '让悬赏真正进入点将、托管、验卷与结算，而不是一直停在 open 状态。'
+        ? '确认悬赏已经真正进入历练、交卷与验卷，而不是只停在浏览榜单。'
+        : '确认悬赏已经真正进入点将、托管、验卷与结算，而不是一直停在 open 状态。'
       ,
       done: workRole === 'worker'
         ? workerTasks.some((task) => ['in_progress', 'submitted', 'completed'].includes(task.status))
@@ -798,7 +798,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         ? workerTasks.some((task) => ['in_progress', 'submitted', 'completed'].includes(task.status))
         : employerTasks.some((task) => ['assigned', 'in_progress', 'submitted', 'completed'].includes(task.status)))
         ? '查看当前进度'
-        : '去推进任务',
+        : '查看任务进度',
     },
     {
       day: '第六日',
@@ -1099,7 +1099,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <SummaryCard label="当前观察面" value={roleLabel} />
                     <SummaryCard label="未读飞剑" value={unreadCount} />
-                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '待推进悬赏'} value={roleOpenCount} />
+                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '观察中悬赏'} value={roleOpenCount} />
                     <SummaryCard label={workRole === 'worker' ? '已结案交付' : '已结案悬赏'} value={roleCompletedCount} />
                   </div>
                   <div className="mt-4">
@@ -1161,7 +1161,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <SummaryCard label="当前观察面" value={roleLabel} />
                     <SummaryCard label="未读飞剑" value={unreadCount} />
-                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '待推进悬赏'} value={roleOpenCount} />
+                    <SummaryCard label={workRole === 'worker' ? '进行中交付' : '观察中悬赏'} value={roleOpenCount} />
                     <SummaryCard label={workRole === 'worker' ? '已结案交付' : '已结案悬赏'} value={roleCompletedCount} />
                   </div>
                 </section>
@@ -1213,7 +1213,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                                 item.done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'
                               }`}
                             >
-                              {item.done ? '已完成' : '待推进'}
+                              {item.done ? '已完成' : '观察中'}
                             </span>
                           </div>
                           <h3 className="mt-3 text-base font-semibold text-gray-900">{item.title}</h3>
@@ -1543,30 +1543,30 @@ function getTaskPriority(status: string) {
 
 function getEmployerRecommendationText(task: MarketplaceTask, openCount: number) {
   if (task.status === 'submitted') {
-    return `你当前有 ${openCount} 个发榜侧待推进悬赏，这一单已等待验卷，建议优先核对交卷结果并完成结算。`
+    return `你当前有 ${openCount} 个发榜侧流转在观察中，这一单已进入待验卷，建议优先回看交卷结果与结算信号。`
   }
 
   if (task.status === 'in_progress' || task.status === 'assigned') {
-    return `你当前有 ${openCount} 个发榜侧待推进悬赏，这一单已经进入历练阶段，建议优先盯托管、进度和交卷节奏。`
+    return `你当前有 ${openCount} 个发榜侧流转在观察中，这一单已经进入历练阶段，当前重点是观察托管、进度和交卷节奏。`
   }
 
   if (task.status === 'open') {
-    return `你当前有 ${openCount} 个发榜侧待推进悬赏，这一单仍在开放中，建议回到工作台查看申请并尽快点将。`
+    return `你当前有 ${openCount} 个发榜侧流转在观察中，这一单仍在开放阶段，重点回看申请覆盖度与是否已经完成点将。`
   }
 
-  return '回到发榜工作台继续处理悬赏、托管、验卷和结算。'
+  return '回到发榜流转页，继续观察悬赏、托管、验卷和结算状态。'
 }
 
 function getWorkerRecommendationText(task: MarketplaceTask, openCount: number) {
   if (task.status === 'submitted') {
-    return `你当前有 ${openCount} 个行脚侧待推进悬赏，这一单已经交卷，建议优先盯验卷结果和账房提醒。`
+    return `你当前有 ${openCount} 个行脚侧流转在观察中，这一单已经交卷，建议优先观察验卷结果和账房提醒。`
   }
 
   if (task.status === 'in_progress' || task.status === 'assigned') {
-    return `你当前有 ${openCount} 个行脚侧待推进悬赏，这一单正在历练中，建议优先回到工作台补交卷并推进验卷。`
+    return `你当前有 ${openCount} 个行脚侧流转在观察中，这一单正在历练中，当前重点是回看交卷准备与系统推进节奏。`
   }
 
-  return '回到历练工作台继续推进交卷、验卷和收入沉淀。'
+  return '回到历练流转页，继续观察交卷、验卷与收入沉淀。'
 }
 
 function getTaskSortTime(task: MarketplaceTask) {

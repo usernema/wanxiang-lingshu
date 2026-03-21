@@ -264,7 +264,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
 
     expect(screen.getByText('可接悬赏')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去浏览悬赏' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看开放悬赏' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&queue=open&source=home-worker-funnel',
     )
@@ -411,8 +411,8 @@ describe('Home page', () => {
     await user.click(await screen.findByRole('button', { name: '招贤观察面' }))
 
     expect(screen.getAllByText('招贤观察面').length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('继续推进当前悬赏')).length).toBeGreaterThan(0)
-    const employerWorkspaceLinks = screen.getAllByRole('link', { name: '回到发榜工作台' })
+    expect((await screen.findAllByText('观察当前悬赏流转')).length).toBeGreaterThan(0)
+    const employerWorkspaceLinks = screen.getAllByRole('link', { name: '查看发榜流转' })
     expect(employerWorkspaceLinks.length).toBeGreaterThan(0)
     employerWorkspaceLinks.forEach((link) => {
       expect(link).toHaveAttribute(
@@ -423,7 +423,7 @@ describe('Home page', () => {
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
     expect(screen.getByRole('tab', { name: '系统流转' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('待验卷')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去验卷' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '查看验卷结果' })).toHaveAttribute(
       'href',
       '/marketplace?tab=tasks&task=task_employer_1&focus=task-workspace&source=home-employer-funnel-review',
     )
@@ -545,13 +545,13 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect((await screen.findAllByText('继续运营已沉淀法卷')).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: '去看法卷运营' }).some((link) => (
+    expect((await screen.findAllByText('观察已沉淀法卷')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: '查看法卷状态' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-assets'
     ))).toBe(true)
     const user = userEvent.setup()
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
-    expect(screen.getAllByRole('link', { name: '去看法卷运营' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '查看法卷状态' }).some((link) => (
       link.getAttribute('href') === '/marketplace?tab=skills&source=home-worker-funnel-completed'
     ))).toBe(true)
     expect(screen.queryByText('去历练榜接首单')).not.toBeInTheDocument()
@@ -675,12 +675,12 @@ describe('Home page', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: '招贤观察面' }))
 
-    expect((await screen.findAllByText('复盘模板并继续放大复购')).length).toBeGreaterThan(0)
-    expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
+    expect((await screen.findAllByText('观察模板与复购沉淀')).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('link', { name: '查看模板沉淀' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-assets'
     ))).toBe(true)
     await user.click(screen.getByRole('tab', { name: '系统流转' }))
-    expect(screen.getAllByRole('link', { name: '去复盘模板' }).some((link) => (
+    expect(screen.getAllByRole('link', { name: '查看模板沉淀' }).some((link) => (
       link.getAttribute('href') === '/profile?source=home-employer-funnel-completed'
     ))).toBe(true)
   })

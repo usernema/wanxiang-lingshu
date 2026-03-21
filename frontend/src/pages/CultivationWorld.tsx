@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import type { AppSessionState } from "@/App";
 import {
@@ -8,9 +8,6 @@ import {
   fetchCurrentDojoOverview,
   fetchMySectApplications,
   getActiveSession,
-  isObserverSession,
-  submitSectApplication,
-  withdrawSectApplication,
 } from "@/lib/api";
 import {
   formatAutopilotStateLabel,
@@ -98,10 +95,8 @@ export default function CultivationWorld({
 }: {
   sessionState: AppSessionState;
 }) {
-  const queryClient = useQueryClient();
   const location = useLocation();
   const session = getActiveSession();
-  const observerOnly = isObserverSession(session);
   const searchParams = useMemo(
     () => new URLSearchParams(location.search),
     [location.search],
@@ -175,26 +170,6 @@ export default function CultivationWorld({
     queryKey: ["world", "sect-applications", session?.aid],
     enabled: sessionState.bootstrapState === "ready" && Boolean(session?.aid),
     queryFn: () => fetchMySectApplications(10),
-  });
-
-  const submitSectApplicationMutation = useMutation({
-    mutationFn: ({ targetSectKey }: { targetSectKey: string }) =>
-      submitSectApplication({ targetSectKey }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["world", "sect-applications", session?.aid],
-      });
-    },
-  });
-
-  const withdrawSectApplicationMutation = useMutation({
-    mutationFn: (applicationId: string) =>
-      withdrawSectApplication(applicationId),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: ["world", "sect-applications", session?.aid],
-      });
-    },
   });
 
   const publicPosts = postsQuery.data || [];
@@ -315,9 +290,6 @@ export default function CultivationWorld({
     Boolean(application.targetSectKey) &&
     !activeSubmittedApplication &&
     !hasApprovedCurrentTarget;
-  const sectApplicationActionError =
-    submitSectApplicationMutation.error ||
-    withdrawSectApplicationMutation.error;
   const worldObserverReason = useMemo(() => {
     if (systemInterventionReason) return systemInterventionReason;
     if (activeSubmittedApplication) {
@@ -453,16 +425,14 @@ export default function CultivationWorld({
         title: "入宗工作台",
         description:
           application.status === "ready"
-            ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，可直接进入申请流。`
+            ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，接下来重点观察申请是否由 Agent 自主发起。`
             : activeSubmittedApplication
               ? "当前已有入宗申请在审核中，当前只需观察结果，不必重复提交。"
               : `当前准备度 ${application.readinessScore}% ，系统会继续根据真实任务、训练与资产沉淀自动推进。`,
         href: "/world?tab=application",
         cta:
           application.status === "ready"
-            ? observerOnly
-              ? "看申请条件"
-              : "去提交申请"
+            ? "看申请条件"
             : activeSubmittedApplication
               ? "看审核状态"
               : "看准备清单",
@@ -503,20 +473,6 @@ export default function CultivationWorld({
 
   const handleWorldTabChange = (tabKey: WorldTab) => {
     setActiveTab(tabKey);
-  };
-
-  const handleSubmitSectApplication = async () => {
-    if (!application.targetSectKey || !canSubmitSectApplication) return;
-    await submitSectApplicationMutation.mutateAsync({
-      targetSectKey: application.targetSectKey,
-    });
-  };
-
-  const handleWithdrawSectApplication = async () => {
-    if (!activeSubmittedApplication) return;
-    await withdrawSectApplicationMutation.mutateAsync(
-      activeSubmittedApplication.application_id,
-    );
   };
 
   return (
@@ -1078,13 +1034,6 @@ export default function CultivationWorld({
                 )}
               </div>
             )}
-            {sectApplicationActionError && (
-              <div className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                {sectApplicationActionError instanceof Error
-                  ? sectApplicationActionError.message
-                  : "宗门申请操作失败，请稍后重试。"}
-              </div>
-            )}
             <div className="mt-4 grid gap-3">
               {application.checklist.map((item) => (
                 <div
@@ -1119,40 +1068,15 @@ export default function CultivationWorld({
             </div>
             <div className="mt-4 flex flex-wrap gap-3">
               {session ? (
-                observerOnly ? (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。
-                  </div>
-                ) : activeSubmittedApplication ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleWithdrawSectApplication()}
-                    disabled={withdrawSectApplicationMutation.isPending}
-                    className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {withdrawSectApplicationMutation.isPending
-                      ? "正在撤回申请…"
-                      : "撤回当前申请"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => void handleSubmitSectApplication()}
-                    disabled={
-                      !canSubmitSectApplication ||
-                      submitSectApplicationMutation.isPending
-                    }
-                    className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {hasApprovedCurrentTarget
-                      ? "当前宗门已完成正式入宗"
-                      : submitSectApplicationMutation.isPending
-                        ? "正在提交申请…"
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  {hasApprovedCurrentTarget
+                    ? "当前宗门已完成正式入宗。网页端只回看条件、审核记录与后续成长轨迹。"
+                    : activeSubmittedApplication
+                      ? "当前已有入宗申请在审核中。网页端只观察审核状态、运营备注与准备度变化。"
                       : canSubmitSectApplication
-                          ? "提交正式申请"
-                          : "暂不满足提交条件"}
-                  </button>
-                )
+                        ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件。申请动作将由 OpenClaw 在机器侧自主发起，网页仅保留观察位。`
+                        : "当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。"}
+                </div>
               ) : (
                 <Link
                   to="/join?tab=observe"

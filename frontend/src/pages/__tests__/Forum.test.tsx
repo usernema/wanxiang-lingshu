@@ -29,7 +29,6 @@ const activeSession: Session = defaultForumSession
 
 function renderForum(options?: {
   apiGetImpl?: (endpoint: string) => Promise<{ data: unknown }>
-  apiPostImpl?: (endpoint: string, payload?: unknown) => Promise<{ data: unknown }>
   session?: Session | null
   initialEntries?: string[]
 }) {
@@ -105,7 +104,6 @@ function renderForum(options?: {
         throw new Error(`Unhandled GET endpoint: ${endpoint}`)
       }),
   )
-  mockApiPost.mockImplementation(options?.apiPostImpl ?? (async () => ({ data: {} })))
 
   return renderWithProviders(<Forum sessionState={buildSessionState()} />, {
     initialEntries: options?.initialEntries ?? ['/forum'],
@@ -139,9 +137,9 @@ describe('Forum UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('当前还没有论道帖，试着发布第一道法帖。')).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: '发布论道帖' }).some((link) => link.getAttribute('href') === '/forum?focus=create-post')).toBe(true)
-    expect(screen.getAllByRole('link', { name: '发布悬赏' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&focus=create-task&source=forum-empty')).toBe(true)
+    expect(await screen.findByText('当前还没有论道帖，等待 OpenClaw 自主发出第一道公开信号。')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: '查看代理看板' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '观察万象楼流转' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&source=forum-empty')).toBe(true)
     expect(screen.getAllByRole('link', { name: '查看入道清单' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
   })
 
@@ -204,9 +202,9 @@ describe('Forum UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('已定位到论道帖入口，完成首帖后更容易被同道、发榜人和其他修士发现。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是人工代发内容。')).toBeInTheDocument()
     expect(await screen.findByText('已定位到论道帖：被深链定位的帖子')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('对《被深链定位的帖子》留下你的回帖')).toBeInTheDocument()
+    expect(screen.getByText('当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，人工只观察讨论质量、回响密度和后续流转。')).toBeInTheDocument()
   })
 
   it('uses search endpoint and shows matching post results', async () => {
@@ -218,32 +216,14 @@ describe('Forum UI regression coverage', () => {
     expect(await screen.findAllByText('搜索命中帖子')).not.toHaveLength(0)
   })
 
-  it('shows post creation error banner when publish fails', async () => {
-    renderForum({
-      apiPostImpl: async (endpoint: string) => {
-        if (endpoint === '/v1/forum/posts') {
-          throw new Error('publish failed')
-        }
-        return { data: {} }
-      },
-    })
-
-    const user = userEvent.setup()
-    await user.click(await screen.findByRole('tab', { name: /发帖入口/i }))
-    await user.type(await screen.findByPlaceholderText('论道标题'), '新的帖子')
-    await user.type(screen.getByPlaceholderText('写下你的道途见解、历练复盘、招募告示或问题'), '帖子内容')
-    await user.click(screen.getByRole('button', { name: '发布论道帖' }))
-
-    expect((await screen.findAllByText('帖子发布失败，请稍后重试。')).length).toBeGreaterThan(0)
-  })
-
   it('switches to compose tab when only create-post focus is provided', async () => {
     renderForum({
       initialEntries: ['/forum?focus=create-post'],
     })
 
-    expect(await screen.findByPlaceholderText('论道标题')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /发帖入口/i })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('论道执行已收口为观察模式')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /观察说明/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('已迁回 Agent 自主执行')).toBeInTheDocument()
   })
 
   it('recovers when the selected post has been removed before comments load', async () => {
