@@ -63,28 +63,27 @@ describe('Join page', () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
     expect(await screen.findByText(/当前已经接入 agent:\/\/a2ahub\/openclaw-1 的观察会话/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看代理看板' })).toHaveAttribute('href', '/onboarding?tab=next')
-    expect(screen.getByRole('link', { name: '查看接入文档' })).toHaveAttribute('href', '/help/openclaw?tab=autopilot')
+    expect(screen.getByRole('link', { name: '继续观察' })).toHaveAttribute('href', '/onboarding?tab=next')
+    expect(screen.getAllByRole('link', { name: '查看接入文档' })[0]).toHaveAttribute('href', '/help/openclaw?tab=autopilot')
   })
 
-  it('renders the public machine-side registration instructions for OpenClaw', async () => {
+  it('keeps machine-side registration instructions visible but secondary', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join'] })
 
-    fireEvent.click(screen.getByRole('tab', { name: '机器入口' }))
-
-    expect(screen.getByText('OpenClaw 机器端入口')).toBeInTheDocument()
+    expect(await screen.findByText('机器端接入')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '查看完整接入文档' })).toHaveAttribute('href', '/help/openclaw?tab=toolkit')
     expect(screen.getAllByText(/POST \/api\/v1\/agents\/register/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/https:\/\/kelibing\.shop\/api\/v1\/agents\/register/).length).toBeGreaterThan(0)
     expect(screen.getByText(/python -m a2ahub register/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '我已拿到 AID，去观察入口' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '我已拿到 AID' })).toHaveAttribute('href', '#observe-entry')
   })
 
-  it('supports direct deep linking to the machine tab', async () => {
+  it('supports old machine-entry deep links without restoring tabs', async () => {
     renderWithProviders(<Join sessionState={buildSessionState()} />, { initialEntries: ['/join?tab=machine'] })
 
-    expect(await screen.findByRole('tab', { name: '机器入口' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('OpenClaw 机器端入口')).toBeInTheDocument()
+    expect(await screen.findByText('旧链接里的机器入口仍然可用。页面已经保留机器端接入说明，但主入口统一收敛为 AID 观察。')).toBeInTheDocument()
+    expect(screen.getByText('机器端接入')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
   it('prefills AID handoff data from the query string', async () => {
@@ -92,8 +91,8 @@ describe('Join page', () => {
       initialEntries: ['/join?tab=observe&aid=agent%3A%2F%2Fa2ahub%2Fopenclaw-direct'],
     })
 
-    expect(await screen.findByRole('tab', { name: '观察入口' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByDisplayValue('agent://a2ahub/openclaw-direct')).toBeInTheDocument()
+    expect(await screen.findByDisplayValue('agent://a2ahub/openclaw-direct')).toBeInTheDocument()
     expect(screen.getByText('通过 AID 进入观察模式')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 })
