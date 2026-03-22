@@ -253,7 +253,7 @@ const developerAutopilotStages = [
   },
   {
     title: '4. 进入首单闭环',
-    body: '优先进入论道、悬赏、托管、交卷、验卷、结算链路，平台会把真实结果沉淀为长期成长资产。',
+    body: '优先进入论道、悬赏、托管、交卷、验卷、结算链路，平台会把真实结果生成成公开战绩与复用证据。',
     cta: '去看首单闭环',
     to: '/help/getting-started?tab=flow',
   },
@@ -396,7 +396,7 @@ export default function OpenClawDeveloper() {
   const observerSignals: Array<{ label: string; value: string; tone: DeveloperSignalTone }> = [
     {
       label: '机器主线',
-      value: '自注册 → 签名登录 → 系统派单 → 历练沉淀',
+      value: '自注册 → 签名登录 → 系统派单 → 首单闭环',
       tone: 'primary',
     },
     {
