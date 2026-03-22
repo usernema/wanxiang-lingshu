@@ -825,7 +825,7 @@ export function AdminGrowthPanel({
         <div>
           <h2 className="text-xl font-semibold text-slate-900">修为成长</h2>
           <p className="text-sm text-slate-500">
-            查看分池结果、手动重评成功任务沉淀出的法卷
+            查看分池结果、手动重评成功任务生成出的法卷
             草稿，以及雇主私有模板。
           </p>
         </div>
@@ -992,7 +992,7 @@ export function AdminGrowthPanel({
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
                     雇主模板 {agent.employer_template_count} · 模板复用{" "}
-                    {agent.template_reuse_count} · 自动沉淀{" "}
+                    {agent.template_reuse_count} · 自动生成{" "}
                     {agent.auto_growth_eligible ? "已就绪" : "待触发"}
                   </p>
                   <p className="mt-1 text-xs text-slate-500">
@@ -1069,7 +1069,7 @@ export function AdminGrowthPanel({
             <div>
               <h3 className="font-semibold text-slate-900">法卷草稿审核</h3>
               <p className="text-sm text-slate-500">
-                对成功任务沉淀的法卷草稿进行通过、发布或归档。
+                对成功任务生成的法卷草稿进行通过、发布或归档。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1205,7 +1205,7 @@ export function AdminGrowthPanel({
             <div>
               <h3 className="font-semibold text-slate-900">雇主模板资产</h3>
               <p className="text-sm text-slate-500">
-                查看成功任务为雇主沉淀下来的复用模板。
+                查看成功任务为雇主生成出的复用模板。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1335,7 +1335,7 @@ export function AdminGrowthPanel({
             <div>
               <h3 className="font-semibold text-slate-900">Experience Cards</h3>
               <p className="text-sm text-slate-500">
-                真实验收后沉淀的经验单元，可用于后续复用和验证。
+                真实验收后生成的经验单元，可用于后续复用和验证。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -1397,7 +1397,7 @@ export function AdminGrowthPanel({
             {!isExperienceCardsLoading &&
               visibleGrowthExperienceCards.length === 0 && (
                 <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-                  当前还没有经验卡沉淀。
+                  当前还没有经验卡记录。
                 </p>
               )}
           </div>
@@ -1851,7 +1851,7 @@ export function AdminWorldOpsPanel({
               宗门运营总览
             </h2>
             <p className="text-sm text-slate-500">
-              把成长分池、道场绑定、任务热度和资产沉淀统一映射到四大宗门，方便运营判断哪里要补人、补题或补流量。
+              把成长分池、道场绑定、任务热度和公开战绩统一映射到四大宗门，方便运营判断哪里要补人、补题或补流量。
             </p>
           </div>
           <span className="rounded-full bg-violet-100 px-3 py-1 text-sm text-violet-800">
@@ -2060,7 +2060,7 @@ export function AdminWorldOpsPanel({
             <div>
               <h2 className="text-xl font-semibold text-slate-900">转宗观察</h2>
               <p className="text-sm text-slate-500">
-                当前成长主域与宗门归属不一致的对象，适合人工复核是否转宗。
+                当前成长主域与宗门归属不一致的对象，适合后台复核是否转宗。
               </p>
             </div>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -3291,7 +3291,7 @@ export function AdminTaskOperationsPanel({
               任务运维队列
             </h2>
             <p className="text-sm text-slate-500">
-              把最容易积压和最需要人工干预的任务先聚出来，值班时直接按队列处理。
+              把最容易积压和最需要后台干预的任务先聚出来，值班时直接按队列处理。
             </p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
@@ -3336,12 +3336,12 @@ export function AdminTaskOperationsPanel({
             recordPending={recordTaskOpsPending}
           />
           <TaskOpsQueueCard
-            title="缺字段待人工复核"
+            title="缺字段待后台复核"
             description="状态、生命周期字段或 escrow / worker 记录不一致，优先排查。"
             count={anomalyQueueItems.length}
             tone={anomalyQueueItems.length > 0 ? "rose" : "emerald"}
             items={anomalyQueueItems}
-            emptyText="当前没有需要人工复核的异常样本。"
+            emptyText="当前没有需要后台复核的异常样本。"
             openTaskDetail={openTaskDetail}
             queueKey="anomaly"
             onRecordDisposition={handleRecordTaskOps}
@@ -3371,7 +3371,7 @@ export function AdminTaskOperationsPanel({
                   任务运维中心
                 </h2>
                 <p className="text-sm text-slate-500">
-                  聚焦任务筛选、异常筛查、历史兼容修复和人工复核。
+                  聚焦任务筛选、异常筛查、历史兼容修复和后台复核。
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
@@ -3445,7 +3445,7 @@ export function AdminTaskOperationsPanel({
                 “归一化历史 assigned”只会处理同时具备{" "}
                 <span className="font-mono text-slate-900">worker_aid</span> 与
                 <span className="font-mono text-slate-900"> escrow_id</span>{" "}
-                的旧任务；缺字段任务会保留原状，供运营人工复核。
+                的旧任务；缺字段任务会保留原状，供运营后台复核。
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <SummaryChip

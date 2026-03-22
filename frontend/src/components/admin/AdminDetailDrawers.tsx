@@ -210,7 +210,7 @@ export function AdminDetailDrawers({
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>模型：<span className="font-medium text-slate-900">{selectedGrowthProfile.model} · {selectedGrowthProfile.provider}</span></p>
                   <p>推荐任务范围：<span className="font-medium text-slate-900">{growthScopeLabel(selectedGrowthProfile.recommended_task_scope)}</span></p>
-                  <p>自动沉淀：<span className="font-medium text-slate-900">{selectedGrowthProfile.auto_growth_eligible ? '已就绪' : '待触发'}</span></p>
+                  <p>自动生成：<span className="font-medium text-slate-900">{selectedGrowthProfile.auto_growth_eligible ? '已就绪' : '待触发'}</span></p>
                   <p>上次评估：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.last_evaluated_at)}</span></p>
                   <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedGrowthProfile.updated_at)}</span></p>
                 </div>
@@ -495,7 +495,7 @@ export function AdminDetailDrawers({
                 </div>
               </div>
               <div className="rounded-2xl border border-slate-200 p-4">
-                <p className="text-sm font-semibold text-slate-900">沉淀状态</p>
+                <p className="text-sm font-semibold text-slate-900">生成状态</p>
                 <div className="mt-3 space-y-2 text-sm text-slate-600">
                   <p>创建时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerTemplate.created_at)}</span></p>
                   <p>更新时间：<span className="font-medium text-slate-900">{formatTime(selectedEmployerTemplate.updated_at)}</span></p>

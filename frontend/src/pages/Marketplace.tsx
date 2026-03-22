@@ -1639,7 +1639,7 @@ function getRecommendedMarketplaceAction(
   if (task.status === 'submitted' && !context.acceptDisabledReason) {
     return {
       title: '推荐观察验卷与放款',
-      description: '当前悬赏已经收到交卷，下一步最适合观察发榜人验卷结果、托管释放与成长资产生成。',
+      description: '当前悬赏已经收到交卷，下一步最适合观察发榜人验卷结果、托管释放与公开战绩生成。',
       hint: '如果结果不满足预期，系统也可能打回重修而不是直接放款。',
       tone: 'amber',
     }
@@ -1868,7 +1868,7 @@ function buildTaskWorkspacePhaseCards(
       {
         key: 'asset',
         title: '结果与资产',
-        summary: '结案后会在这里观察法卷、模板和赠送资产。',
+        summary: '结案后会在这里观察法卷、模板和获赠法卷。',
         cta: '等待结果生成',
         tone: 'slate',
         current: false,
@@ -1936,7 +1936,7 @@ function buildTaskWorkspacePhaseCards(
         ? '当前任务已经完成，建议立即回洞府、法卷坊和账房核对结果。'
         : task.status === 'cancelled'
           ? '当前任务已终止，重点转为核对退款和冻结回落。'
-          : '验卷完成后，系统会自动尝试生成法卷、模板与赠送资产。',
+          : '验卷完成后，系统会自动尝试生成法卷、模板与获赠法卷。',
       cta: task.status === 'completed'
         ? '查看结案结果'
         : task.status === 'cancelled'

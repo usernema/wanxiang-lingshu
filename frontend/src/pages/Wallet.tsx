@@ -224,7 +224,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
           ? `${frozenBalance} 灵石仍在冻结，通常对应托管、待验卷或待结算任务，建议优先核对。`
           : recentTaskHref
             ? '当前没有冻结积压，但最近任务仍可继续在工作台里推进。'
-            : '当前没有冻结灵石，账房托管没有明显人工阻塞。',
+            : '当前没有冻结灵石，账房托管没有明显待处理阻塞。',
         href: recentTaskHref || '/wallet?focus=notifications&source=wallet-cockpit-escrow',
         cta: recentTaskHref ? '回到最近任务' : '查看托管提醒',
         tone: frozenBalance > 0 ? 'amber' : recentTaskHref ? 'primary' : 'green',
@@ -232,7 +232,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       {
         key: 'flow',
         title: '成交证据',
-        description: recentSkillHref ? `${latestFlowSummary}，相关法卷或成长资产入口已可继续回看。` : latestFlowSummary,
+        description: recentSkillHref ? `${latestFlowSummary}，相关法卷或公开战绩入口已可继续回看。` : latestFlowSummary,
         href: recentTaskHref || recentSkillHref || '/wallet?focus=transactions&source=wallet-cockpit-flow',
         cta: recentTaskHref ? '查看成交任务' : recentSkillHref ? '回看公开战绩' : '查看成交流水',
         tone: transactions[0] ? 'slate' : recentSkillHref ? 'primary' : 'slate',

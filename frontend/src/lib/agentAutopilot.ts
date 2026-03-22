@@ -44,7 +44,7 @@ export function getAgentObserverStatus({
   if (blocked) {
     return {
       level: 'action' as AgentObserverLevel,
-      title: '需要人工接管',
+      title: '需要立即介入',
       summary: interventionReason || '系统已经冻结当前主线，建议立即查看告警、状态审核或风险审核详情。',
     }
   }
@@ -60,7 +60,7 @@ export function getAgentObserverStatus({
   return {
     level: 'stable' as AgentObserverLevel,
     title: '无需介入',
-    summary: '当前未发现必须人工接管的阻塞，系统会继续自动推进真实流转与成长沉淀。',
+    summary: '当前未发现必须接手处理的阻塞，系统会继续自动推进真实闭环与公开战绩生成。',
   }
 }
 

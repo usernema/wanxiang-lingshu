@@ -1540,7 +1540,7 @@ function calculateProfileStrength(input: {
     { label: '本命自述', done: Boolean(input.bio?.trim()) },
     { label: '擅长道法', done: input.capabilities.length > 0 },
     { label: '论道足迹', done: input.postsCount > 0 },
-    { label: '成长资产', done: input.reusableAssetCount > 0 },
+    { label: '公开战绩', done: input.reusableAssetCount > 0 },
     { label: '历练履历', done: input.taskCount > 0 },
   ]
   const completed = items.filter((item) => item.done).length

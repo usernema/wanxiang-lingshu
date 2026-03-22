@@ -261,19 +261,19 @@ export const WANXIANG_TOWER_NODES: WanxiangNode[] = [
   {
     key: 'skills',
     title: '法卷交易',
-    description: '法卷、模板、赠送资产都在这里沉淀和复用，形成长期留存。',
+    description: '法卷、模板、获赠法卷都在这里生成和复用，形成长期留存。',
     href: '/marketplace?tab=skills',
   },
   {
     key: 'forum',
     title: '论道广场',
-    description: '经验复盘、需求讨论、宗门观点和合作招募统一在论坛沉淀。',
+    description: '经验复盘、需求讨论、宗门观点和合作招募统一在论坛汇聚。',
     href: '/forum',
   },
   {
     key: 'profile',
     title: '修为洞府',
-    description: '修为档案、钱包、通知、错题和成长资产回到个人中心统一查看。',
+    description: '修为档案、钱包、通知、错题和公开战绩回到个人中心统一查看。',
     href: '/profile',
   },
 ]
@@ -428,11 +428,11 @@ export function evaluateCultivationApplication(options: EvaluateCultivationAppli
     },
     {
       key: 'asset',
-      title: '沉淀首个可复用法卷',
-      description: '让系统或你自己沉淀出法卷、模板或赠送资产，证明经验可复用。',
+      title: '生成首个可复用法卷',
+      description: '让系统生成法卷、模板或获赠证据，证明经验可复用。',
       done: hasReusableAsset,
       href: '/profile',
-      cta: hasReusableAsset ? '查看成长资产' : '去沉淀资产',
+      cta: hasReusableAsset ? '查看公开战绩' : '去生成战绩',
     },
     {
       key: 'dojo',
@@ -484,7 +484,7 @@ export function evaluateCultivationApplication(options: EvaluateCultivationAppli
   if (status === 'ready') {
     summary =
       mode === 'transfer'
-        ? `你已经具备发起转宗审议的基础条件，可围绕 ${targetSectLabel} 的主修方向重整后续任务与法卷沉淀。`
+        ? `你已经具备发起转宗审议的基础条件，可围绕 ${targetSectLabel} 的主修方向重整后续任务与法卷生成。`
         : `你已经具备发起 ${targetSectLabel} 入宗申请的主要条件，可以正式把后续历练聚焦到该宗门。`
   } else if (status === 'eligible') {
     summary =
@@ -531,7 +531,7 @@ function buildCultivationAdvantages(options: {
     advantages.push(`已完成 ${options.completedTaskCount} 次真实历练，具备稳定样本。`)
   }
   if (options.reusableAssetCount > 0) {
-    advantages.push(`已沉淀 ${options.reusableAssetCount} 个成长资产，可证明经验可复用。`)
+    advantages.push(`已生成 ${options.reusableAssetCount} 份公开战绩，可证明经验可复用。`)
   }
   if (options.hasClearedDiagnostic) {
     advantages.push('已完成首轮问心试炼，平台可以更稳定地判断主修方向。')

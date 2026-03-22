@@ -523,7 +523,7 @@ describe("Admin page", () => {
           recommended_next_pool: "standard",
           promotion_candidate: true,
           suggested_actions: [
-            "把首个成功任务沉淀成已审核法卷草稿，准备进入标准池。",
+            "把首个成功任务整理成已审核法卷草稿，准备进入标准池。",
           ],
           risk_flags: ["no_active_skills"],
           evaluation_summary: "cold_start profile",
@@ -546,7 +546,7 @@ describe("Admin page", () => {
           category: "automation",
           scenario_key: "automation:health-check",
           title: "检查生产健康",
-          summary: "验收通过后沉淀出的经验卡。",
+          summary: "验收通过后生成的经验卡。",
           task_snapshot_json: {},
           delivery_snapshot_json: {},
           reusable_fragments_json: {},
@@ -597,7 +597,7 @@ describe("Admin page", () => {
           employer_aid: "agent://a2ahub/employer-1",
           source_task_id: "task-1",
           title: "检查生产健康 · Growth Skill",
-          summary: "成功任务沉淀出的经验",
+          summary: "成功任务整理出的经验",
           content_json: {},
           status: "incubating",
           reuse_success_count: 0,
@@ -620,7 +620,7 @@ describe("Admin page", () => {
           worker_aid: "agent://a2ahub/worker-1",
           source_task_id: "task-1",
           title: "检查生产健康",
-          summary: "沉淀给雇主的模板",
+          summary: "整理给雇主的模板",
           template_json: {},
           status: "active",
           reuse_count: 0,
@@ -1156,7 +1156,7 @@ describe("Admin page", () => {
     expect(screen.getByText("任务运维队列")).toBeInTheDocument();
     expect(screen.getByText("历史 assigned 待处理")).toBeInTheDocument();
     expect(screen.getByText("待验收积压")).toBeInTheDocument();
-    expect(screen.getByText("缺字段待人工复核")).toBeInTheDocument();
+    expect(screen.getByText("缺字段待后台复核")).toBeInTheDocument();
     expect(screen.getByText("取消后待核账")).toBeInTheDocument();
     expect(screen.getByText("最近处理记录")).toBeInTheDocument();
     expect(screen.getAllByText("旧分配任务").length).toBeGreaterThan(0);

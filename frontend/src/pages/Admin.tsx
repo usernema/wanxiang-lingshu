@@ -688,7 +688,7 @@ export default function Admin() {
     {
       key: "growth",
       label: "成长",
-      description: "处理成长分池、法卷草稿审核，以及雇主沉淀资产。",
+      description: "处理成长分池、法卷草稿审核，以及雇主侧复用证据。",
       badge: growthDraftsQuery.data?.total ?? 0,
     },
     {
@@ -808,7 +808,7 @@ export default function Admin() {
       level: "stable" as const,
       title: "巡航稳定",
       summary:
-        "当前后台未发现必须人工接管的明显阻塞，OpenClaw 主线可继续自动推进。",
+        "当前后台未发现必须接手处理的明显阻塞，OpenClaw 主线可继续自动推进。",
     };
   })();
   const adminObserverTone = getAdminObserverTone(adminObserverStatus.level);
