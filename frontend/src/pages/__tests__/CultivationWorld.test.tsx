@@ -1,4 +1,4 @@
-import { fireEvent, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { vi } from "vitest";
 import CultivationWorld from "@/pages/CultivationWorld";
 import { renderWithProviders } from "@/test/renderWithProviders";
@@ -210,8 +210,7 @@ describe("CultivationWorld", () => {
     expect(await screen.findByText("世界视角总结")).toBeInTheDocument();
     expect(screen.getByText("你的当前道途")).toBeInTheDocument();
     expect(screen.getByText("系统主线 · 自动流转稳定")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "宗门观察" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "入宗工作台" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(screen.getByText("宗门总榜")).toBeInTheDocument();
     expect(screen.getByText("当前境界")).toBeInTheDocument();
     expect(screen.getAllByText("金丹期").length).toBeGreaterThan(0);
@@ -222,8 +221,7 @@ describe("CultivationWorld", () => {
     expect(
       screen.getByText("继续完成真实自动化任务，并把成功经验沉淀成公开法卷。"),
     ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "入宗工作台" }));
+    expect(screen.getByText("入宗 / 转宗申请工作台")).toBeInTheDocument();
     expect(screen.getByText("五境界修行图")).toBeInTheDocument();
     expect(screen.getByText("散修 → 入宗主线")).toBeInTheDocument();
   });
@@ -236,10 +234,8 @@ describe("CultivationWorld", () => {
       },
     );
 
-    expect(await screen.findByRole("tab", { name: "入宗工作台" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
+    expect(await screen.findByText("已按深链展开入宗工作台段。世界页现在会把三段观察内容连续展示，减少来回切页和切 tab。")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
     expect(screen.getByText("入宗 / 转宗申请工作台")).toBeInTheDocument();
   });
 
@@ -331,8 +327,6 @@ describe("CultivationWorld", () => {
 
     expect(await screen.findByText("正式宗门")).toBeInTheDocument();
     expect(screen.getByText("推荐路线")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "入宗工作台" }));
     expect(screen.getByText("当前正式宗门 · 铸器谷")).toBeInTheDocument();
     expect(screen.getByText("推荐宗门 · 御灵宗")).toBeInTheDocument();
     expect(screen.getByText("转宗审议：御灵宗")).toBeInTheDocument();

@@ -147,6 +147,8 @@ describe('Forum UI regression coverage', () => {
     renderForum()
 
     expect(await screen.findByText('万象楼 · 论道台')).toBeInTheDocument()
+    expect(screen.getByText('公开信号观察流')).toBeInTheDocument()
+    expect(screen.getByText('只读观察说明')).toBeInTheDocument()
     const postCard = await screen.findByRole('button', { name: /第一篇帖子/i })
     expect(postCard).toBeInTheDocument()
     expect(postCard).toHaveTextContent('作者：forum-agent')
@@ -216,14 +218,17 @@ describe('Forum UI regression coverage', () => {
     expect(await screen.findAllByText('搜索命中帖子')).not.toHaveLength(0)
   })
 
-  it('switches to compose tab when only create-post focus is provided', async () => {
+  it('keeps observer guide visible when only create-post focus is provided', async () => {
     renderForum({
       initialEntries: ['/forum?focus=create-post'],
     })
 
+    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是人工代发内容。')).toBeInTheDocument()
+    expect(screen.getByText('只读观察说明')).toBeInTheDocument()
     expect(await screen.findByText('论道执行已收口为观察模式')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: /观察说明/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('已由 deep link 定位到此处')).toBeInTheDocument()
     expect(screen.getByText('已迁回 Agent 自主执行')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
   it('recovers when the selected post has been removed before comments load', async () => {

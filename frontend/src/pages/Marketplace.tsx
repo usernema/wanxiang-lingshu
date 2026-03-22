@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
 import { api, ensureSession, fetchStarterTaskPack, getActiveRole, getSession, setActiveRole } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
-import PageTabBar from '@/components/ui/PageTabBar'
 import type {
   MarketplaceTask,
   MarketplaceTaskCompleteResponse,
@@ -18,8 +17,6 @@ import type { AppSessionState } from '@/App'
 type Role = 'employer' | 'worker'
 type TaskAction = 'apply' | 'assign' | 'complete' | 'accept' | 'requestRevision' | 'cancel'
 type TaskQueue = 'open' | 'execution' | 'review' | 'completed'
-type TaskPanelTab = 'overview' | 'publish'
-type SkillPanelTab = 'catalog' | 'publish'
 
 type HttpErrorPayload = {
   detail?: string
@@ -458,17 +455,17 @@ function buildMarketplaceObserverSignals({
 }
 
 function buildMarketplaceObserverActions({
-  marketTab,
+  observerSpotlight,
   role,
   selectedTask,
   focusedTaskQueue,
 }: {
-  marketTab: 'tasks' | 'skills'
+  observerSpotlight: 'tasks' | 'skills'
   role: Role
   selectedTask: MarketplaceTask | null
   focusedTaskQueue: TaskQueue | null
 }): MarketplaceObserverAction[] {
-  if (marketTab === 'skills') {
+  if (observerSpotlight === 'skills') {
     return [
       { label: '留在卷面市集', href: '/marketplace?tab=skills', tone: 'primary' },
       { label: '去洞府看沉淀', href: '/profile?source=marketplace-observer', tone: 'secondary' },
@@ -851,9 +848,6 @@ function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplica
 
 export default function Marketplace({ sessionState }: { sessionState: AppSessionState }) {
   const [role, setRole] = useState<Role>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
-  const [marketTab, setMarketTab] = useState<'tasks' | 'skills'>('tasks')
-  const [taskPanelTab, setTaskPanelTab] = useState<TaskPanelTab>('overview')
-  const [skillPanelTab, setSkillPanelTab] = useState<SkillPanelTab>('catalog')
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState('100')
@@ -870,7 +864,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const taskStreamRef = useRef<HTMLDivElement | null>(null)
   const createTaskRef = useRef<HTMLDivElement | null>(null)
+  const skillsSectionRef = useRef<HTMLDivElement | null>(null)
   const publishSkillRef = useRef<HTMLFormElement | null>(null)
   const taskWorkspaceRef = useRef<HTMLDivElement | null>(null)
   const marketplaceSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
@@ -881,53 +877,17 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const focusedSkillId = marketplaceSearchParams.get('skill_id')
   const focusedSkillSource = marketplaceSearchParams.get('source')
   const shouldSyncTaskParam = marketplaceSearchParams.has('task')
+  const observerSpotlight = useMemo<'tasks' | 'skills'>(() => {
+    if (focusedMarketplaceFocus === 'publish-skill' || focusedSkillId || requestedTab === 'skills') {
+      return 'skills'
+    }
+
+    return 'tasks'
+  }, [focusedMarketplaceFocus, focusedSkillId, requestedTab])
 
   useEffect(() => {
     setActiveRole(role)
   }, [role])
-
-  useEffect(() => {
-    if (focusedMarketplaceFocus === 'create-task' || focusedMarketplaceFocus === 'task-workspace') {
-      setMarketTab('tasks')
-      return
-    }
-
-    if (focusedTaskQueue) {
-      setMarketTab('tasks')
-      return
-    }
-
-    if (focusedMarketplaceFocus === 'publish-skill') {
-      setMarketTab('skills')
-      return
-    }
-
-    if (requestedTab === 'tasks' || requestedTab === 'skills') {
-      setMarketTab(requestedTab)
-    }
-  }, [focusedMarketplaceFocus, focusedTaskQueue, requestedTab])
-
-  useEffect(() => {
-    if (focusedMarketplaceFocus === 'create-task') {
-      setTaskPanelTab('publish')
-      return
-    }
-
-    if (focusedTaskQueue || focusedMarketplaceFocus === 'task-workspace' || focusedTaskId || requestedTab === 'tasks') {
-      setTaskPanelTab('overview')
-    }
-  }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, requestedTab])
-
-  useEffect(() => {
-    if (focusedMarketplaceFocus === 'publish-skill') {
-      setSkillPanelTab('publish')
-      return
-    }
-
-    if (focusedSkillId || requestedTab === 'skills') {
-      setSkillPanelTab('catalog')
-    }
-  }, [focusedMarketplaceFocus, focusedSkillId, requestedTab])
 
   const currentSession = getSession('default')
   const employerSession = currentSession
@@ -948,7 +908,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
   const diagnosticsQuery = useQuery({
     queryKey: ['task-diagnostics-consistency'],
-    enabled: sessionState.bootstrapState === 'ready' && marketTab === 'tasks',
+    enabled: sessionState.bootstrapState === 'ready',
     queryFn: async () => {
       const response = await api.get('/v1/marketplace/tasks/diagnostics/consistency')
       return response.data as TaskConsistencyReport
@@ -965,7 +925,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   })
   const starterPackQuery = useQuery({
     queryKey: ['marketplace-starter-pack', currentSession?.aid],
-    enabled: sessionState.bootstrapState === 'ready' && marketTab === 'tasks' && Boolean(currentSession?.aid),
+    enabled: sessionState.bootstrapState === 'ready' && Boolean(currentSession?.aid),
     queryFn: () => fetchStarterTaskPack(currentSession!.aid, 3),
     staleTime: 30_000,
     refetchInterval: 30_000,
@@ -1038,7 +998,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     if (!(shouldSyncTaskParam && requestedTask)) return
 
     const nextSearchParams = new URLSearchParams(location.search)
-    if (marketTab !== 'tasks' || !selectedTaskId || nextSearchParams.get('task') === selectedTaskId) return
+    if (!selectedTaskId || nextSearchParams.get('task') === selectedTaskId) return
 
     nextSearchParams.set('task', selectedTaskId)
 
@@ -1053,7 +1013,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   }, [
     location.pathname,
     location.search,
-    marketTab,
     navigate,
     requestedTask,
     selectedTaskId,
@@ -1166,12 +1125,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   )
   const observerActions = useMemo(
     () => buildMarketplaceObserverActions({
-      marketTab,
+      observerSpotlight,
       role,
       selectedTask,
       focusedTaskQueue,
     }),
-    [focusedTaskQueue, marketTab, role, selectedTask],
+    [focusedTaskQueue, observerSpotlight, role, selectedTask],
   )
   const marketplaceQueueHref = focusedTaskQueue
     ? `/marketplace?${new URLSearchParams({ tab: 'tasks', queue: focusedTaskQueue }).toString()}`
@@ -1227,22 +1186,22 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       {
         key: 'assets',
         title: '成长沉淀',
-        description: marketTab === 'skills'
+        description: observerSpotlight === 'skills'
           ? '当前已切到法卷坊，可以直接运营卷面资产与公开能力。'
           : selectedTask?.status === 'completed'
             ? '当前任务已结案，建议回洞府或法卷坊查看法卷、模板与获赠资产。'
             : '真实闭环完成后，系统会把成功经验沉淀为法卷、模板或获赠资产。',
-        href: marketTab === 'skills' ? '/marketplace?tab=skills' : '/profile?tab=assets',
-        cta: marketTab === 'skills' ? '留在法卷坊' : '查看成长资产',
-        tone: marketTab === 'skills' || selectedTask?.status === 'completed' ? 'green' : 'primary',
+        href: observerSpotlight === 'skills' ? '/marketplace?tab=skills' : '/profile?tab=assets',
+        cta: observerSpotlight === 'skills' ? '留在法卷坊' : '查看成长资产',
+        tone: observerSpotlight === 'skills' || selectedTask?.status === 'completed' ? 'green' : 'primary',
       },
     ]
   }, [
     diagnosticsIssueCount,
     focusedTaskQueue,
-    marketTab,
     marketplaceQueueHref,
     marketplaceWorkspaceHref,
+    observerSpotlight,
     recommendedAction.description,
     recommendedAction.title,
     recommendedAction.tone,
@@ -1253,27 +1212,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     taskQueueGuide?.title,
     visibleTasks.length,
   ])
-  const marketplaceTabs = useMemo(
-    () => [
-      { key: 'tasks', label: '历练榜', badge: visibleTasks.length || tasksQuery.data?.length || 0 },
-      { key: 'skills', label: '法卷坊', badge: skillsQuery.data?.length || 0 },
-    ],
-    [skillsQuery.data?.length, tasksQuery.data?.length, visibleTasks.length],
-  )
-  const taskPanelTabs = useMemo(
-    () => [
-      { key: 'overview', label: '任务总览', badge: selectedTask ? getTaskDecisionState(selectedTask, currentApplications) : visibleTasks.length || '待选' },
-      { key: 'publish', label: observerOnly ? '招贤观察区' : '悬赏观察区', badge: observerOnly ? '只读' : employerSession ? '可用' : '访客' },
-    ],
-    [currentApplications, employerSession, observerOnly, selectedTask, visibleTasks.length],
-  )
-  const skillPanelTabs = useMemo(
-    () => [
-      { key: 'catalog', label: '卷面市集', badge: skillsQuery.data?.length || 0 },
-      { key: 'publish', label: observerOnly ? '沉淀观察区' : '法卷观察区', badge: observerOnly ? '只读' : currentSession ? '可用' : '访客' },
-    ],
-    [currentSession, observerOnly, skillsQuery.data?.length],
-  )
   const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
   const taskWorkspacePhaseCards = useMemo(
     () => buildTaskWorkspacePhaseCards(selectedTask, currentApplications, visibleTaskOutcome),
@@ -1530,13 +1468,17 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           ? publishSkillRef.current
           : focusedMarketplaceFocus === 'task-workspace' || focusedTaskId || focusedTaskQueue
             ? taskWorkspaceRef.current
+            : focusedSkillId || requestedTab === 'skills'
+              ? skillsSectionRef.current
+              : requestedTab === 'tasks'
+                ? taskStreamRef.current
             : null
 
     if (!target) return
     if (typeof target.scrollIntoView === 'function') {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, marketTab, selectedTaskId])
+  }, [focusedMarketplaceFocus, focusedTaskId, focusedTaskQueue, focusedSkillId, requestedTab, selectedTaskId])
 
   const taskListPanel = (
     <div className="rounded-2xl bg-white p-6 shadow-sm">
@@ -1560,7 +1502,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         </select>
       </div>
 
-      {(focusedMarketplaceFocus === 'starter-engine' || starterPackQuery.data?.stage === 'first_order') && (
+      {(focusedMarketplaceFocus === 'starter-engine' || (observerSpotlight === 'tasks' && starterPackQuery.data?.stage === 'first_order')) && (
         <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
@@ -2028,28 +1970,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         </div>
         {actionMessage && <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">{actionMessage}</div>}
         {errorMessage && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
-        {focusedMarketplaceFocus === 'create-task' && marketTab === 'tasks' && (
-          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            {observerOnly ? '已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。' : '已定位到发榜区，可直接创建新的真实悬赏。'}
-          </div>
-        )}
-        {focusedMarketplaceFocus === 'publish-skill' && marketTab === 'skills' && (
-          <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            {observerOnly ? '已定位到法卷发布区，但当前网页只保留观察位。请改为回看沉淀结果与卷面状态。' : '已定位到上架法卷区，可直接沉淀并上架你的能力资产。'}
-          </div>
-        )}
-        {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && marketTab === 'tasks' && (
-          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
-            {requestedTask
-              ? `已定位到悬赏工作台：${requestedTask.title}`
-              : '正在定位指定悬赏；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
-          </div>
-        )}
-        {focusedTaskQueue && marketTab === 'tasks' && (
-          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            {taskQueueBannerCopy}
-          </div>
-        )}
 
         <div className={`mt-4 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -2082,64 +2002,92 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         </div>
       </div>
 
-      <PageTabBar
-        ariaLabel="万象楼主标签"
-        idPrefix="marketplace-main"
-        items={marketplaceTabs}
-        activeKey={marketTab}
-        onChange={(key) => setMarketTab(key as 'tasks' | 'skills')}
-      />
-
-      {marketTab === 'skills' && focusedSkillId && (
-        <div className={`rounded-2xl border px-4 py-3 text-sm ${
-          focusedSkill
-            ? 'border-primary-200 bg-primary-50 text-primary-800'
-            : skillsQuery.isLoading
-              ? 'border-slate-200 bg-slate-50 text-slate-700'
-              : 'border-amber-200 bg-amber-50 text-amber-800'
-        }`}>
-          {skillsQuery.isLoading
-            ? '正在定位指定法卷...'
-            : focusedSkill
-              ? `${focusedSkillSource === 'gifted-grant' ? '已定位到获赠法卷' : '已定位到指定法卷'}：${focusedSkill.name}。你可以在这里继续查看卷面详情、定价和市集反馈。`
-              : '目标法卷当前不在公开市场，可能已下架、未发布或尚未同步。'}
-        </div>
-      )}
-
-      {marketTab === 'tasks' ? (
-        <div className="space-y-4">
-          <PageTabBar
-            ariaLabel="历练榜次级标签"
-            idPrefix="marketplace-task-panel"
-            items={taskPanelTabs}
-            activeKey={taskPanelTab}
-            onChange={(key) => setTaskPanelTab(key as TaskPanelTab)}
-          />
-
-          {taskPanelTab === 'overview' ? (
-            <div className="space-y-4">
-              <DiagnosticsCard diagnosticsQuery={diagnosticsQuery} />
-              <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr]">
-                <div>{taskListPanel}</div>
-                <div>{taskWorkspacePanel}</div>
-              </div>
+      <section ref={taskStreamRef} className="space-y-4">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-900">任务观察主线</div>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">真实成交与交付推进</h2>
+              <p className="mt-2 text-sm text-slate-600">这一段只保留榜单、工作台和一致性异常，让观察者能顺着任务从公开招贤一路看到交付结案。</p>
             </div>
-          ) : (
-            createTaskPanel
-          )}
+            <div className={`rounded-full px-4 py-2 text-sm ${
+              observerSpotlight === 'tasks'
+                ? 'bg-primary-100 text-primary-700'
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {observerSpotlight === 'tasks' ? '当前视线聚焦任务主线' : '任务主线保持常驻'}
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <PageTabBar
-            ariaLabel="法卷坊次级标签"
-            idPrefix="marketplace-skill-panel"
-            items={skillPanelTabs}
-            activeKey={skillPanelTab}
-            onChange={(key) => setSkillPanelTab(key as SkillPanelTab)}
-          />
-          {skillPanelTab === 'catalog' ? skillCatalogPanel : publishSkillPanel}
+
+        {focusedMarketplaceFocus === 'create-task' && (
+          <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+            {observerOnly ? '已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。' : '已定位到发榜区，可直接创建新的真实悬赏。'}
+          </div>
+        )}
+        {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+            {requestedTask
+              ? `已定位到悬赏工作台：${requestedTask.title}`
+              : '正在定位指定悬赏；如果未出现，可能任务已被筛掉、删除，或尚未同步。'}
+          </div>
+        )}
+        {focusedTaskQueue && (
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+            {taskQueueBannerCopy}
+          </div>
+        )}
+
+        <DiagnosticsCard diagnosticsQuery={diagnosticsQuery} />
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.9fr]">
+          <div>{taskListPanel}</div>
+          <div>{taskWorkspacePanel}</div>
         </div>
-      )}
+        <div>{createTaskPanel}</div>
+      </section>
+
+      <section ref={skillsSectionRef} className="space-y-4">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-900">法卷观察主线</div>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">卷面沉淀与能力复用</h2>
+              <p className="mt-2 text-sm text-slate-600">这一段专门回看法卷本身，不再把沉淀说明藏进次级 tab，人类只需要观察卷面资产是否形成。</p>
+            </div>
+            <div className={`rounded-full px-4 py-2 text-sm ${
+              observerSpotlight === 'skills'
+                ? 'bg-primary-100 text-primary-700'
+                : 'bg-slate-100 text-slate-600'
+            }`}>
+              {observerSpotlight === 'skills' ? '当前视线聚焦法卷主线' : '法卷主线保持常驻'}
+            </div>
+          </div>
+        </div>
+
+        {focusedMarketplaceFocus === 'publish-skill' && (
+          <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
+            {observerOnly ? '已定位到法卷发布区，但当前网页只保留观察位。请改为回看沉淀结果与卷面状态。' : '已定位到上架法卷区，可直接沉淀并上架你的能力资产。'}
+          </div>
+        )}
+        {focusedSkillId && (
+          <div className={`rounded-2xl border px-4 py-3 text-sm ${
+            focusedSkill
+              ? 'border-primary-200 bg-primary-50 text-primary-800'
+              : skillsQuery.isLoading
+                ? 'border-slate-200 bg-slate-50 text-slate-700'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+          }`}>
+            {skillsQuery.isLoading
+              ? '正在定位指定法卷...'
+              : focusedSkill
+                ? `${focusedSkillSource === 'gifted-grant' ? '已定位到获赠法卷' : '已定位到指定法卷'}：${focusedSkill.name}。你可以在这里继续查看卷面详情、定价和市集反馈。`
+                : '目标法卷当前不在公开市场，可能已下架、未发布或尚未同步。'}
+          </div>
+        )}
+
+        <div>{skillCatalogPanel}</div>
+        <div>{publishSkillPanel}</div>
+      </section>
     </div>
   )
 }
