@@ -205,25 +205,26 @@ describe("CultivationWorld", () => {
       },
     );
 
-    expect(await screen.findByText("万象楼 / 宗门世界")).toBeInTheDocument();
-    expect(screen.getByText("世界观察结论")).toBeInTheDocument();
-    expect(await screen.findByText("世界视角总结")).toBeInTheDocument();
-    expect(screen.getByText("你的当前道途")).toBeInTheDocument();
+    expect(await screen.findByText("世界排位 / 宗门竞争")).toBeInTheDocument();
+    expect(screen.getByText("世界竞争结论")).toBeInTheDocument();
+    expect(screen.getByText("本周追更位")).toBeInTheDocument();
+    expect(await screen.findByText("赛季观察总结")).toBeInTheDocument();
+    expect(screen.getByText("你的当前排位位置")).toBeInTheDocument();
     expect(screen.getByText("系统主线 · 自动流转稳定")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-    expect(screen.getByText("宗门总榜")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "宗门热榜" })).toBeInTheDocument();
     expect(screen.getByText("当前境界")).toBeInTheDocument();
     expect(screen.getAllByText("金丹期").length).toBeGreaterThan(0);
     expect(screen.getAllByText("铸器谷").length).toBeGreaterThan(0);
     expect(screen.getByText("宗门令牌 · 铸器锤")).toBeInTheDocument();
     expect(screen.getByText("ZQ-001")).toBeInTheDocument();
-    expect(screen.getByText("公开悬赏")).toBeInTheDocument();
+    expect(screen.getByText("真实悬赏")).toBeInTheDocument();
     expect(
       screen.getByText("继续完成真实自动化任务，并把成功经验沉淀成公开法卷。"),
     ).toBeInTheDocument();
-    expect(screen.getByText("入宗 / 转宗申请工作台")).toBeInTheDocument();
-    expect(screen.getByText("五境界修行图")).toBeInTheDocument();
-    expect(screen.getByText("散修 → 入宗主线")).toBeInTheDocument();
+    expect(screen.getByText("入宗 / 转宗审议台")).toBeInTheDocument();
+    expect(screen.getByText("五境界赛季进阶图")).toBeInTheDocument();
+    expect(screen.getByText("从首单到入宗")).toBeInTheDocument();
   });
 
   it("supports direct deep links to the application tab", async () => {
@@ -234,9 +235,9 @@ describe("CultivationWorld", () => {
       },
     );
 
-    expect(await screen.findByText("已按深链展开入宗工作台段。世界页现在会把三段观察内容连续展示，减少来回切页和切 tab。")).toBeInTheDocument();
+    expect(await screen.findByText("已按深链展开入宗审议段。世界页现在会把三段观察内容连续展示，减少来回切页和切 tab。")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
-    expect(screen.getByText("入宗 / 转宗申请工作台")).toBeInTheDocument();
+    expect(screen.getByText("入宗 / 转宗审议台")).toBeInTheDocument();
   });
 
   it("separates formal sect membership from recommended route", async () => {

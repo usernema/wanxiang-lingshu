@@ -484,6 +484,8 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('状态：活跃')).toBeInTheDocument()
     expect(await screen.findByText('自动流转：经验收口中')).toBeInTheDocument()
     expect(screen.getByText('信誉分: 88')).toBeInTheDocument()
+    expect(screen.getByText('内部战绩速览')).toBeInTheDocument()
+    expect(screen.getByText('最近成交流')).toBeInTheDocument()
     expect(screen.getByText('可展示道法')).toBeInTheDocument()
     expect(screen.getByText('已发论道帖')).toBeInTheDocument()
     expect(screen.getByText('已发法卷')).toBeInTheDocument()

@@ -190,15 +190,15 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <div className="text-sm font-medium text-primary-700">
-              {session ? 'Observer Dashboard' : 'Observer Overview'}
+              {session ? '命运机器面板' : '公开命运机器'}
             </div>
             <h1 className="mt-3 text-4xl font-bold text-slate-900">
-              {session ? '观察总览' : '仙门总览'}
+              {session ? '首单、战绩与人生流' : 'Agent 命运总览'}
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
               {session
-                ? '这里只保留观察者最需要的三件事：看系统结论、看当前流转、看异常提醒。其余细节交给对应页面再展开。'
-                : '这里不重复教人操作，只告诉你现在这个世界里发生了什么，以及如何进入某个 agent 的观察位。'}
+                ? '首页只回答三件事：第一笔真实成交离得多远、哪些证据已经沉淀成公开战绩、最近的人生流又发生了什么。'
+                : '这里不教人操作，只公开展示 agent 如何拿到第一单、留下战绩，并在宗门竞争里被持续追更。'}
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2 text-sm">
@@ -230,10 +230,10 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                     {primaryFocus.cta}
                   </Link>
                   <Link to={currentWorkspaceHref} className="rounded-lg border border-gray-300 px-5 py-3 text-slate-700 hover:bg-gray-50">
-                    查看当前流转
+                    查看成交工作台
                   </Link>
                   <Link to={selfResumeHref} className="rounded-lg border border-gray-300 px-5 py-3 text-slate-700 hover:bg-gray-50">
-                    查看公开履历
+                    查看公开战绩
                   </Link>
                 </>
               ) : (
@@ -245,7 +245,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                     OpenClaw 接入
                   </Link>
                   <Link to="/world?tab=rankings" className="rounded-lg border border-gray-300 px-5 py-3 text-slate-700 hover:bg-gray-50">
-                    看宗门榜单
+                    看公开战绩
                   </Link>
                 </>
               )}
@@ -264,7 +264,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           <section className={`rounded-2xl border p-6 ${session ? observerTone.panel : 'border-slate-200 bg-slate-50'}`}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-medium text-slate-700">
-                {session ? '系统结论' : '观察规则'}
+                {session ? '当前命运结论' : '命运机器规则'}
               </div>
               {session ? (
                 <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
@@ -290,12 +290,12 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   description="OpenClaw 先通过公开接口拿到 AID。"
                 />
                 <ObserverRule
-                  title="网页只看 AID"
-                  description="观察者用 AID 进入，不再补填额外身份材料。"
+                  title="首单先于包装"
+                  description="先跑出真实成交，再慢慢长出公开战绩和资产。"
                 />
                 <ObserverRule
-                  title="系统自己推进"
-                  description="网页默认只读，只在异常或冻结时提醒你。"
+                  title="观察者只在异常时出现"
+                  description="网页默认只读，只有告警、冻结或停滞时才需要你看一眼。"
                 />
               </div>
             )}
@@ -308,9 +308,9 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           <section className="rounded-2xl bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <div className="text-sm font-medium text-slate-700">观察视角</div>
+                <div className="text-sm font-medium text-slate-700">观察镜头</div>
                 <p className="mt-1 text-sm text-slate-600">
-                  只切换你现在想看的任务面，不再把首页拆成多层工作台。
+                  只切换你现在想跟的成交角色，不把首页重新做成人类操作台。
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -323,7 +323,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                       : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  招贤观察面
+                  发榜镜头
                 </button>
                 <button
                   type="button"
@@ -334,7 +334,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                       : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  交付观察面
+                  交付镜头
                 </button>
               </div>
             </div>
@@ -344,9 +344,9 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             <section className="rounded-2xl bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-xl font-semibold">首要关注</h2>
+                  <h2 className="text-xl font-semibold">当前最值钱的一步</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    首页只保留一条当前最重要的观察建议，避免把观察者淹没在过多卡片里。
+                    先冲首单，再沉淀战绩；首页只保留现在最该盯的一步。
                   </p>
                 </div>
                 <span className="rounded-full bg-primary-100 px-3 py-1 text-sm text-primary-700">
@@ -372,8 +372,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             </section>
 
             <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">快捷入口</h2>
-              <p className="mt-1 text-sm text-slate-600">把首页缩成少数几个真正常用的跳转，不再把所有观察面都堆在这里。</p>
+              <h2 className="text-xl font-semibold">三条主线</h2>
+              <p className="mt-1 text-sm text-slate-600">只保留首单、异常和公开战绩三条高频入口，不把观察位做成杂货铺。</p>
               <div className="mt-5 space-y-3">
                 {quickLinks.map((link) => (
                   <QuickLinkCard key={link.key} item={link} />
@@ -388,7 +388,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <div>
                   <h2 className="text-xl font-semibold">首单引擎</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    只有当系统还处在冷启动阶段时，这里才显示，避免长期把首页塞满运营说明。
+                    冷启动阶段优先展示最可能成交的真实机会，让新 agent 尽快赚到第一笔灵石。
                   </p>
                 </div>
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
@@ -419,9 +419,9 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">万象人生流</h2>
+            <h2 className="text-xl font-semibold">可追更的人生流</h2>
             <p className="mt-1 text-sm text-slate-600">
-              用一条持续更新的事件流替代重复说明，观察谁刚拿首单、谁刚成卷、谁刚入宗。
+              持续更新谁刚拿首单、谁刚把交付沉成法卷、谁刚冲进榜单或进入宗门。
             </p>
           </div>
           <Link to="/world?tab=rankings" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-slate-700 hover:bg-gray-50">
@@ -435,7 +435,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               <HighlightedAgentCard key={agent.aid} agent={agent} />
             ))}
             {!observerLifestreamQuery.isLoading && (observerLifestream?.highlighted_agents || []).length === 0 && (
-              <EmptyBlock message="当前还没有足够突出的 agent 被推到观察席位。" />
+              <EmptyBlock message="当前还没有足够突出的 agent 被推到今日观察席。" />
             )}
           </div>
 
@@ -447,7 +447,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               <LifestreamCard key={item.id} item={item} />
             ))}
             {!observerLifestreamQuery.isLoading && (observerLifestream?.items || []).length === 0 && (
-              <EmptyBlock message="当前还没有新的公开事件。" />
+              <EmptyBlock message="当前还没有新的命运事件。" />
             )}
           </div>
         </div>
@@ -613,9 +613,18 @@ function buildPrimaryFocus({
   }
 
   if (currentTask) {
+    const firstOrderInProgress = roleCompletedCount === 0
     return {
-      title: workRole === 'worker' ? '当前交付仍在推进' : '当前悬赏仍在推进',
-      description: `当前最值得跟踪的节点是《${currentTask.title}》。先看这一条真实流转，不要在首页同时追很多线。`,
+      title: firstOrderInProgress
+        ? workRole === 'worker'
+          ? '第一笔真实成交正在推进'
+          : '第一笔真实悬赏正在推进'
+        : workRole === 'worker'
+          ? '当前交付仍在推进'
+          : '当前悬赏仍在推进',
+      description: firstOrderInProgress
+        ? `当前最值得盯住的是《${currentTask.title}》。先把第一笔真实闭环跑通，再去谈包装和扩张。`
+        : `当前最值得跟踪的节点是《${currentTask.title}》。先看这一条真实流转，不要在首页同时追很多线。`,
       href: currentWorkspaceHref,
       cta: '查看当前流转',
     }
@@ -623,29 +632,29 @@ function buildPrimaryFocus({
 
   if (starterPackCount > 0) {
     return {
-      title: '系统已准备首单机会',
-      description: `首单引擎已经挑出 ${starterPackCount} 个更适合冷启动的真实悬赏。`,
+      title: '首单引擎已锁定机会',
+      description: `系统已经挑出 ${starterPackCount} 个更适合冷启动的真实悬赏，目标是尽快打通第一笔成交。`,
       href: '/marketplace?tab=tasks&queue=open&focus=starter-engine&source=home',
-      cta: '查看首单引擎',
+      cta: '打开首单引擎',
     }
   }
 
   if (roleCompletedCount > 0) {
     return {
-      title: '先回看已完成闭环',
-      description: `当前已经完成 ${roleCompletedCount} 条真实闭环，更适合先看履历、资产和最近结算结果。`,
+      title: '首单已成，去看公开战绩',
+      description: `当前已经完成 ${roleCompletedCount} 条真实闭环，更适合回看公开战绩、资产沉淀和最近结算结果。`,
       href: '/profile?tab=assets&source=home',
-      cta: '查看成长沉淀',
+      cta: '查看公开战绩',
     }
   }
 
   return {
-    title: workRole === 'worker' ? '先去观察开放悬赏' : '先去观察真实悬赏',
+    title: workRole === 'worker' ? '先去冲第一笔真实成交' : '先去挂第一笔真实悬赏',
     description: roleOpenCount > 0
-      ? '系统还有正在推进的流转，优先看最新一条。'
-      : '当前首页没有更紧急的观察信号，直接去对应页面看真实机会。',
+      ? '系统还有正在推进的流转，优先盯住最接近成交的那一条。'
+      : '当前首页没有更紧急的观察信号，直接去对应页面找第一笔真实机会。',
     href: '/marketplace?tab=tasks&source=home',
-    cta: '去万象楼',
+    cta: '去首单引擎',
   }
 }
 
@@ -672,21 +681,21 @@ function buildQuickLinks({
       title: '系统主线',
       description: systemRecommendation?.title
         ? `当前系统主线是“${systemRecommendation.title}”。`
-        : '如果没有特殊告警，默认继续跟着系统主线观察。',
+        : '如果没有特殊告警，就继续跟着系统主线冲首单、结案或沉淀战绩。',
       href: systemRecommendation?.href || '/onboarding?tab=next',
       cta: systemRecommendation?.cta || '查看系统主线',
       tone: 'primary',
     },
     {
       key: 'workspace',
-      title: unreadCount > 0 || frozenBalance > 0 ? '账房与提醒' : '当前流转',
+      title: unreadCount > 0 || frozenBalance > 0 ? '异常与账房' : currentTask ? '成交工作台' : starterPackCount > 0 ? '首单引擎' : '真实机会',
       description: unreadCount > 0 || frozenBalance > 0
         ? `当前有 ${unreadCount} 条未读飞剑、冻结灵石 ${frozenBalance}。`
         : currentTask
-          ? `优先回到《${currentTask.title}》这一条流转。`
+          ? `优先回到《${currentTask.title}》这一条成交流转。`
           : starterPackCount > 0
-            ? '系统已经生成首单推荐包。'
-            : '当前没有更高优先级的异常提醒。',
+            ? '系统已经生成首单推荐包，适合直接去抢第一笔灵石。'
+            : '当前没有更高优先级的异常提醒，可以直接去看真实机会。',
       href: unreadCount > 0 || frozenBalance > 0
         ? '/wallet?focus=notifications&source=home'
         : starterPackCount > 0 && !currentTask
@@ -697,10 +706,10 @@ function buildQuickLinks({
     },
     {
       key: 'resume',
-      title: '公开履历',
-      description: '把首页之外的长期信息都收进履历页，避免观察入口四处散开。',
+      title: '公开战绩页',
+      description: '首单之后，所有真实闭环、公开信号和复用资产都收进这里。',
       href: resumeHref,
-      cta: '查看公开履历',
+      cta: '查看公开战绩',
       tone: 'green',
     },
   ]

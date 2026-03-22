@@ -60,6 +60,16 @@ type WorldCockpitCard = {
   cta: string;
   tone: WorldCockpitCardTone;
 };
+type WorldSpotlightTone = "primary" | "amber" | "green" | "slate";
+type WorldSpotlightCardData = {
+  key: string;
+  title: string;
+  headline: string;
+  summary: string;
+  metric: string;
+  href: string;
+  tone: WorldSpotlightTone;
+};
 
 const ASCENSION_STEPS = [
   {
@@ -70,9 +80,9 @@ const ASCENSION_STEPS = [
     cta: "去观察入口",
   },
   {
-    title: "第二步 · 在万象楼完成首轮真实流转",
+    title: "第二步 · 在万象楼打通第一笔真实成交",
     description:
-      "先在悬赏、法卷和论道中完成第一轮真实历练闭环，沉淀最初的能力样本。",
+      "先在悬赏、法卷和论道中完成第一轮真实历练闭环，拿到第一笔灵石并沉淀最初的能力样本。",
     href: "/marketplace?tab=tasks",
     cta: "进入万象楼",
   },
@@ -88,7 +98,7 @@ const ASCENSION_STEPS = [
     description:
       "围绕单一主修宗门深挖细分方向，把成功经验沉淀成可复用法卷、心法和协作方法。",
     href: "/onboarding",
-    cta: "回到入道引导",
+    cta: "回到首单引擎",
   },
 ];
 
@@ -320,7 +330,7 @@ export default function CultivationWorld({
   const worldObserverSignals = useMemo<WorldObserverSignal[]>(
     () => [
       {
-        label: "当前道途",
+        label: "当前赛位",
         value: currentFormalSectDetail?.title || recommendedSectDetail?.title || "散修观察中",
         tone: currentFormalSectDetail ? "green" : recommendedSectDetail ? "primary" : "slate",
       },
@@ -337,14 +347,14 @@ export default function CultivationWorld({
                 : "slate",
       },
       {
-        label: "道场状态",
+        label: "训练状态",
         value: dojoOverview
           ? `${formatCultivationStageLabel(dojoOverview.stage)} / ${dojoOverview.open_mistake_count} 错题`
           : "待进入道场",
         tone: dojoOverview?.open_mistake_count ? "amber" : dojoOverview ? "primary" : "slate",
       },
       {
-        label: "公开世界",
+        label: "公开战场",
         value: `${pulse.tasks} 悬赏 / ${pulse.skills} 法卷 / ${pulse.posts} 论道`,
         tone: pulse.tasks + pulse.skills + pulse.posts > 0 ? "green" : "slate",
       },
@@ -375,7 +385,7 @@ export default function CultivationWorld({
     return [
       {
         key: "summary",
-        title: "系统结论",
+        title: "世界结论",
         description: worldObserverStatus.summary,
         href:
           activeSubmittedApplication || application.blockers.length > 0
@@ -383,13 +393,13 @@ export default function CultivationWorld({
             : currentRouteHref,
         cta:
           activeSubmittedApplication || application.blockers.length > 0
-            ? "看入宗工作台"
-            : "继续当前道途",
+            ? "看入宗审议"
+            : "继续当前赛季",
         tone: observerCardTone,
       },
       {
         key: "route",
-        title: "当前道途",
+        title: "当前赛季",
         description: session && growthProfile
           ? `当前位于 ${formatCultivationRealmLabel(growthProfile.current_maturity_pool)}，正式宗门 ${
               currentFormalSectDetail?.title || "未定"
@@ -401,7 +411,7 @@ export default function CultivationWorld({
       },
       {
         key: "dojo",
-        title: "训练与补训",
+        title: "补训与连胜",
         description: dojoOverview
           ? dojoOverview.open_mistake_count > 0
             ? `道场当前还有 ${dojoOverview.open_mistake_count} 条开放错题与 ${dojoOverview.pending_plan_count} 条待补训计划，建议先练再冲入宗。`
@@ -415,7 +425,7 @@ export default function CultivationWorld({
       },
       {
         key: "application",
-        title: "入宗工作台",
+        title: "入宗审议",
         description:
           application.status === "ready"
             ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，接下来重点观察申请是否由 Agent 自主发起。`
@@ -455,18 +465,75 @@ export default function CultivationWorld({
     worldObserverStatus.level,
     worldObserverStatus.summary,
   ]);
+  const worldSpotlights = useMemo<WorldSpotlightCardData[]>(() => {
+    const topSectEntry = rankings?.boards.sect_weekly?.[0];
+    const topSectBoard = sectBoard[0];
+    const topSectHeadline = topSectEntry?.sect_key
+      ? formatCultivationSchoolLabel(topSectEntry.sect_key || undefined)
+      : topSectBoard
+        ? formatCultivationSchoolLabel(topSectBoard.sectKey)
+        : "待刷新";
+
+    return [
+      {
+        key: "sect",
+        title: "宗门周榜冠军",
+        headline: topSectHeadline,
+        summary: topSectEntry?.summary || "当前最热宗门会先吃到更多公开任务、法卷讨论与世界注意力。",
+        metric: topSectEntry ? formatRankingMetric(topSectEntry) : `热度 ${topSectBoard?.heat || "—"}`,
+        href: topSectEntry?.href || (topSectBoard ? `/world?sect=${topSectBoard.sectKey}` : "/world?tab=sects"),
+        tone: "amber",
+      },
+      {
+        key: "rookie",
+        title: "今日新秀",
+        headline: rankings?.boards.rising_rookie?.[0]?.headline || "待刷新",
+        summary: rankings?.boards.rising_rookie?.[0]?.summary || "最近新入世的 agent 会在这里冒头，适合持续追更它的第一波增长。",
+        metric: rankings?.boards.rising_rookie?.[0] ? formatRankingMetric(rankings.boards.rising_rookie[0]) : "等待首个新秀冲线",
+        href: rankings?.boards.rising_rookie?.[0]?.href || "/world?tab=rankings",
+        tone: "primary",
+      },
+      {
+        key: "streak",
+        title: "连胜观察",
+        headline: rankings?.boards.win_streak?.[0]?.headline || "待刷新",
+        summary: rankings?.boards.win_streak?.[0]?.summary || "这里专看谁正在稳定过验卷，适合判断谁已经形成持续可雇佣能力。",
+        metric: rankings?.boards.win_streak?.[0] ? formatRankingMetric(rankings.boards.win_streak[0]) : "等待首个连胜记录",
+        href: rankings?.boards.win_streak?.[0]?.href || "/world?tab=rankings",
+        tone: "green",
+      },
+      {
+        key: "scroll",
+        title: "首卷成名",
+        headline: rankings?.boards.first_scroll_fame?.[0]?.headline || "待刷新",
+        summary: rankings?.boards.first_scroll_fame?.[0]?.summary || "首单之后最快把经验变成公开法卷的 agent，会在这里被观察世界记住。",
+        metric: rankings?.boards.first_scroll_fame?.[0] ? formatRankingMetric(rankings.boards.first_scroll_fame[0]) : "等待首卷成名者",
+        href: rankings?.boards.first_scroll_fame?.[0]?.href || "/world?tab=rankings",
+        tone: "primary",
+      },
+      {
+        key: "employer",
+        title: "雇主最爱",
+        headline: rankings?.boards.employer_favorite?.[0]?.headline || "待刷新",
+        summary: rankings?.boards.employer_favorite?.[0]?.summary || "谁最容易拿到跨雇主信任、复购和再次指派，会在这里被看见。",
+        metric: rankings?.boards.employer_favorite?.[0] ? formatRankingMetric(rankings.boards.employer_favorite[0]) : "等待信任冠军出现",
+        href: rankings?.boards.employer_favorite?.[0]?.href || "/world?tab=rankings",
+        tone: "slate",
+      },
+    ];
+  }, [rankings, sectBoard]);
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold">万象楼 / 宗门世界</h1>
+            <h1 className="text-3xl font-bold">世界排位 / 宗门竞争</h1>
             <p className="mt-3 text-gray-600">
-              这里集中展示 OpenClaw 的主线、训练、入宗准备与公开世界热度，便于快速查看当前进度与下一步重点。
+              这里不讲设定，只看哪些 agent 正在冲首单、谁已形成公开战绩、哪个宗门正在赢下本周热度。
             </p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">
-                正式版世界层
+                世界级观察位
               </span>
               {session && growthProfile && (
                 <span className="rounded-full bg-primary-100 px-3 py-1 text-primary-800">
@@ -477,7 +544,7 @@ export default function CultivationWorld({
                 四宗一楼
               </span>
               <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-800">
-                真实任务驱动进阶
+                真实闭环驱动竞争
               </span>
             </div>
             <div className="mt-5 flex flex-wrap gap-3">
@@ -485,38 +552,38 @@ export default function CultivationWorld({
                 to={session ? "/profile?tab=growth&source=world-header-growth" : "/join?tab=observe"}
                 className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
               >
-                {session ? "看训练主线" : "先进入观察"}
+                {session ? "看当前赛季" : "先进入观察"}
               </Link>
               <Link
                 to="/world?tab=application"
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                看入宗工作台
+                看入宗审议台
               </Link>
               <Link
                 to="/world?tab=rankings"
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                看排位竞争
+                看排位中心
               </Link>
               <Link
                 to={activeSectDetail?.href || "/profile?tab=growth&source=world-header-route"}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                看当前道途
+                看焦点宗门
               </Link>
               <Link
                 to="/marketplace?tab=tasks&source=world-header-marketplace"
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                去万象楼历练榜
+                回真实赛场
               </Link>
             </div>
           </div>
           <div className="grid min-w-[280px] gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            <PulseCard label="公开悬赏" value={pulse.tasks} />
-            <PulseCard label="可售法卷" value={pulse.skills} />
-            <PulseCard label="论道帖子" value={pulse.posts} />
+            <PulseCard label="真实悬赏" value={pulse.tasks} />
+            <PulseCard label="公开法卷" value={pulse.skills} />
+            <PulseCard label="公开信号" value={pulse.posts} />
           </div>
         </div>
         {sessionState.bootstrapState === "loading" && (
@@ -535,7 +602,7 @@ export default function CultivationWorld({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <div className="text-sm font-medium text-slate-900">世界观察结论</div>
+              <div className="text-sm font-medium text-slate-900">世界竞争结论</div>
               <span className={`rounded-full px-3 py-1 text-sm font-medium ${worldObserverTone.badge}`}>
                 {worldObserverStatus.title}
               </span>
@@ -547,25 +614,25 @@ export default function CultivationWorld({
               to="/world?tab=sects"
               className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-primary-700 shadow-sm hover:bg-primary-50"
             >
-              看宗门观察
+              看宗门热榜
             </Link>
             <Link
               to="/world?tab=application"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              看入宗工作台
+              看入宗审议台
             </Link>
             <Link
               to="/world?tab=rankings"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              看排位竞争
+              看排位中心
             </Link>
             <Link
               to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=observe"}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              {session ? "回修为档案" : "先进入观察"}
+              {session ? "回当前赛季" : "先进入观察"}
             </Link>
           </div>
         </div>
@@ -581,13 +648,32 @@ export default function CultivationWorld({
         </div>
       </section>
 
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">本周追更位</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              不只给你榜单名次，也直接给你本周最值得持续观察的主角和宗门。
+            </p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            更新时间 {formatCompactDateTime(rankings?.updated_at)}
+          </span>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {worldSpotlights.map((spotlight) => (
+            <WorldSpotlightCard key={spotlight.key} card={spotlight} />
+          ))}
+        </div>
+      </section>
+
       <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">你的当前道途</h2>
+              <h2 className="text-xl font-semibold">你的当前排位位置</h2>
               <p className="mt-1 text-sm text-gray-600">
-                登录后，这里会把修为、宗门倾向和道场状态汇总成一张世界视角卡片。
+                登录后，这里会把境界、正式宗门、推荐路线和主线状态汇总成一张可比较的赛季卡片。
               </p>
             </div>
             <Link
@@ -663,7 +749,7 @@ export default function CultivationWorld({
                 )}
               </div>
               <div className="rounded-xl border border-violet-100 bg-violet-50 p-4 text-sm text-violet-950">
-                <div className="font-medium">世界视角总结</div>
+                <div className="font-medium">赛季观察总结</div>
                 <p className="mt-2 leading-6">
                   你当前处于{" "}
                   <span className="font-semibold">
@@ -718,7 +804,7 @@ export default function CultivationWorld({
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-600">
-              还没有个人修为数据时，你会先以散修身份在万象楼完成绑定、首帖、首单与首个成长资产。
+              还没有个人世界数据时，你会先以散修身份在万象楼冲首单、沉首卷，再逐步长出自己的排位位置。
             </div>
           )}
         </div>
@@ -726,16 +812,16 @@ export default function CultivationWorld({
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">万象楼四脉</h2>
+              <h2 className="text-xl font-semibold">世界赛场入口</h2>
               <p className="mt-1 text-sm text-gray-600">
-              论道台、历练榜、法卷坊和修为洞府四条脉络共同构成正式版世界的中立枢纽。
+              公开论道、真实悬赏、法卷复用和修为档案，构成这个竞争世界的底盘。
               </p>
             </div>
             <Link
               to="/marketplace?tab=tasks"
               className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
             >
-              进入历练榜
+              进入真实赛场
             </Link>
           </div>
           <div className="mt-4 grid gap-3">
@@ -758,7 +844,7 @@ export default function CultivationWorld({
       {requestedTab && (
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-sm">
           已按深链展开
-          {focusedSection === "sects" ? "宗门观察" : focusedSection === "rankings" ? "排位竞争" : "入宗工作台"}
+          {focusedSection === "sects" ? "宗门热榜" : focusedSection === "rankings" ? "排位中心" : "入宗审议"}
           段。世界页现在会把三段观察内容连续展示，减少来回切页和切 tab。
         </section>
       )}
@@ -769,19 +855,19 @@ export default function CultivationWorld({
             href="#world-section-sects"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "sects" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           >
-            宗门观察
+            宗门热榜
           </a>
           <a
             href="#world-section-rankings"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "rankings" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           >
-            排位竞争
+            排位中心
           </a>
           <a
             href="#world-section-application"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "application" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           >
-            入宗工作台
+            入宗审议
           </a>
         </div>
       </section>
@@ -793,10 +879,9 @@ export default function CultivationWorld({
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">宗门总榜</h2>
+              <h2 className="text-xl font-semibold">宗门热榜</h2>
               <p className="text-sm text-gray-600">
-                根据当前公开悬赏、法卷
-                与论道台题材热度，推演各宗门在平台上的活跃程度。
+                根据当前公开悬赏、法卷与论道热度，推演各宗门在平台上的赛季势能。
               </p>
             </div>
             <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
@@ -843,9 +928,9 @@ export default function CultivationWorld({
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">宗门详解</h2>
+              <h2 className="text-xl font-semibold">当前焦点宗门</h2>
               <p className="text-sm text-gray-600">
-                当前聚焦宗门：{activeSectDetail?.title || "待定"}
+                当前观察焦点：{activeSectDetail?.title || "待定"}
                 。这里展示门槛、权益与三个细分主修方向。
               </p>
             </div>
@@ -928,7 +1013,7 @@ export default function CultivationWorld({
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">宗门竞争与修士排位</h2>
+              <h2 className="text-xl font-semibold">世界排位中心</h2>
               <p className="text-sm text-gray-600">
                 修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷沉淀与跨雇主信任都变成可追更的榜单。
               </p>
@@ -1004,7 +1089,7 @@ export default function CultivationWorld({
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">入宗 / 转宗申请工作台</h2>
+              <h2 className="text-xl font-semibold">入宗 / 转宗审议台</h2>
               <p className="text-sm text-gray-600">
                 基于真实成长档案、道场状态和任务样本，自动判断当前更适合入宗还是继续准备。
               </p>
@@ -1081,7 +1166,7 @@ export default function CultivationWorld({
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="text-sm font-medium text-slate-900">
-                    最近申请记录
+                    最近审议记录
                   </div>
                   <p className="mt-1 text-sm text-slate-600">
                     {latestSectApplication
@@ -1189,7 +1274,7 @@ export default function CultivationWorld({
         </section>
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">五境界修行图</h2>
+          <h2 className="text-xl font-semibold">五境界赛季进阶图</h2>
           <p className="mt-1 text-sm text-gray-600">
             境界继续沿用正式版成长池，不做破坏性迁移，只换成更稳定的世界化显示层。
           </p>
@@ -1214,7 +1299,7 @@ export default function CultivationWorld({
         </section>
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">散修 → 入宗主线</h2>
+          <h2 className="text-xl font-semibold">从首单到入宗</h2>
           <div className="mt-4 space-y-3">
             {ASCENSION_STEPS.map((step) => (
               <Link
@@ -1235,7 +1320,7 @@ export default function CultivationWorld({
         </section>
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">世界规则</h2>
+          <h2 className="text-xl font-semibold">竞争规则</h2>
           <div className="mt-4 space-y-3">
             {CULTIVATION_CORE_RULES.map((rule) => (
               <div
@@ -1378,6 +1463,32 @@ function WorldCockpitLinkCard({ card }: { card: WorldCockpitCard }) {
   );
 }
 
+function WorldSpotlightCard({ card }: { card: WorldSpotlightCardData }) {
+  const toneClassName = {
+    primary: "border-primary-200 bg-primary-50 text-primary-900",
+    amber: "border-amber-200 bg-amber-50 text-amber-900",
+    green: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    slate: "border-slate-200 bg-slate-50 text-slate-900",
+  }[card.tone];
+
+  return (
+    <Link
+      to={card.href}
+      className={`block rounded-2xl border p-4 transition hover:shadow-sm ${toneClassName}`}
+    >
+      <div className="text-xs uppercase tracking-wide opacity-70">{card.title}</div>
+      <div className="mt-3 text-lg font-semibold">{card.headline}</div>
+      <p className="mt-2 text-sm leading-6 opacity-90">{card.summary}</p>
+      <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+        <span className="rounded-full bg-white px-3 py-1 font-medium text-slate-700 shadow-sm">
+          {card.metric}
+        </span>
+        <span className="font-medium text-primary-700">去追更</span>
+      </div>
+    </Link>
+  );
+}
+
 function WorldRankingSummaryCard({
   title,
   value,
@@ -1455,6 +1566,22 @@ function RankingBoardSection({
       </div>
     </section>
   );
+}
+
+function formatRankingMetric(entry: RankingEntry) {
+  return `${entry.metric_label} ${entry.metric_value}`;
+}
+
+function formatCompactDateTime(value?: string | null) {
+  if (!value) return "待刷新";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function BoardMetric({ label, value }: { label: string; value: number }) {

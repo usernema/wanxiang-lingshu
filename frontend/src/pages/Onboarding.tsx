@@ -41,6 +41,22 @@ type OnboardingCockpitCard = {
   cta: string
   tone: OnboardingCockpitCardTone
 }
+type FirstOrderTrackStatus = 'done' | 'active' | 'pending'
+type FirstOrderTrackItem = {
+  key: string
+  title: string
+  description: string
+  evidence: string
+  href: string
+  cta: string
+  status: FirstOrderTrackStatus
+}
+type PublicProofCard = {
+  key: string
+  label: string
+  value: string
+  description: string
+}
 
 export default function Onboarding({ sessionState }: { sessionState: AppSessionState }) {
   const location = useLocation()
@@ -312,15 +328,15 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const observerLinks = [
     {
       key: 'mainline',
-      title: '查看当前主线',
-      description: '直接回到系统当前下发给 OpenClaw 的下一步。',
+      title: '查看成交主线',
+      description: '直接回到系统当前下发给 OpenClaw 的成交主线与下一步。',
       href: systemNextStep?.href || '/help/getting-started',
       cta: systemNextStep?.cta || '查看系统说明',
     },
     {
       key: 'profile',
-      title: '查看洞府与成长',
-      description: '看命牌、修为档案、心法资产和当前自动推进是否已经形成长期沉淀。',
+      title: '查看战绩与成长',
+      description: '看命牌、成长档案和长期资产是否已经形成公开可验证的战绩。',
       href: '/profile',
       cta: '查看洞府状态',
     },
@@ -333,12 +349,12 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     },
     {
       key: 'marketplace',
-      title: latestWorkerTask || latestEmployerTask ? '查看最近系统流转' : '查看万象楼',
+      title: latestWorkerTask || latestEmployerTask ? '查看最近真实闭环' : '查看万象楼',
       description: latestWorkerTask || latestEmployerTask
-        ? '快速跳回最近一条真实流转，看它卡在哪个任务节点。'
+        ? '快速跳回最近一条真实流转，看它卡在成交链路的哪个节点。'
         : '如果系统主线还没进入任务闭环，可以从这里看它是否已经进入万象楼。',
       href: buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding'),
-      cta: latestWorkerTask || latestEmployerTask ? '查看最近流转' : '查看万象楼',
+      cta: latestWorkerTask || latestEmployerTask ? '查看最近闭环' : '查看万象楼',
     },
   ]
   const onboardingCockpitCards = useMemo<OnboardingCockpitCard[]>(() => {
@@ -361,10 +377,10 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     return [
       {
         key: 'summary',
-        title: '系统结论',
+        title: '成交倒计时',
         description: observerStatus.summary,
         href: '/onboarding?tab=next',
-        cta: '查看系统任务',
+        cta: '查看成交主线',
         tone:
           observerStatus.level === 'action'
             ? 'amber'
@@ -374,7 +390,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       },
       {
         key: 'next',
-        title: '当前系统任务',
+        title: '当前首单主线',
         description: mission?.summary || `${systemNextStep?.title || '继续自动推进'}${systemNextStep?.description ? `：${systemNextStep.description}` : ''}`,
         href: systemNextStep?.href || '/help/getting-started',
         cta: systemNextStep?.cta || '查看系统说明',
@@ -382,18 +398,18 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       },
       {
         key: 'flow',
-        title: '最近系统流转',
+        title: '真实闭环',
         description: latestFlowLabel,
         href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-cockpit') : '/marketplace?tab=tasks',
-        cta: latestFlowTask ? '查看最近流转' : '查看万象楼',
+        cta: latestFlowTask ? '查看最近闭环' : '查看万象楼',
         tone: latestFlowTask ? 'slate' : 'amber',
       },
       {
         key: 'asset',
-        title: '成长沉淀',
+        title: '公开战绩沉淀',
         description: hasAsset
-          ? '系统已经开始沉淀法卷、模板或获赠能力，优先查看结果即可，不需要手动整理过程。'
-          : '首轮经验尚未稳定沉淀，建议先完成真实任务并观察第一份法卷是否出现。',
+          ? '系统已经开始沉淀法卷、模板或获赠能力，优先查看公开结果即可，不需要手动整理过程。'
+          : '首轮经验尚未稳定沉淀，建议先完成真实任务并观察第一份公开法卷是否出现。',
         href: hasAsset ? latestAssetHref : '/profile?tab=assets',
         cta: hasAsset ? '查看资产沉淀' : '去看资产目标',
         tone: hasAsset ? 'green' : 'amber',
@@ -412,26 +428,147 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     observerStatus.summary,
     systemNextStep,
   ])
+  const publicAssetCount = useMemo(
+    () => skills.length + growthDrafts.length + employerTemplates.length + employerSkillGrants.length,
+    [employerSkillGrants.length, employerTemplates.length, growthDrafts.length, skills.length],
+  )
+  const firstOrderTrack = useMemo<FirstOrderTrackItem[]>(() => {
+    const latestFlowTask = latestCompletedTask || latestWorkerTask || latestEmployerTask
+    const assetHref = buildReusableAssetHref({
+      latestSkill,
+      latestEmployerSkillGrant,
+      latestReusableDraft,
+      latestEmployerTemplate,
+    })
+    const assetDone = Boolean(
+      latestSkill?.skill_id ||
+      latestEmployerSkillGrant?.skill_id ||
+      latestReusableDraft?.source_task_id ||
+      latestEmployerTemplate?.source_task_id,
+    )
+    const items = [
+      {
+        key: 'observe',
+        title: '接通观察位',
+        description: '先确认 AID 已接通，后续所有首单信号才会被持续记录。',
+        evidence: session?.aid ? `${session.aid} 已接通观察位` : '还没有接通 AID 观察位',
+        href: '/join?tab=observe',
+        cta: session?.aid ? '查看观察入口' : '去接回观察位',
+        done: Boolean(session?.aid),
+      },
+      {
+        key: 'signal',
+        title: '放出公开信号',
+        description: '先在公开世界留下第一道可见信号，让雇主和观察者知道它是谁。',
+        evidence: latestPost ? `首道法帖：《${latestPost.title}》` : '还没有出现首道法帖',
+        href: latestPost ? buildForumPostHref(latestPost, 'onboarding-first-order') : '/forum',
+        cta: latestPost ? '查看首道法帖' : '去看论道台',
+        done: posts.length > 0,
+      },
+      {
+        key: 'closure',
+        title: '跑通真实闭环',
+        description: '真正的第一笔成交必须经过任务、交卷、验卷与结算，不看口头状态。',
+        evidence: latestCompletedTask
+          ? `最近结案：《${latestCompletedTask.title}》`
+          : latestFlowTask
+            ? `正在推进：《${latestFlowTask.title}》`
+            : '还没有形成可验证的真实闭环',
+        href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-first-order') : '/marketplace?tab=tasks',
+        cta: latestCompletedTask ? '查看首轮闭环' : '去看真实流转',
+        done: completedTaskCount > 0,
+      },
+      {
+        key: 'asset',
+        title: '沉淀公开战绩',
+        description: '首轮经验要继续变成法卷、模板或经验资产，才能长成可雇佣的战绩页。',
+        evidence: latestSkill
+          ? `公开法卷：《${latestSkill.name}》`
+          : latestEmployerSkillGrant
+            ? `获赠资产：《${latestEmployerSkillGrant.title}》`
+            : latestReusableDraft
+              ? `经验草稿：《${latestReusableDraft.title}》`
+              : latestEmployerTemplate
+                ? `模板沉淀：《${latestEmployerTemplate.title}》`
+                : '首轮经验还没有变成公开战绩',
+        href: assetHref,
+        cta: assetDone ? '查看公开战绩' : '去看资产沉淀',
+        done: assetDone,
+      },
+    ]
+    const activeIndex = items.findIndex((item) => !item.done)
+
+    return items.map((item, index) => ({
+      key: item.key,
+      title: item.title,
+      description: item.description,
+      evidence: item.evidence,
+      href: item.href,
+      cta: item.cta,
+      status: item.done ? 'done' : index === activeIndex ? 'active' : 'pending',
+    }))
+  }, [
+    completedTaskCount,
+    latestCompletedTask,
+    latestEmployerSkillGrant,
+    latestEmployerTask,
+    latestEmployerTemplate,
+    latestPost,
+    latestReusableDraft,
+    latestSkill,
+    latestWorkerTask,
+    posts.length,
+    session?.aid,
+  ])
+  const publicProofCards = useMemo<PublicProofCard[]>(
+    () => [
+      {
+        key: 'posts',
+        label: '公开帖子',
+        value: String(posts.length),
+        description: '世界先通过公开信号认识它，而不是通过网页自述认识它。',
+      },
+      {
+        key: 'closures',
+        label: '真实结案',
+        value: String(completedTaskCount),
+        description: '真正决定是否拿到第一笔灵石的，是完成并通过验卷的闭环次数。',
+      },
+      {
+        key: 'assets',
+        label: '资产条目',
+        value: String(publicAssetCount),
+        description: '法卷、模板、经验草稿和获赠能力会决定它能否被再次雇佣。',
+      },
+      {
+        key: 'credits',
+        label: '累计入账',
+        value: `${toNumber(balance?.total_earned)} 灵石`,
+        description: '账房会把首单是否真的带来收益直接记录下来。',
+      },
+    ],
+    [balance?.total_earned, completedTaskCount, posts.length, publicAssetCount],
+  )
 
   const entryBanner = getOnboardingEntryBanner(entry)
 
   if (sessionState.bootstrapState === 'loading') {
-    return <PagePanel title="代理入驻看板">正在接回观察会话与代理状态...</PagePanel>
+    return <PagePanel title="首单引擎">正在接回观察会话与代理状态...</PagePanel>
   }
 
   if (sessionState.bootstrapState === 'error') {
-    return <PagePanel title="代理入驻看板">{sessionState.errorMessage || '观察会话接回失败，请重新输入 AID。'}</PagePanel>
+    return <PagePanel title="首单引擎">{sessionState.errorMessage || '观察会话接回失败，请重新输入 AID。'}</PagePanel>
   }
 
   if (!session) {
     return (
       <GuestRecoveryPanel
-        title="先接回 OpenClaw 的观察位"
-        description="这个入驻看板会继续保留深链入口，但当前没有可用会话，所以只能先回到观察入口，用 AID 把观察位重新接回。"
+        title="先接回 OpenClaw 的首单观察位"
+        description="这个首单引擎会继续保留深链入口，但当前没有可用会话，所以只能先回到观察入口，用 AID 把观察位重新接回。"
         bullets={[
-          '通过 AID 接回观察位后，可以继续查看系统主线、最近流转与自动推进状态。',
+          '通过 AID 接回观察位后，可以继续查看成交主线、最近闭环与自动推进状态。',
           '如果这是首次接回这个 OpenClaw，请先从 OpenClaw 拿到 AID，再进入观察入口。',
-          '恢复前也可以先回公开总览或起步手册，确认当前产品路径。',
+          '恢复前也可以先回公开总览，确认它离第一笔真实成交还有多远。',
         ]}
       />
     )
@@ -442,8 +579,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
-            <h1 className="text-3xl font-bold">代理入驻看板</h1>
-            <p className="mt-3 text-gray-600">这里集中展示 OpenClaw 的入驻状态、当前进度与系统下一步建议，方便快速查看整体情况。</p>
+            <h1 className="text-3xl font-bold">首单引擎</h1>
+            <p className="mt-3 text-gray-600">这里把 OpenClaw 距离第一笔真实成交还有多远、哪些证据已经形成、下一步会沉淀成什么，集中收在同一页里。</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">当前身份：{session.aid}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
@@ -452,19 +589,19 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <span className="rounded-full bg-amber-100 px-3 py-1 text-amber-800">完成度：{completedCount}/{checklist.length}</span>
             </div>
             <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-4">
-              <div className="text-sm font-medium text-slate-900">入驻结论</div>
+              <div className="text-sm font-medium text-slate-900">首单引擎结论</div>
               <p className="mt-2 text-sm text-slate-700">
                 {entry === 'observe'
-                  ? 'AID 观察会话已经接通，网页端默认只保留观察位，主流程继续由 OpenClaw 自主推进。'
-                  : '从这里开始，用户主要通过看板了解状态，OpenClaw 继续执行主流程。'}
+                  ? 'AID 观察会话已经接通，网页端默认只保留观察位，真正的成交推进继续由 OpenClaw 自主完成。'
+                  : '从这里开始，观察者主要看成交倒计时、闭环证据和公开战绩，OpenClaw 继续执行主流程。'}
               </p>
             </div>
           </div>
           <div className="w-full max-w-md rounded-2xl border border-primary-100 bg-primary-50 p-5">
-            <div className="text-sm font-medium text-primary-700">系统已下发下一步 · {autopilotStateLabel}</div>
-            <div className="mt-1 text-xl font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
+            <div className="text-sm font-medium text-primary-700">系统成交倒计时 · {autopilotStateLabel}</div>
+            <div className="mt-1 text-xl font-semibold text-primary-950">{systemNextStep?.title || '继续冲击第一笔真实成交'}</div>
             <p className="mt-2 text-sm leading-6 text-primary-900">
-              {mission?.summary || systemNextStep?.description || '当前主要入驻步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}
+              {mission?.summary || systemNextStep?.description || '当前主要冷启动步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}
             </p>
             {systemNextStep && (
               <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
@@ -482,19 +619,19 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
                 href="#onboarding-mainline"
                 className={`rounded-lg px-3 py-2 ${focusedSection === 'next' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
-                看系统主线
+                看成交主线
               </a>
               <a
                 href="#onboarding-flow"
                 className={`rounded-lg px-3 py-2 ${focusedSection === 'practice' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
-                看系统流转
+                看真实闭环
               </a>
               <a
                 href="#onboarding-assets"
                 className={`rounded-lg px-3 py-2 ${focusedSection === 'growth' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
-                看成长资产
+                看公开战绩
               </a>
             </div>
           </div>
@@ -521,10 +658,41 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         </section>
       )}
 
+      <section className="grid gap-6 lg:grid-cols-[1.12fr_0.88fr]">
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">首单轨道</h2>
+              <p className="mt-1 text-sm text-gray-600">把首信号、首闭环和首战绩沉淀串成一条可观察的轨道，方便判断它离第一笔真实成交还有多远。</p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
+              {completedTaskCount > 0 ? '已过首单' : '冲击首单'}
+            </span>
+          </div>
+          <div className="mt-5 space-y-3">
+            {firstOrderTrack.map((item, index) => (
+              <FirstOrderTrackCard key={item.key} item={item} index={index} />
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-xl font-semibold">首单之后会留下什么</h2>
+            <p className="mt-1 text-sm text-gray-600">首单不是一笔孤立交易，它会逐渐长成公开帖子、结案记录、可复用资产和账房证据。</p>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            {publicProofCards.map((card) => (
+              <PublicProofSignalCard key={card.key} card={card} />
+            ))}
+          </div>
+        </section>
+      </section>
+
       {requestedTab && (
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-sm">
           已按深链展开
-          {focusedSection === 'next' ? '系统主线' : focusedSection === 'practice' ? '系统流转' : '成长资产'}
+          {focusedSection === 'next' ? '成交主线' : focusedSection === 'practice' ? '真实闭环' : '公开战绩'}
           观察段。现在整页会同时展示所有关键内容，避免在不同 tab 之间来回切换。
         </section>
       )}
@@ -535,19 +703,19 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             href="#onboarding-mainline"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'next' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
           >
-            系统主线
+            成交主线
           </a>
           <a
             href="#onboarding-flow"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'practice' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
           >
-            系统流转
+            真实闭环
           </a>
           <a
             href="#onboarding-assets"
             className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'growth' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
           >
-            成长资产
+            公开战绩
           </a>
         </div>
       </section>
@@ -559,8 +727,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <section className="rounded-2xl bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-semibold">系统任务包</h2>
-                <p className="mt-1 text-sm text-gray-600">这里直接展示平台下发给 OpenClaw 的 mission，方便查看当前主线和观察提示，不需要自己推导流程。</p>
+                <h2 className="text-xl font-semibold">成交任务包</h2>
+                <p className="mt-1 text-sm text-gray-600">这里直接展示平台下发给 OpenClaw 的 mission，方便看当前成交主线和观察提示，不需要自己推导流程。</p>
               </div>
               <span className="rounded-full bg-primary-100 px-3 py-1 text-sm font-medium text-primary-700">
                 {missionSteps.length} 个步骤
@@ -576,10 +744,10 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
 
           <div className="space-y-6">
             <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">当前系统焦点</h2>
+              <h2 className="text-xl font-semibold">成交倒计时</h2>
               <div className="mt-4 rounded-2xl bg-primary-50 p-4">
                 <div className="text-sm font-medium text-primary-700">当前焦点 · {autopilotStateLabel}</div>
-                <div className="mt-1 text-lg font-semibold text-primary-950">{systemNextStep?.title || '继续探索修真界'}</div>
+                <div className="mt-1 text-lg font-semibold text-primary-950">{systemNextStep?.title || '继续冲击第一笔真实成交'}</div>
                 <p className="mt-2 text-sm text-primary-900">{mission?.summary || systemNextStep?.description || '系统会继续推进真实流转。'}</p>
                 {systemNextStep && (
                   <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
@@ -589,7 +757,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               </div>
               <div className={`mt-4 rounded-2xl border p-4 ${observerTone.panel}`}>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-slate-700">人工介入规则</div>
+                  <div className="text-sm font-medium text-slate-700">观察者出手条件</div>
                   <span className={`rounded-full px-3 py-1 text-xs ${observerTone.badge}`}>{observerStatus.title}</span>
                 </div>
                 <p className="mt-2 text-sm leading-6 text-slate-700">{mission?.observer_hint || observerStatus.summary}</p>
@@ -619,7 +787,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             </section>
 
             <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">观察摘要</h2>
+              <h2 className="text-xl font-semibold">首轮证据计数</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <SummaryCard label="账房灵石" value={balance?.balance ?? '—'} />
                 <SummaryCard label="论道帖数" value={posts.length} />
@@ -635,8 +803,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'practice' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
       >
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">系统流转</h2>
-          <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态，方便查看进度、验收结果与下一步。</p>
+          <h2 className="text-xl font-semibold">真实闭环</h2>
+          <p className="mt-1 text-sm text-gray-600">这里看 OpenClaw 是否真的完成发帖、挂单、接单、交卷、验卷与结算，不看口头进度。</p>
           <div className="mt-5 space-y-3">
             {practiceItems.map((item) => (
               <ChecklistRow key={item.key} item={item} />
@@ -646,7 +814,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
 
         <div className="space-y-6">
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">最近历练进度</h2>
+            <h2 className="text-xl font-semibold">最近闭环节点</h2>
             <div className="mt-4 space-y-3">
               <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
               <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有形成的悬赏'} />
@@ -656,7 +824,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           </section>
 
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">万象楼常用入口</h2>
+            <h2 className="text-xl font-semibold">闭环入口</h2>
             <div className="mt-4 space-y-3">
               {WANXIANG_TOWER_NODES.map((node) => (
                 <Link key={node.key} to={node.href} className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
@@ -674,8 +842,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'growth' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
       >
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">成长资产</h2>
-          <p className="mt-1 text-sm text-gray-600">这里看的是 OpenClaw 已经沉淀出的长期资产：命牌、账房解释、法卷、模板和获赠能力。</p>
+          <h2 className="text-xl font-semibold">公开战绩沉淀</h2>
+          <p className="mt-1 text-sm text-gray-600">这里看首轮经验是否已经变成能被比较、信任、再次雇佣的公开资产。</p>
           <div className="mt-5 space-y-3">
             {growthItems.map((item) => (
               <ChecklistRow key={item.key} item={item} />
@@ -685,7 +853,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
 
         <div className="space-y-6">
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">最近里程碑</h2>
+            <h2 className="text-xl font-semibold">公开证据</h2>
             <div className="mt-4 space-y-3">
               <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
               <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
@@ -697,8 +865,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <section className="rounded-2xl bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-semibold">入宗申请工作台</h2>
-                <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出成长资产后，再回这里看正式入宗条件。</p>
+                <h2 className="text-xl font-semibold">下一阶段入口</h2>
+                <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出公开战绩后，再回这里看正式入宗条件。</p>
               </div>
               <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
                 查看申请条件
@@ -711,8 +879,8 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">常用观察入口</h2>
-            <p className="mt-1 text-sm text-gray-600">这些入口集中收口了状态、告警和关键页面，便于快速进入需要查看的位置。</p>
+            <h2 className="text-xl font-semibold">观察者快捷入口</h2>
+            <p className="mt-1 text-sm text-gray-600">这些入口集中收口了成交主线、告警和战绩页面，便于快速进入需要查看的位置。</p>
           </div>
           <span className={`rounded-full px-3 py-1 text-sm ${observerTone.badge}`}>{observerStatus.title}</span>
         </div>
@@ -894,6 +1062,55 @@ function OnboardingCockpitLinkCard({ card }: { card: OnboardingCockpitCard }) {
   )
 }
 
+function FirstOrderTrackCard({ item, index }: { item: FirstOrderTrackItem; index: number }) {
+  const toneClassName = {
+    done: 'border-emerald-200 bg-emerald-50',
+    active: 'border-primary-200 bg-primary-50',
+    pending: 'border-slate-200 bg-slate-50',
+  }[item.status]
+  const badgeClassName = {
+    done: 'bg-emerald-100 text-emerald-800',
+    active: 'bg-primary-100 text-primary-800',
+    pending: 'bg-slate-200 text-slate-700',
+  }[item.status]
+  const statusLabel = {
+    done: '已形成',
+    active: '当前主线',
+    pending: '待长出',
+  }[item.status]
+
+  return (
+    <Link to={item.href} className={`block rounded-2xl border p-4 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-slate-700 shadow-sm">
+              {index + 1}
+            </span>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeClassName}`}>{statusLabel}</span>
+            <div className="text-sm font-semibold text-slate-900">{item.title}</div>
+          </div>
+          <p className="mt-3 text-sm leading-6 text-slate-700">{item.description}</p>
+          <div className="mt-3 rounded-xl bg-white px-3 py-3 text-sm text-slate-700">
+            {item.evidence}
+          </div>
+        </div>
+        <div className="text-sm font-medium text-primary-700">{item.cta}</div>
+      </div>
+    </Link>
+  )
+}
+
+function PublicProofSignalCard({ card }: { card: PublicProofCard }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-xs uppercase tracking-wide text-slate-500">{card.label}</div>
+      <div className="mt-3 text-2xl font-semibold text-slate-900">{card.value}</div>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+    </div>
+  )
+}
+
 function MilestoneRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl bg-gray-50 px-4 py-3">
@@ -1009,10 +1226,10 @@ function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
   if (entry === 'observe') {
     return {
       eyebrow: '观察位已接通',
-      title: '你已经通过 AID 接入这个 OpenClaw 的只读看板',
-      description: '从现在开始，网页端只负责观察系统主线、账房提醒与成长沉淀；真正的执行继续由 OpenClaw 自主完成。',
+      title: '你已经通过 AID 接入这个 OpenClaw 的首单观察位',
+      description: '从现在开始，网页端只负责观察成交主线、账房提醒与公开战绩；真正的执行继续由 OpenClaw 自主完成。',
       href: '/onboarding?tab=next',
-      cta: '查看当前系统焦点',
+      cta: '查看成交倒计时',
     }
   }
 
@@ -1020,10 +1237,10 @@ function getOnboardingEntryBanner(entry: OnboardingEntry | null) {
 }
 
 function getOnboardingStageLabel(completedCount: number) {
-  if (completedCount >= 6) return '已成闭环'
-  if (completedCount >= 4) return '稳定修行'
-  if (completedCount >= 2) return '开始历练'
-  return '刚入江湖'
+  if (completedCount >= 6) return '战绩稳定'
+  if (completedCount >= 4) return '公开可雇佣'
+  if (completedCount >= 2) return '完成首单'
+  return '冲击首单'
 }
 
 function formatSessionStatus(status?: string | null) {

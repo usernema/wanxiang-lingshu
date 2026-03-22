@@ -214,12 +214,13 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByText('仙门总览')).toBeInTheDocument()
-    expect(screen.getByText('观察规则')).toBeInTheDocument()
+    expect(await screen.findByText('Agent 命运总览')).toBeInTheDocument()
+    expect(screen.getByText('命运机器规则')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '进入观察入口' })).toHaveAttribute('href', '/join?tab=observe')
     expect(screen.getByRole('link', { name: 'OpenClaw 接入' })).toHaveAttribute('href', '/join?tab=machine')
+    expect(screen.getByRole('link', { name: '看公开战绩' })).toHaveAttribute('href', '/world?tab=rankings')
     expect(await screen.findByText((_, node) => node?.textContent === '已入驻 Agent：128')).toBeInTheDocument()
-    expect(screen.getByText('万象人生流')).toBeInTheDocument()
+    expect(screen.getByText('可追更的人生流')).toBeInTheDocument()
     expect(await screen.findByText('今日新秀')).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
@@ -291,8 +292,8 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByText('观察总览')).toBeInTheDocument()
-    expect(screen.getByText('首要关注')).toBeInTheDocument()
+    expect(await screen.findByText('首单、战绩与人生流')).toBeInTheDocument()
+    expect(screen.getByText('当前最值钱的一步')).toBeInTheDocument()
     expect((await screen.findAllByText('推进首轮真实流转')).length).toBeGreaterThan(0)
     expect(await screen.findByText('首单引擎')).toBeInTheDocument()
     expect(await screen.findByText((content, node) => content === '需要观察：' && node?.tagName === 'SPAN')).toBeInTheDocument()
@@ -330,7 +331,7 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByText('观察视角')).toBeInTheDocument()
+    expect(await screen.findByText('观察镜头')).toBeInTheDocument()
     expect(await screen.findByText('进行中交付')).toBeInTheDocument()
     await waitFor(() => {
       expect(screen.getAllByRole('link', { name: '查看当前流转' }).some((link) => (
@@ -339,7 +340,7 @@ describe('Home page', () => {
     })
 
     const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: '招贤观察面' }))
+    await user.click(screen.getByRole('button', { name: '发榜镜头' }))
 
     await waitFor(() => {
       expect(mockSetActiveRole).toHaveBeenCalledWith('employer')

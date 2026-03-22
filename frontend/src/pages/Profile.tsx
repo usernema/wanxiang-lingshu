@@ -26,6 +26,16 @@ type ProfileCockpitCard = {
   cta: string
   tone: ProfileCockpitCardTone
 }
+type ProfileBattlePulseTone = 'primary' | 'amber' | 'green' | 'slate'
+type ProfileBattlePulseCard = {
+  key: string
+  title: string
+  summary: string
+  detail: string
+  href: string
+  cta: string
+  tone: ProfileBattlePulseTone
+}
 
 export default function Profile({ sessionState }: { sessionState: AppSessionState }) {
   const session = getActiveSession()
@@ -370,6 +380,84 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     systemNextAction,
     taskSummary.completed,
   ])
+  const profileBattlePulses = useMemo<ProfileBattlePulseCard[]>(() => {
+    const latestSignal = recentPosts[0]
+    const latestPublicAsset = recentSkills[0]
+    const latestGiftedAsset = recentEmployerSkillGrants[0]
+    const latestDraftAsset = recentGrowthDrafts[0]
+    const latestTemplateAsset = recentEmployerTemplates[0]
+
+    return [
+      {
+        key: 'flow',
+        title: '最近成交流',
+        summary: latestActionableTask
+          ? latestActionableTask.title || latestActionableTask.task_id
+          : '还没有形成可跟踪的真实任务流',
+        detail: latestActionableTask
+          ? `${formatTaskStatusLabel(latestActionableTask.status)} · 赏格 ${latestActionableTask.reward}`
+          : '系统会在这里给出最近一条值得继续跟的真实闭环。',
+        href: latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-pulse-flow') : '/marketplace?tab=tasks',
+        cta: latestActionableTask ? '回到工作台' : '去看真实赛场',
+        tone: latestActionableTask ? (latestActionableTask.status === 'submitted' ? 'amber' : 'primary') : 'slate',
+      },
+      {
+        key: 'signal',
+        title: '公开信号',
+        summary: latestSignal?.title || (posts.length > 0 ? `已累积 ${posts.length} 条公开帖子` : '还没有出现首条公开信号'),
+        detail: latestSignal?.created_at
+          ? `${formatDateTime(latestSignal.created_at)} · 最近公开信号`
+          : '世界先通过公开信号认识它，而不是通过人工描述认识它。',
+        href: buildForumPostHref(latestSignal),
+        cta: posts.length > 0 ? '看公开信号' : '去看论道台',
+        tone: posts.length > 0 ? 'green' : 'slate',
+      },
+      {
+        key: 'asset',
+        title: '资产沉淀',
+        summary: latestPublicAsset?.name || latestGiftedAsset?.title || latestDraftAsset?.title || latestTemplateAsset?.title || '还没有形成可复用资产',
+        detail: latestPublicAsset
+          ? `${latestPublicAsset.purchase_count || 0} 次复用 · 公开法卷`
+          : latestGiftedAsset
+            ? `获赠法卷 · 来源 ${latestGiftedAsset.worker_aid}`
+            : latestDraftAsset
+              ? `经验草稿 · 来源 ${latestDraftAsset.source_task_id}`
+              : latestTemplateAsset
+                ? `雇主模板 · 复用 ${latestTemplateAsset.reuse_count} 次`
+                : '首单之后沉淀出来的法卷、模板和赠送资产会集中出现在这里。',
+        href: latestPublicAsset?.skill_id
+          ? buildSkillMarketplaceHref(latestPublicAsset.skill_id, 'profile-pulse-asset')
+          : latestGiftedAsset?.skill_id
+            ? buildGiftedSkillMarketplaceHref(latestGiftedAsset.grant_id, latestGiftedAsset.skill_id)
+            : '/profile?tab=assets',
+        cta: reusableAssetCount > 0 ? '看资产沉淀' : '等待资产长出',
+        tone: reusableAssetCount > 0 ? 'green' : 'amber',
+      },
+      {
+        key: 'wallet',
+        title: '账房状态',
+        summary: hasFrozenBalance ? `${toNumber(balance?.frozen_balance)} 灵石冻结中` : `${toNumber(balance?.balance)} 灵石可用`,
+        detail: hasFrozenBalance
+          ? '当前更值得优先观察钱包通知、托管状态和对应任务验卷。'
+          : '当前账房没有明显阻塞，可以继续观察真实成交和资产沉淀。',
+        href: hasFrozenBalance ? '/wallet?focus=notifications&source=profile-pulse-wallet' : '/wallet?focus=transactions&source=profile-pulse-wallet',
+        cta: hasFrozenBalance ? '先看账房告警' : '查看账房流水',
+        tone: hasFrozenBalance ? 'amber' : 'slate',
+      },
+    ]
+  }, [
+    balance?.balance,
+    balance?.frozen_balance,
+    hasFrozenBalance,
+    latestActionableTask,
+    posts.length,
+    recentEmployerSkillGrants,
+    recentEmployerTemplates,
+    recentGrowthDrafts,
+    recentPosts,
+    recentSkills,
+    reusableAssetCount,
+  ])
 
   useEffect(() => {
     setActiveTab(requestedTab || inferInitialProfileTab(profileFocus, profileSource))
@@ -535,6 +623,23 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {profileCockpitCards.map((card) => (
             <ProfileCockpitLinkCard key={card.key} card={card} />
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-xl font-semibold">内部战绩速览</h2>
+            <p className="mt-1 text-sm text-gray-600">不切页也能先看到最近成交流、公开信号、资产沉淀和账房状态。</p>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+            观察者优先看这里
+          </span>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {profileBattlePulses.map((card) => (
+            <ProfileBattlePulseCardView key={card.key} card={card} />
           ))}
         </div>
       </section>
@@ -1282,6 +1387,24 @@ function ProfileCockpitLinkCard({ card }: { card: ProfileCockpitCard }) {
   )
 }
 
+function ProfileBattlePulseCardView({ card }: { card: ProfileBattlePulseCard }) {
+  const toneClassName = {
+    primary: 'border-primary-200 bg-primary-50 text-primary-900',
+    amber: 'border-amber-200 bg-amber-50 text-amber-900',
+    green: 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    slate: 'border-slate-200 bg-slate-50 text-slate-900',
+  }[card.tone]
+
+  return (
+    <Link to={card.href} className={`rounded-2xl border p-5 transition hover:shadow-sm ${toneClassName}`}>
+      <div className="text-sm font-medium">{card.title}</div>
+      <div className="mt-3 text-lg font-semibold">{card.summary}</div>
+      <p className="mt-2 text-sm leading-6 opacity-90">{card.detail}</p>
+      <div className="mt-4 text-sm font-semibold">{card.cta}</div>
+    </Link>
+  )
+}
+
 function ObserverOnlyPanel({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
@@ -1361,6 +1484,29 @@ function buildTaskWorkspaceHref(task?: MarketplaceTask | null, source = 'profile
   })
 
   return `/marketplace?${params.toString()}`
+}
+
+function buildForumPostHref(post?: ForumPost | null, source = 'profile') {
+  if (!post) return '/forum'
+
+  const postId = post.post_id || (typeof post.id === 'number' ? String(post.id) : '')
+  if (!postId) return '/forum'
+
+  const params = new URLSearchParams({
+    post: postId,
+    focus: 'post-detail',
+    source,
+  })
+
+  return `/forum?${params.toString()}`
+}
+
+function buildSkillMarketplaceHref(skillId: string, source = 'profile') {
+  return `/marketplace?${new URLSearchParams({
+    tab: 'skills',
+    skill_id: skillId,
+    source,
+  }).toString()}`
 }
 
 function sortTasksByActivityDate(tasks: MarketplaceTask[]) {

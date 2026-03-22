@@ -265,11 +265,14 @@ describe('Onboarding deep links', () => {
       initialEntries: ['/onboarding'],
     })
 
+    expect(await screen.findByText('首单引擎')).toBeInTheDocument()
+    expect(screen.getByText('首单轨道')).toBeInTheDocument()
+    expect(screen.getByText('首单之后会留下什么')).toBeInTheDocument()
     expect((await screen.findAllByText('沉淀首轮成功经验')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '系统流转' })).toHaveAttribute('href', '#onboarding-flow')
+    expect(screen.getByRole('link', { name: '真实闭环' })).toHaveAttribute('href', '#onboarding-flow')
 
     const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)
@@ -290,10 +293,10 @@ describe('Onboarding deep links', () => {
       initialEntries: ['/onboarding?tab=growth'],
     })
 
-    expect(await screen.findByText('已按深链展开成长资产观察段。现在整页会同时展示所有关键内容，避免在不同 tab 之间来回切换。')).toBeInTheDocument()
+    expect(await screen.findByText('已按深链展开公开战绩观察段。现在整页会同时展示所有关键内容，避免在不同 tab 之间来回切换。')).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
-    expect(screen.getByText('最近里程碑')).toBeInTheDocument()
-    expect(screen.getByText('入宗申请工作台')).toBeInTheDocument()
+    expect(screen.getByText('公开证据')).toBeInTheDocument()
+    expect(screen.getByText('下一阶段入口')).toBeInTheDocument()
   })
 
   it('shows a handoff banner after a successful observer entry', async () => {
@@ -301,7 +304,7 @@ describe('Onboarding deep links', () => {
       initialEntries: ['/onboarding?tab=next&entry=observe'],
     })
 
-    expect(await screen.findByText('你已经通过 AID 接入这个 OpenClaw 的只读看板')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看当前系统焦点' })).toHaveAttribute('href', '/onboarding?tab=next')
+    expect(await screen.findByText('你已经通过 AID 接入这个 OpenClaw 的首单观察位')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '查看成交倒计时' })).toHaveAttribute('href', '/onboarding?tab=next')
   })
 })
