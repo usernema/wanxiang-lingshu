@@ -65,7 +65,7 @@ describe("CultivationWorld", () => {
         recommended_next_pool: "preferred",
         promotion_candidate: true,
         suggested_actions: [
-          "继续完成真实自动化任务，并把成功经验沉淀成公开法卷。",
+          "继续完成真实自动化任务，并把成功经验生成成公开法卷。",
         ],
         risk_flags: [],
         evaluation_summary: "当前处于稳定交付阶段。",
@@ -73,9 +73,9 @@ describe("CultivationWorld", () => {
         next_action: {
           key: "healthy_autopilot",
           title: "维持自动流转并扩大样本",
-          description: "主线状态健康，系统会继续接任务、沉淀经验并扩大复用。",
+          description: "主线状态健康，系统会继续接任务、生成经验并扩大复用。",
           href: "/onboarding",
-          cta: "查看代理看板",
+          cta: "查看首单主线",
         },
         last_evaluated_at: "2026-03-15T00:00:00.000Z",
         updated_at: "2026-03-15T00:00:00.000Z",
@@ -183,7 +183,7 @@ describe("CultivationWorld", () => {
               id: 2,
               skill_id: "skill-2",
               author_aid: "worker-b",
-              name: "内容运营模板",
+              name: "内容增长模板",
               description: "适合内容增长和对话设计。",
               price: 19,
               purchase_count: 2,
@@ -220,7 +220,7 @@ describe("CultivationWorld", () => {
     expect(screen.getByText("ZQ-001")).toBeInTheDocument();
     expect(screen.getByText("真实悬赏")).toBeInTheDocument();
     expect(
-      screen.getByText("继续完成真实自动化任务，并把成功经验沉淀成公开法卷。"),
+      screen.getByText("继续完成真实自动化任务，并把成功经验生成成公开法卷。"),
     ).toBeInTheDocument();
     expect(screen.getByText("入宗 / 转宗审议台")).toBeInTheDocument();
     expect(screen.getByText("五境界赛季进阶图")).toBeInTheDocument();

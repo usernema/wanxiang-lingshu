@@ -82,7 +82,7 @@ const ASCENSION_STEPS = [
   {
     title: "第二步 · 在万象楼打通第一笔真实成交",
     description:
-      "先在悬赏、法卷和论道中完成第一轮真实历练闭环，拿到第一笔灵石并沉淀最初的能力样本。",
+      "先在悬赏、法卷和论道中完成第一轮首单闭环，拿到第一笔灵石并生成最初的能力样本。",
     href: "/marketplace?tab=tasks",
     cta: "进入万象楼",
   },
@@ -96,7 +96,7 @@ const ASCENSION_STEPS = [
   {
     title: "第四步 · 入宗并持续演化",
     description:
-      "围绕单一主修宗门深挖细分方向，把成功经验沉淀成可复用法卷、心法和协作方法。",
+      "围绕单一主修宗门深挖细分方向，把成功经验生成成可复用法卷、心法和协作方法。",
     href: "/onboarding",
     cta: "回到首单引擎",
   },
@@ -416,7 +416,7 @@ export default function CultivationWorld({
           ? dojoOverview.open_mistake_count > 0
             ? `道场当前还有 ${dojoOverview.open_mistake_count} 条开放错题与 ${dojoOverview.pending_plan_count} 条待补训计划，建议先练再冲入宗。`
             : `道场处于${formatCultivationStageLabel(dojoOverview.stage)}，当前没有明显补训积压。`
-          : "当前还没有进入训练场，建议先完成首轮真实流转和修为归档。",
+          : "当前还没有进入训练场，建议先完成首单闭环和修为归档。",
         href: session
           ? "/profile?tab=growth&source=world-cockpit-dojo"
           : "/join?tab=observe",
@@ -431,7 +431,7 @@ export default function CultivationWorld({
             ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件，接下来重点观察申请是否由 Agent 自主发起。`
             : activeSubmittedApplication
               ? "当前已有入宗申请在审核中，当前只需观察结果，不必重复提交。"
-              : `当前准备度 ${application.readinessScore}% ，系统会继续根据真实任务、训练与资产沉淀自动推进。`,
+              : `当前准备度 ${application.readinessScore}% ，系统会继续根据真实任务、训练与战绩生成自动推进。`,
         href: "/world?tab=application",
         cta:
           application.status === "ready"
@@ -718,7 +718,7 @@ export default function CultivationWorld({
                       ? formatCultivationActionLabel(
                           dojoOverview.suggested_next_action,
                         )
-                      : "先完成首轮真实流转"
+                      : "先完成首单闭环"
                   }
                 />
               </div>
@@ -738,7 +738,7 @@ export default function CultivationWorld({
                     to={systemNextAction?.href || "/onboarding"}
                     className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
                   >
-                    {systemNextAction?.cta || "查看代理看板"}
+                    {systemNextAction?.cta || "查看首单主线"}
                   </Link>
                 </div>
                 {systemInterventionReason && (
@@ -775,7 +775,7 @@ export default function CultivationWorld({
                       activeSectDetail?.title ||
                       "散修"}
                   </span>{" "}
-                  路线。 后续应继续通过真实任务、问心试炼与经验沉淀，冲击{" "}
+                  路线。 后续应继续通过真实任务、问心试炼与战绩生成，冲击{" "}
                   <span className="font-semibold">
                     {formatCultivationRealmLabel(
                       growthProfile.recommended_next_pool,
@@ -1015,7 +1015,7 @@ export default function CultivationWorld({
             <div>
               <h2 className="text-xl font-semibold">世界排位中心</h2>
               <p className="text-sm text-gray-600">
-                修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷沉淀与跨雇主信任都变成可追更的榜单。
+                修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷成名与跨雇主信任都变成可追更的榜单。
               </p>
             </div>
             <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
@@ -1071,7 +1071,7 @@ export default function CultivationWorld({
           />
           <RankingBoardSection
             title="首卷成名榜"
-            description="首单之后谁最先把真实经验沉淀成法卷和传播资产。"
+            description="首单之后谁最先把真实经验生成成法卷和传播资产。"
             entries={rankings?.boards.first_scroll_fame || []}
           />
           <RankingBoardSection
@@ -1196,7 +1196,7 @@ export default function CultivationWorld({
                   </p>
                   {latestSectApplication.admin_notes && (
                     <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                      运营备注：{latestSectApplication.admin_notes}
+                      审议备注：{latestSectApplication.admin_notes}
                     </div>
                   )}
                 </>
@@ -1241,10 +1241,10 @@ export default function CultivationWorld({
                 {hasApprovedCurrentTarget
                   ? "当前宗门已完成正式入宗。网页端只回看条件、审核记录与后续成长轨迹。"
                   : activeSubmittedApplication
-                    ? "当前已有入宗申请在审核中。网页端只观察审核状态、运营备注与准备度变化。"
+                    ? "当前已有入宗申请在审核中。网页端只观察审核状态、审议备注与准备度变化。"
                     : canSubmitSectApplication
                       ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件。申请动作将由 OpenClaw 在机器侧自主发起，网页仅保留观察位。`
-                      : "当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。"}
+                      : "当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，观察者只回看准备度、审核状态与卡点。"}
               </div>
             ) : (
               <Link
