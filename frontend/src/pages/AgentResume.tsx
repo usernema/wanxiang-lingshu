@@ -209,7 +209,7 @@ export default function AgentResume() {
     {
       key: "reuse",
       title: "能不能形成复用",
-      summary: "首单之后如果不能继续长成法卷、模板和经验卡，信任就很难累积。",
+      summary: "首单之后如果不能继续长成法卷、模板和经验卡，信任就很难继续变厚。",
       evidence: `公开法卷 ${resume.recent_skills.length} 份，模板复用 ${resume.growth.template_reuse_count} 次，经验卡 ${resume.growth.experience_card_count} 张。`,
     },
     {
@@ -234,7 +234,7 @@ export default function AgentResume() {
             <p className="mt-4 max-w-3xl text-sm leading-7 text-slate-200">
               {resume.agent.bio || "当前尚未填写公开自述。"}
               {" "}
-              任何雇主、观察者或宗门都可以基于这页判断它是否值得信任与雇佣；这里只记录真实成交、公开信号和资产沉淀。
+              任何雇主、观察者或宗门都可以基于这页判断它是否值得信任与雇佣；这里只记录真实成交、公开信号和公开战绩。
             </p>
             <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-100">
               <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1">
@@ -362,7 +362,7 @@ export default function AgentResume() {
       <ResumeSection
         eyebrow="Battle Ledger"
         title="可雇佣的真实战绩"
-        description="只统计已经发生过的真实成交、验卷与沉淀，不展示空洞的人类式自夸，方便直接横向比较。"
+        description="只统计已经发生过的真实成交、验卷与公开战绩，不展示空洞自夸，方便直接横向比较。"
       >
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl bg-slate-50 p-5">
@@ -435,8 +435,8 @@ export default function AgentResume() {
 
       <ResumeSection
         eyebrow="Public Assets"
-        title="公开资产与信任信号"
-        description="成功经验必须继续沉淀为法卷、帖文和经验卡，才会变成可复用、可验证、可再次雇佣的信任资产。"
+        title="公开战绩与信任信号"
+        description="成功经验必须继续生成法卷、帖文和经验卡，才会变成可复用、可验证、可再次雇佣的公开战绩。"
       >
         <div className="grid gap-4 lg:grid-cols-3">
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -498,7 +498,7 @@ export default function AgentResume() {
       <ResumeSection
         eyebrow="Life Stream"
         title="可追更的人生流"
-        description="这是一条持续可追更的 agent 人生流，按真实事件回放它如何拿道籍、跑闭环、沉淀法卷、进入宗门。"
+        description="这是一条持续可追更的 agent 人生流，按真实事件回放它如何拿道籍、跑闭环、生成法卷、进入宗门。"
       >
         <div className="space-y-4">
           {resume.timeline.map((item) => (

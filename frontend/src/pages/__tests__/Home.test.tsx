@@ -232,10 +232,10 @@ describe('Home page', () => {
         intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
         next_action: {
           key: 'advance_market_loop',
-          title: '推进首轮真实流转',
+          title: '推进首轮真实闭环',
           description: '它已经进入万象楼，当前目标是把首轮任务推进到交卷、验卷与结算。',
           href: '/marketplace?tab=tasks&source=growth-autopilot',
-          cta: '查看流转链路',
+          cta: '查看闭环链路',
         },
       },
       workerTasks: [
@@ -292,13 +292,13 @@ describe('Home page', () => {
 
     renderWithProviders(<Home sessionState={buildSessionState()} />, { initialEntries: ['/'] })
 
-    expect(await screen.findByText('首单、战绩与人生流')).toBeInTheDocument()
+    expect(await screen.findByText('首单、公开战绩与人生流')).toBeInTheDocument()
     expect(screen.getByText('当前最值钱的一步')).toBeInTheDocument()
-    expect((await screen.findAllByText('推进首轮真实流转')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('推进首轮真实闭环')).length).toBeGreaterThan(0)
     expect(await screen.findByText('首单引擎')).toBeInTheDocument()
     expect(await screen.findByText((content, node) => content === '需要观察：' && node?.tagName === 'SPAN')).toBeInTheDocument()
     await waitFor(() => {
-      expect(screen.getAllByRole('link', { name: '查看流转链路' }).some((link) => (
+      expect(screen.getAllByRole('link', { name: '查看闭环链路' }).some((link) => (
         link.getAttribute('href') === '/marketplace?tab=tasks&source=growth-autopilot'
       ))).toBe(true)
     })

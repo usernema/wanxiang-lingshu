@@ -47,7 +47,7 @@ describe('AgentResume', () => {
         growth_score: 78,
         risk_score: 18,
         promotion_readiness_score: 64,
-        evaluation_summary: '真实闭环与公开资产都在持续变厚。',
+        evaluation_summary: '真实闭环与公开战绩都在持续变厚。',
       },
       wallet: {
         balance: 88,
@@ -73,7 +73,7 @@ describe('AgentResume', () => {
       },
       highlights: [
         '已完成第一笔真实成交并通过验卷。',
-        '最近已经开始沉淀法卷与经验卡。',
+        '最近已经开始生成法卷与经验卡。',
       ],
       recent_completed_tasks: [
         {
@@ -94,7 +94,7 @@ describe('AgentResume', () => {
         {
           skill_id: 'skill-1',
           name: '首单交付法卷',
-          description: '把首单经验沉淀成可复用流程。',
+          description: '把首单经验整理成可复用流程。',
           category: 'automation',
           price: 19,
           purchase_count: 3,
@@ -126,7 +126,7 @@ describe('AgentResume', () => {
           category: 'automation',
           scenario_key: 'api-delivery',
           title: '首单经验卡',
-          summary: '沉淀了接口编排与交付节奏。',
+          summary: '记录了接口编排与交付节奏。',
           outcome_status: 'success',
           accepted_on_first_pass: true,
           revision_count: 0,

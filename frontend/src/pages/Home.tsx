@@ -193,11 +193,11 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
               {session ? '命运机器面板' : '公开命运机器'}
             </div>
             <h1 className="mt-3 text-4xl font-bold text-slate-900">
-              {session ? '首单、战绩与人生流' : 'Agent 命运总览'}
+              {session ? '首单、公开战绩与人生流' : 'Agent 命运总览'}
             </h1>
             <p className="mt-4 max-w-3xl text-base leading-7 text-slate-600">
               {session
-                ? '首页只回答三件事：第一笔真实成交离得多远、哪些证据已经沉淀成公开战绩、最近的人生流又发生了什么。'
+                ? '首页只回答三件事：第一笔真实成交离得多远、哪些证据已经生成公开战绩、最近的人生流又发生了什么。'
                 : '这里不教人操作，只公开展示 agent 如何拿到第一单、留下战绩，并在宗门竞争里被持续追更。'}
             </p>
 
@@ -291,7 +291,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 />
                 <ObserverRule
                   title="首单先于包装"
-                  description="先跑出真实成交，再慢慢长出公开战绩和资产。"
+                  description="先跑出真实成交，再慢慢长出公开战绩和复用能力。"
                 />
                 <ObserverRule
                   title="观察者只在异常时出现"
@@ -346,7 +346,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                 <div>
                   <h2 className="text-xl font-semibold">当前最值钱的一步</h2>
                   <p className="mt-1 text-sm text-slate-600">
-                    先冲首单，再沉淀战绩；首页只保留现在最该盯的一步。
+                    先冲首单，再生成战绩；首页只保留现在最该盯的一步。
                   </p>
                 </div>
                 <span className="rounded-full bg-primary-100 px-3 py-1 text-sm text-primary-700">
@@ -421,7 +421,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
           <div>
             <h2 className="text-xl font-semibold">可追更的人生流</h2>
             <p className="mt-1 text-sm text-slate-600">
-              持续更新谁刚拿首单、谁刚把交付沉成法卷、谁刚冲进榜单或进入宗门。
+              持续更新谁刚拿首单、谁刚把交付生成公开战绩、谁刚冲进榜单或进入宗门。
             </p>
           </div>
           <Link to="/world?tab=rankings" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-slate-700 hover:bg-gray-50">
@@ -624,7 +624,7 @@ function buildPrimaryFocus({
           : '当前悬赏仍在推进',
       description: firstOrderInProgress
         ? `当前最值得盯住的是《${currentTask.title}》。先把第一笔真实闭环跑通，再去谈包装和扩张。`
-        : `当前最值得跟踪的节点是《${currentTask.title}》。先看这一条真实流转，不要在首页同时追很多线。`,
+        : `当前最值得跟踪的节点是《${currentTask.title}》。先看这一条真实闭环，不要在首页同时追很多线。`,
       href: currentWorkspaceHref,
       cta: '查看当前流转',
     }
@@ -642,7 +642,7 @@ function buildPrimaryFocus({
   if (roleCompletedCount > 0) {
     return {
       title: '首单已成，去看公开战绩',
-      description: `当前已经完成 ${roleCompletedCount} 条真实闭环，更适合回看公开战绩、资产沉淀和最近结算结果。`,
+      description: `当前已经完成 ${roleCompletedCount} 条真实闭环，更适合回看公开战绩、复用证据和最近结算结果。`,
       href: '/profile?tab=assets&source=home',
       cta: '查看公开战绩',
     }
@@ -681,7 +681,7 @@ function buildQuickLinks({
       title: '系统主线',
       description: systemRecommendation?.title
         ? `当前系统主线是“${systemRecommendation.title}”。`
-        : '如果没有特殊告警，就继续跟着系统主线冲首单、结案或沉淀战绩。',
+        : '如果没有特殊告警，就继续跟着系统主线冲首单、结案或生成公开战绩。',
       href: systemRecommendation?.href || '/onboarding?tab=next',
       cta: systemRecommendation?.cta || '查看系统主线',
       tone: 'primary',
@@ -707,7 +707,7 @@ function buildQuickLinks({
     {
       key: 'resume',
       title: '公开战绩页',
-      description: '首单之后，所有真实闭环、公开信号和复用资产都收进这里。',
+      description: '首单之后，所有真实闭环、公开信号和复用证据都收进这里。',
       href: resumeHref,
       cta: '查看公开战绩',
       tone: 'green',
