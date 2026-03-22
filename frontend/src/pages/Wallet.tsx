@@ -148,9 +148,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
   )
   const walletTabs = useMemo(
     () => [
-      { key: 'overview', label: '观察总览', badge: observerStatus.title },
+      { key: 'overview', label: '首单总览', badge: observerStatus.title },
       { key: 'notifications', label: '飞剑传书', badge: unreadNotificationCount },
-      { key: 'transactions', label: '流水记录', badge: transactions.length },
+      { key: 'transactions', label: '成交流水', badge: transactions.length },
     ],
     [observerStatus.title, transactions.length, unreadNotificationCount],
   )
@@ -188,12 +188,12 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         }`
       : notifications[0]?.title
         ? `飞剑：${notifications[0].title}`
-        : '尚未形成首轮闭环'
+        : '尚未形成首笔成交证据'
 
     return [
       {
         key: 'summary',
-        title: '系统结论',
+        title: '首单结论',
         description: observerStatus.summary,
         href:
           unreadNotificationCount > 0
@@ -201,12 +201,12 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
             : transactions.length > 0
               ? '/wallet?focus=transactions&source=wallet-cockpit-summary'
               : '/marketplace?tab=tasks&source=wallet-cockpit-summary',
-        cta: unreadNotificationCount > 0 ? '先看飞剑告警' : transactions.length > 0 ? '查看最近流水' : '去观察首轮闭环',
+        cta: unreadNotificationCount > 0 ? '先看风险飞剑' : transactions.length > 0 ? '查看成交流水' : '去观察首单闭环',
         tone: observerCardTone,
       },
       {
         key: 'notifications',
-        title: '飞剑与告警',
+        title: '风险飞剑',
         description:
           unreadNotificationCount > 0
             ? `当前有 ${unreadNotificationCount} 封未读飞剑，建议先处理静默中的托管、审核或状态变化。`
@@ -219,7 +219,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       },
       {
         key: 'escrow',
-        title: '托管与冻结',
+        title: '冻结风险',
         description: frozenBalance > 0
           ? `${frozenBalance} 灵石仍在冻结，通常对应托管、待验卷或待结算任务，建议优先核对。`
           : recentTaskHref
@@ -231,10 +231,10 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       },
       {
         key: 'flow',
-        title: '最近流转',
+        title: '成交证据',
         description: recentSkillHref ? `${latestFlowSummary}，相关法卷或成长资产入口已可继续回看。` : latestFlowSummary,
         href: recentTaskHref || recentSkillHref || '/wallet?focus=transactions&source=wallet-cockpit-flow',
-        cta: recentTaskHref ? '查看任务流水' : recentSkillHref ? '回看相关法卷' : '查看账簿流水',
+        cta: recentTaskHref ? '查看成交任务' : recentSkillHref ? '回看公开战绩' : '查看成交流水',
         tone: transactions[0] ? 'slate' : recentSkillHref ? 'primary' : 'slate',
       },
     ]
@@ -249,32 +249,32 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-8 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">灵石钱庄 · 运营账房</h1>
-            <p className="mt-3 max-w-3xl text-gray-600">这里集中展示 OpenClaw 真实流转中的结算状态、冻结托管、飞剑提醒和最近流水，便于快速确认是否需要介入。</p>
+            <h1 className="text-3xl font-bold">首单收益与风险账房</h1>
+            <p className="mt-3 max-w-3xl text-gray-600">这里把 OpenClaw 的首单成交、托管冻结、放款提醒与最近流水压成一张观察账房，帮助你快速判断现在是在赚钱、卡单，还是需要介入。</p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
                 to={unreadNotificationCount > 0 ? '/wallet?focus=notifications&source=wallet-header-primary' : '/wallet?focus=transactions&source=wallet-header-primary'}
                 className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
               >
-                {unreadNotificationCount > 0 ? '先看飞剑告警' : '继续账房观察'}
+                {unreadNotificationCount > 0 ? '先看风险飞剑' : '继续观察首单'}
               </Link>
               <Link
                 to={recentTaskHref || '/marketplace?tab=tasks&source=wallet-header-task'}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                {recentTaskHref ? '回到最近任务' : '去万象楼任务台'}
+                {recentTaskHref ? '回到成交任务' : '去看首单任务'}
               </Link>
               <Link
                 to={recentSkillHref || '/marketplace?tab=skills&source=wallet-header-skill'}
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                {recentSkillHref ? '回看相关法卷' : '去看法卷资产'}
+                {recentSkillHref ? '回看成交法卷' : '去看公开战绩'}
               </Link>
               <Link
                 to="/profile?tab=assets&source=wallet-header-assets"
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
-                去看成长资产
+                去看成长战绩
               </Link>
             </div>
           </div>
@@ -282,7 +282,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </div>
 
         <div className={`mt-5 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
-          <div className="text-sm font-medium text-slate-900">账房结论</div>
+          <div className="text-sm font-medium text-slate-900">首单账房结论</div>
           <p className="mt-2 text-sm text-slate-700">{observerStatus.summary}</p>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             {observerSignals.map((signal) => (
@@ -308,31 +308,31 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         />
       </section>
 
-      {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载账房...</div>}
-      {(balanceQuery.isError || transactionsQuery.isError) && <div className="rounded-2xl bg-red-50 p-6 text-sm text-red-700">加载账房失败，请检查 gateway 与 credit service。</div>}
+      {balanceQuery.isLoading && <div className="rounded-2xl bg-white p-6 text-sm text-gray-600 shadow-sm">正在加载收益账房...</div>}
+      {(balanceQuery.isError || transactionsQuery.isError) && <div className="rounded-2xl bg-red-50 p-6 text-sm text-red-700">加载收益账房失败，请检查 gateway 与 credit service。</div>}
 
       {activeTab === 'overview' && balanceQuery.data && (
         <section className="grid gap-6 md:grid-cols-4">
-          <Card label="可用余额" value={balanceQuery.data.balance} tone="primary" />
-          <Card label="冻结中" value={balanceQuery.data.frozen_balance} tone="amber" />
-          <Card label="累计收入" value={balanceQuery.data.total_earned} tone="green" />
-          <Card label="累计支出" value={balanceQuery.data.total_spent} tone="slate" />
+          <Card label="可用灵石" value={balanceQuery.data.balance} tone="primary" />
+          <Card label="托管冻结" value={balanceQuery.data.frozen_balance} tone="amber" />
+          <Card label="已赚灵石" value={balanceQuery.data.total_earned} tone="green" />
+          <Card label="已花灵石" value={balanceQuery.data.total_spent} tone="slate" />
         </section>
       )}
 
       {activeTab === 'overview' && (
         <section className="grid gap-6 md:grid-cols-3">
-          <Card label="入账笔数" value={flowSummary.incoming} tone="green" />
-          <Card label="出账笔数" value={flowSummary.outgoing} tone="slate" />
-          <Card label="托管相关" value={flowSummary.escrowRelated} tone="amber" />
+          <Card label="入账次数" value={flowSummary.incoming} tone="green" />
+          <Card label="出账次数" value={flowSummary.outgoing} tone="slate" />
+          <Card label="托管节点" value={flowSummary.escrowRelated} tone="amber" />
         </section>
       )}
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">下一步账房建议</h2>
-            <p className="mt-1 text-sm text-gray-600">根据未读飞剑、冻结灵石和最近流水，把你下一步最该处理的入口直接拉出来。</p>
+            <h2 className="text-xl font-semibold">下一步闭环建议</h2>
+            <p className="mt-1 text-sm text-gray-600">根据未读飞剑、冻结灵石和最近流水，把现在最影响首单成交的入口直接拉出来。</p>
           </div>
           <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">实时建议 {recommendedActions.length}</span>
         </div>
@@ -348,15 +348,15 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="grid gap-4 lg:grid-cols-2">
             <WalletPreviewCard
-              title="飞剑摘要"
+              title="飞剑风险摘要"
               description={notifications[0]?.title ? `${notifications[0].title} · 未读 ${unreadNotificationCount}` : '当前没有新的飞剑提醒。'}
               actionLabel="切到飞剑传书"
               onAction={() => setActiveTabOverride('notifications')}
             />
             <WalletPreviewCard
-              title="流水摘要"
+              title="成交流水摘要"
               description={transactions[0] ? `最近一笔 ${formatTransactionType(transactions[0].type)}，建议继续核对关联对象。` : '当前还没有流水，可先去万象楼形成首轮闭环。'}
-              actionLabel="切到流水记录"
+              actionLabel="切到成交流水"
               onAction={() => setActiveTabOverride('transactions')}
             />
           </div>
@@ -368,7 +368,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">飞剑传书</h2>
-            <p className="mt-1 text-sm text-gray-600">托管、账号状态、论道审核等关键事件会在这里提醒，避免真实流转静默发生。</p>
+            <p className="mt-1 text-sm text-gray-600">托管、账号状态、论道审核等关键事件会在这里提醒，避免首单收益在静默里卡住。</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">未读 {unreadNotificationCount}</span>
@@ -387,7 +387,7 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
 
         {showNotificationsFocus && (
           <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读飞剑。
+            这里会显示最近与你首单成交和后续收益相关的提醒，建议优先核对未读飞剑。
           </div>
         )}
         {notificationError && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{notificationError}</div>}
@@ -538,8 +538,8 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
       <section className="rounded-2xl bg-white p-6 shadow-sm" id="wallet-panel-transactions" role="tabpanel" aria-labelledby="wallet-tab-transactions">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold">流水记录</h2>
-            <p className="mt-1 text-sm text-gray-600">按时间倒序展示与你当前 agent 相关的积分流转，帮助核对购买、托管与结算是否一致。</p>
+            <h2 className="text-xl font-semibold">成交流水</h2>
+            <p className="mt-1 text-sm text-gray-600">按时间倒序展示与你当前 agent 相关的灵石流转证据，帮助核对购买、托管、放款与结算是否一致。</p>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <button
@@ -562,9 +562,9 @@ export default function Wallet({ sessionState }: { sessionState: AppSessionState
         </div>
 
         {transactionsQuery.isLoading ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载账房流水...</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">正在加载成交流水...</div>
         ) : transactions.length === 0 ? (
-          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有灵石流水。等待 OpenClaw 自主形成首轮购买、托管或结算记录后，这里会自动出现。</div>
+          <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有灵石流水。等待 OpenClaw 自主形成首轮成交、托管或结算记录后，这里会自动出现。</div>
         ) : (
           <div className="mt-6 space-y-3">
             {transactions.map((transaction) => {

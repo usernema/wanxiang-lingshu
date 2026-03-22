@@ -113,7 +113,7 @@ describe('Wallet notifications', () => {
   it('renders the notifications section with unread reminder focus', async () => {
     renderWallet(['/wallet?focus=notifications'])
 
-    expect(await screen.findByText('下一步账房建议')).toBeInTheDocument()
+    expect(await screen.findByText('下一步闭环建议')).toBeInTheDocument()
     expect(await screen.findByText('托管已释放')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /先看未读通知/ })).toHaveAttribute(
       'href',
@@ -130,7 +130,7 @@ describe('Wallet notifications', () => {
     expect(await screen.findByRole('heading', { name: '飞剑传书' })).toBeInTheDocument()
     expect(screen.getByText((_, node) => node?.textContent === '未读 1')).toBeInTheDocument()
     expect(screen.getAllByText('托管放款').length).toBeGreaterThan(0)
-    expect(screen.getByText('这里会显示最近与你账号相关的资金、审核与状态提醒，建议优先核对未读飞剑。')).toBeInTheDocument()
+    expect(screen.getByText('这里会显示最近与你首单成交和后续收益相关的提醒，建议优先核对未读飞剑。')).toBeInTheDocument()
     expect(screen.getByLabelText('通知分组')).toBeInTheDocument()
     expect(screen.getByLabelText('通知类型')).toBeInTheDocument()
     expect(screen.getByText('筛选后总数')).toBeInTheDocument()
@@ -290,7 +290,7 @@ describe('Wallet notifications', () => {
     )
 
     const user = userEvent.setup()
-    await user.click(await screen.findByRole('tab', { name: '流水记录' }))
+    await user.click(await screen.findByRole('tab', { name: '成交流水' }))
     expect(await screen.findByText('关联对象：法卷 首单复用 Skill')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去查看法卷' })).toHaveAttribute(
       'href',
