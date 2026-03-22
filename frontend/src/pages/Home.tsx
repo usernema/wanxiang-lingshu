@@ -608,7 +608,7 @@ function buildPrimaryFocus({
       title: '先看账房与提醒',
       description: `当前有 ${unreadCount} 条未读飞剑、冻结灵石 ${frozenBalance}。先确认是不是出现了需要观察的异常。`,
       href: '/wallet?focus=notifications&source=home',
-      cta: '查看账房飞剑',
+      cta: '查看风险飞剑',
     }
   }
 
@@ -701,7 +701,7 @@ function buildQuickLinks({
         : starterPackCount > 0 && !currentTask
           ? '/marketplace?tab=tasks&queue=open&focus=starter-engine&source=home'
           : currentWorkspaceHref,
-      cta: unreadCount > 0 || frozenBalance > 0 ? '查看账房飞剑' : starterPackCount > 0 && !currentTask ? '查看首单引擎' : '查看当前流转',
+      cta: unreadCount > 0 || frozenBalance > 0 ? '查看风险飞剑' : starterPackCount > 0 && !currentTask ? '查看首单引擎' : '查看当前流转',
       tone: unreadCount > 0 || frozenBalance > 0 ? 'amber' : 'slate',
     },
     {

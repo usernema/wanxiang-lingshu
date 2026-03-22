@@ -468,8 +468,8 @@ function buildMarketplaceObserverActions({
   if (observerSpotlight === 'skills') {
     return [
       { label: '留在卷面市集', href: '/marketplace?tab=skills', tone: 'primary' },
-      { label: '去洞府看沉淀', href: '/profile?source=marketplace-observer', tone: 'secondary' },
-      { label: '去账房看结算', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
+      { label: '去洞府看战绩', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+      { label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
     ]
   }
 
@@ -482,8 +482,8 @@ function buildMarketplaceObserverActions({
 
   return [
     { label: selectedTask ? '打开任务工作台' : '查看当前队列', href: workspaceHref, tone: 'primary' },
-    { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
-    { label: role === 'worker' ? '去洞府看成长' : '去洞府看复盘', href: '/profile?source=marketplace-observer', tone: 'secondary' },
+    { label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-observer', tone: 'secondary' },
+    { label: role === 'worker' ? '去洞府看战绩' : '去洞府看复盘', href: '/profile?source=marketplace-observer', tone: 'secondary' },
   ]
 }
 
@@ -647,7 +647,7 @@ function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQue
         ? `当前有 ${count} 个历练中的悬赏，建议重点盯托管状态、交卷节奏和潜在阻塞。`
         : '当前没有进行中的悬赏，可以回开放队列继续发布或点将悬赏。',
       actions: [
-        { label: '去账房核对托管', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
+        { label: '去核对托管风险', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
         { label: '回开放招募队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
       ],
     }
@@ -658,11 +658,11 @@ function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQue
       return {
         title: '待验卷悬赏要盯住结算反馈',
         summary: count > 0
-          ? `当前有 ${count} 个待发榜人验卷悬赏，建议同步关注账房飞剑与验卷结果。`
+          ? `当前有 ${count} 个待发榜人验卷悬赏，建议同步关注风险飞剑与验卷结果。`
           : '当前没有待验卷悬赏，说明交卷暂时没有卡在发榜人确认这一环。',
         actions: [
-          { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
-          { label: '去洞府看成长档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
+          { label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
+          { label: '去洞府看战绩档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
         ],
       }
     }
@@ -1180,19 +1180,19 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               ? '当前任务托管已建立，系统未发现必须立即接管的一致性阻塞。'
               : '当前没有强制接管信号，可继续观察系统流转。',
         href: selectedTask ? marketplaceWorkspaceHref : '/wallet?focus=notifications&source=marketplace-observer',
-        cta: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? '查看异常上下文' : '查看账房飞剑',
+        cta: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? '查看异常上下文' : '查看风险飞剑',
         tone: selectedTaskDiagnostic || diagnosticsIssueCount > 0 ? 'amber' : selectedTask?.escrow_id ? 'green' : 'slate',
       },
       {
         key: 'assets',
-        title: '成长沉淀',
+        title: '公开战绩',
         description: observerSpotlight === 'skills'
-          ? '当前已切到法卷坊，可以直接运营卷面资产与公开能力。'
+          ? '当前已切到法卷坊，可以直接回看卷面资产与公开能力。'
           : selectedTask?.status === 'completed'
             ? '当前任务已结案，建议回洞府或法卷坊查看法卷、模板与获赠资产。'
-            : '真实闭环完成后，系统会把成功经验沉淀为法卷、模板或获赠资产。',
+            : '真实闭环完成后，系统会把成功经验生成成法卷、模板或获赠资产。',
         href: observerSpotlight === 'skills' ? '/marketplace?tab=skills' : '/profile?tab=assets',
-        cta: observerSpotlight === 'skills' ? '留在法卷坊' : '查看成长资产',
+        cta: observerSpotlight === 'skills' ? '留在法卷坊' : '查看公开战绩',
         tone: observerSpotlight === 'skills' || selectedTask?.status === 'completed' ? 'green' : 'primary',
       },
     ]
@@ -1587,7 +1587,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       {observerOnly ? (
         <ObserverLockNotice
           title="网页端已切换为只读观察"
-          body="发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许人工代发悬赏。"
+          body="发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许网页端代发悬赏。"
         />
       ) : (
         <form onSubmit={submitTask} className="space-y-3">
@@ -1748,7 +1748,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               {observerOnly ? (
                 <ObserverLockNotice
                   title="交付推进保持自动化"
-                  body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。人工在这里仅观察当前提案质量、托管状态和执行进展。"
+                  body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。观察者在这里仅回看当前提案质量、托管状态和执行进展。"
                 />
               ) : (
                 <>
@@ -1791,7 +1791,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 {observerOnly ? (
                   <ObserverLockNotice
                     title="验卷决策改为只读观察"
-                    body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。人工只保留对结果、阻塞和账房信号的观察位。"
+                    body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。观察者只保留对结果、阻塞和风险信号的观察位。"
                   />
                 ) : (
                   <>
@@ -1850,7 +1850,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           actions={observerOnly
             ? [
                 { label: '回到历练榜观察', to: '/marketplace?tab=tasks', tone: 'primary' },
-                { label: '去洞府看沉淀', to: '/profile?tab=assets&source=marketplace-empty' },
+                { label: '去洞府看战绩', to: '/profile?tab=assets&source=marketplace-empty' },
               ]
             : [
                 { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
@@ -1909,12 +1909,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4">
         <h2 className="text-xl font-semibold">法卷观察区</h2>
-        <p className="mt-1 text-sm text-gray-600">这里用于回看从真实历练中沉淀出的卷面状态，避免和浏览市集混在一起。</p>
+        <p className="mt-1 text-sm text-gray-600">这里用于回看从真实历练里生成出的卷面状态，避免和浏览市集混在一起。</p>
       </div>
       {observerOnly ? (
         <ObserverLockNotice
-          title="法卷发布改为自动沉淀"
-          body="网页端不再允许人工上架或购入法卷。这里仅保留卷面观察，真正的沉淀、发布与复用由 OpenClaw 自主完成。"
+          title="法卷发布改为自动生成"
+          body="网页端不再允许直接上架或购入法卷。这里仅保留卷面观察，真正的生成、发布与复用由 OpenClaw 自主完成。"
         />
       ) : (
         <div className="space-y-3">
@@ -1943,7 +1943,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold">万象楼 · 历练 / 法卷坊</h1>
-            <p className="mt-2 text-sm text-gray-600">这里集中展示 OpenClaw 的任务队列、托管状态、异常提醒和资产沉淀，便于快速查看当前进度与处理重点。</p>
+            <p className="mt-2 text-sm text-gray-600">这里集中展示 OpenClaw 的任务队列、托管状态、异常提醒和公开战绩，便于快速查看当前进度与处理重点。</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <Link to={marketplaceWorkspaceHref} className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
                 继续当前工作台
@@ -1955,10 +1955,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 {observerOnly ? '观察当前队列' : role === 'employer' ? '发布真实悬赏' : '查看可接悬赏'}
               </Link>
               <Link to="/wallet?focus=notifications&source=marketplace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
-                去账房飞剑
+                去风险飞剑
               </Link>
               <Link to="/profile?tab=assets" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
-                去看成长资产
+                去看公开战绩
               </Link>
             </div>
           </div>
@@ -2763,9 +2763,9 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
   if (!shouldShow) return null
 
   const summary = task.status === 'submitted'
-    ? '当前悬赏已进入待验卷阶段，建议同时盯住账房飞剑与洞府资金解释，避免放款后信息不同步。'
+    ? '当前悬赏已进入待验卷阶段，建议同时盯住风险飞剑与洞府资金解释，避免放款后信息不同步。'
     : task.status === 'completed'
-      ? '当前悬赏已完成，建议立即核对账房飞剑、余额变化和洞府里的 credit 解释。'
+      ? '当前悬赏已完成，建议立即核对风险飞剑、余额变化和洞府里的 credit 解释。'
       : task.status === 'cancelled'
         ? '当前悬赏已撤下，如有托管，建议核对退款通知和冻结余额是否已回落。'
         : '当前悬赏已经涉及托管或结算，建议同步核对账房和洞府。'
@@ -2776,7 +2776,7 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
       <div className="mt-2">{summary}</div>
       <div className="mt-4 flex flex-wrap gap-3">
         <Link to="/wallet?focus=notifications&source=marketplace-task" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
-          去账房飞剑中心
+          去风险飞剑中心
         </Link>
         <Link to="/profile?focus=credit-verification&source=marketplace" className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50">
           去洞府核对资金
@@ -2858,7 +2858,7 @@ function getTaskOutcomeDescription(outcome: RecentTaskOutcome) {
     return '这次悬赏已经沉淀出可复用资产，建议继续回洞府查看模板、草稿和后续复用路径。'
   }
 
-  return '本次悬赏已完成并释放托管，但当前没有返回新的成长资产。建议优先核对账房飞剑和洞府。'
+  return '本次悬赏已完成并释放托管，但当前没有返回新的公开战绩。建议优先核对风险飞剑和洞府。'
 }
 
 function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[] {
@@ -2866,8 +2866,8 @@ function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[
   const actions: TaskOutcomeAction[] = []
 
   if (outcome.status === 'submitted') {
-    actions.push({ label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
-    actions.push({ label: '去洞府看成长档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
+    actions.push({ label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
+    actions.push({ label: '去洞府看战绩档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
     return actions
   }
 
@@ -2894,7 +2894,7 @@ function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[
   }
 
   actions.push({
-    label: '去账房飞剑中心',
+    label: '去风险飞剑中心',
     href: '/wallet?focus=notifications&source=marketplace-acceptance',
     tone: actions.length === 0 ? 'primary' : 'secondary',
   })
