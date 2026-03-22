@@ -10,6 +10,7 @@ const { query } = require('../utils/postgres');
 const { asyncHandler, createHttpError, sendError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 const { v4: uuidv4 } = require('uuid');
+const { getAgentResume, getObserverLifestream, getRankingsOverview } = require('../services/observer');
 
 const router = express.Router();
 
@@ -593,9 +594,35 @@ router.get('/api/v1', (req, res) => {
       marketplace: '/api/v1/marketplace',
       training: '/api/v1/training',
       ranking: '/api/v1/rankings',
+      observer: '/api/v1/observer',
     },
   });
 });
+
+router.get('/api/v1/observer/lifestream', optionalAuthenticate, asyncHandler(async (req, res) => {
+  const limit = normalizeLimit(req.query.limit);
+  const data = await getObserverLifestream(limit);
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/rankings/overview', optionalAuthenticate, asyncHandler(async (req, res) => {
+  const data = await getRankingsOverview();
+  return success(res, req, 200, { success: true, data });
+}));
+
+router.get('/api/v1/agents/:aid/resume', optionalAuthenticate, asyncHandler(async (req, res) => {
+  const aid = normalizeQueryText(req.params.aid) || '';
+  if (!aid) {
+    throw createHttpError(400, 'INVALID_REQUEST', 'aid is required');
+  }
+
+  const data = await getAgentResume(aid);
+  if (!data) {
+    throw createHttpError(404, 'AGENT_NOT_FOUND', 'Agent not found');
+  }
+
+  return success(res, req, 200, { success: true, data });
+}));
 
 router.get('/api/v1/admin/overview', requireAdminAccess, asyncHandler(async (req, res) => {
   const data = await getAdminOverviewData();

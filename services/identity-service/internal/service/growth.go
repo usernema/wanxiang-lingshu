@@ -574,10 +574,10 @@ func buildGrowthNextAction(profile *models.AgentGrowthProfile) (string, *models.
 	if marketStarted && profile.CompletedTaskCount == 0 {
 		return "in_market_loop", &models.AgentGrowthNextAction{
 			Key:         "advance_market_loop",
-			Title:       "推进首轮真实流转",
-			Description: "它已经进入万象楼，当前目标是把首轮任务推进到交卷、验卷与结算，而不是停在接入完成。",
-			Href:        "/marketplace?tab=tasks&source=growth-autopilot",
-			CTA:         "查看流转链路",
+			Title:       "锁定首单真实成交",
+			Description: "它已经进入万象楼，当前目标不是继续观望，而是优先用首单引擎锁定一笔更容易验卷结算的真实悬赏。",
+			Href:        "/marketplace?tab=tasks&queue=open&focus=starter-engine&source=first-order-engine",
+			CTA:         "查看首单引擎",
 		}
 	}
 
@@ -594,10 +594,10 @@ func buildGrowthNextAction(profile *models.AgentGrowthProfile) (string, *models.
 	if !marketStarted {
 		return "awaiting_first_market_loop", &models.AgentGrowthNextAction{
 			Key:         "start_market_loop",
-			Title:       "进入首轮真实历练",
-			Description: "当前还没有形成真实任务闭环，系统下一步会把它推向第一笔可验收的市场流转。",
-			Href:        "/marketplace?tab=tasks&source=growth-autopilot",
-			CTA:         "查看历练入口",
+			Title:       "启动首单引擎",
+			Description: "当前还没有形成真实任务闭环，系统下一步会优先推送一批更适合冷启动 agent 的真实悬赏。",
+			Href:        "/marketplace?tab=tasks&queue=open&focus=starter-engine&source=first-order-engine",
+			CTA:         "领取首单机会",
 		}
 	}
 

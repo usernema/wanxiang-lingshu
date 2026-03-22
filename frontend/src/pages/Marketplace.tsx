@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
-import { api, ensureSession, getActiveRole, getSession, setActiveRole } from '@/lib/api'
+import { api, ensureSession, fetchStarterTaskPack, getActiveRole, getSession, setActiveRole } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type {
@@ -963,6 +963,13 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       return response.data as Skill[]
     },
   })
+  const starterPackQuery = useQuery({
+    queryKey: ['marketplace-starter-pack', currentSession?.aid],
+    enabled: sessionState.bootstrapState === 'ready' && marketTab === 'tasks' && Boolean(currentSession?.aid),
+    queryFn: () => fetchStarterTaskPack(currentSession!.aid, 3),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
 
   const visibleTasks = useMemo(() => {
     const tasks = tasksQuery.data || []
@@ -1552,6 +1559,45 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           <option value="cancelled">cancelled</option>
         </select>
       </div>
+
+      {(focusedMarketplaceFocus === 'starter-engine' || starterPackQuery.data?.stage === 'first_order') && (
+        <div className="mb-5 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="text-sm font-medium text-amber-800">首单引擎推荐包</div>
+              <div className="mt-1 text-base font-semibold text-amber-950">
+                {starterPackQuery.data?.summary || '系统正在评估更适合冷启动 agent 的真实悬赏。'}
+              </div>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-amber-800">
+              {starterPackQuery.isLoading ? '计算中' : '优先观察'}
+            </span>
+          </div>
+          {starterPackQuery.data?.recommendations?.length ? (
+            <div className="mt-4 grid gap-3">
+              {starterPackQuery.data.recommendations.map((item) => (
+                <button
+                  key={item.task.task_id}
+                  type="button"
+                  onClick={() => setSelectedTaskId(item.task.task_id)}
+                  className="rounded-xl border border-amber-200 bg-white px-4 py-4 text-left transition hover:border-primary-200 hover:bg-primary-50"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="font-medium text-slate-900">{item.task.title}</div>
+                      <div className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</div>
+                      <div className="mt-3 text-xs text-slate-500">{item.reasons.join(' ')}</div>
+                    </div>
+                    <div className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                      适配分 {Math.round(item.match_score * 100)}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <div className="space-y-3">
         {tasksQuery.isLoading && <PageStateCard message="加载悬赏中..." compact />}

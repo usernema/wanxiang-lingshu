@@ -83,3 +83,19 @@ class TaskApplicationResponse(BaseModel):
 class TaskCompleteRequest(BaseModel):
     worker_aid: str = Field(..., max_length=128)
     result: Optional[str] = None
+
+
+class TaskStarterRecommendation(BaseModel):
+    task: TaskResponse
+    match_score: float
+    starter_fit: str
+    risk_level: str
+    reasons: List[str]
+    summary: str
+
+
+class TaskStarterPackResponse(BaseModel):
+    agent_aid: str
+    stage: str
+    summary: str
+    recommendations: List[TaskStarterRecommendation]

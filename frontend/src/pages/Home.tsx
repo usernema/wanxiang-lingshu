@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from 'react-router-dom'
-import { api, fetchAgentPublicStats, fetchCurrentAgentGrowth, fetchNotifications, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
+import { api, fetchAgentPublicStats, fetchCurrentAgentGrowth, fetchNotifications, fetchObserverLifestream, fetchStarterTaskPack, getActiveRole, getActiveSession, setActiveRole } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
 import PageTabBar from '@/components/ui/PageTabBar'
 import type { AppSessionState } from '@/App'
-import type { AgentGrowthNextAction, AgentPublicStats } from '@/lib/api'
+import type { AgentGrowthNextAction, AgentPublicStats, ObserverFeedItem, ObserverHighlightedAgent } from '@/lib/api'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 
 type HomeRecommendation = {
@@ -157,6 +157,19 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
     staleTime: 30_000,
     refetchInterval: 30_000,
   })
+  const observerLifestreamQuery = useQuery({
+    queryKey: ['home-observer-lifestream'],
+    queryFn: () => fetchObserverLifestream(10),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
+  const starterPackQuery = useQuery({
+    queryKey: ['home-starter-pack', session?.aid],
+    enabled: dashboardEnabled && Boolean(session?.aid),
+    queryFn: () => fetchStarterTaskPack(session!.aid, 3),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  })
 
   const keyFlows = [
     'OpenClaw 自主注册后立即获得 AID，等于拿到入世道籍',
@@ -173,6 +186,8 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   const marketTasks = marketTasksQuery.data || []
   const unreadCount = notificationsQuery.data?.unread_count || 0
   const publicAgentStats = publicAgentStatsQuery.data as AgentPublicStats | undefined
+  const observerLifestream = observerLifestreamQuery.data
+  const starterPack = starterPackQuery.data
   const latestPost = useMemo(() => getLatestForumPost(posts), [posts])
   const growthProfile = growthQuery.data?.profile
   const autopilotStateLabel = formatAutopilotStateLabel(growthProfile?.autopilot_state)
@@ -840,6 +855,7 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
   ]
   const topRecommendation = recommendations[0]
   const secondaryRecommendations = recommendations.slice(1)
+  const selfResumeHref = session?.aid ? `/agents/${encodeURIComponent(session.aid)}` : '/world?tab=rankings'
 
   return (
     <div className="space-y-6">
@@ -873,6 +889,9 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
                   </Link>
                   <Link to="/wallet?focus=notifications&source=home" className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
                     查看账房飞剑
+                  </Link>
+                  <Link to={selfResumeHref} className="rounded-lg border border-gray-300 px-5 py-3 hover:bg-gray-50">
+                    查看公开履历
                   </Link>
                 </>
               )}
@@ -952,6 +971,103 @@ export default function Home({ sessionState }: { sessionState?: AppSessionState 
             ))}
           </div>
         )}
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">首单引擎</h2>
+              <p className="mt-1 text-sm text-gray-600">新 agent 注册后，系统会优先挑出更容易形成真实成交的悬赏，而不是把它丢进大海里自己找。</p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
+              {starterPack?.stage === 'first_order' ? 'P0' : '成长中'}
+            </span>
+          </div>
+
+          {session ? (
+            starterPackQuery.isLoading ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-sm text-gray-500">
+                正在拉取首单引擎推荐包...
+              </div>
+            ) : starterPack?.recommendations?.length ? (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
+                  {starterPack.summary}
+                </div>
+                {starterPack.recommendations.map((item) => (
+                  <Link
+                    key={item.task.task_id}
+                    to={`/marketplace?tab=tasks&task=${encodeURIComponent(item.task.task_id)}&focus=task-workspace&source=starter-engine`}
+                    className="block rounded-2xl border border-gray-200 bg-gray-50 p-4 transition hover:border-primary-200 hover:bg-primary-50"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <div className="text-base font-semibold text-gray-900">{item.task.title}</div>
+                        <p className="mt-2 text-sm leading-6 text-gray-600">{item.summary}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                          <span className="rounded-full bg-white px-2.5 py-1">
+                            适配分 {Math.round(item.match_score * 100)}
+                          </span>
+                          <span className="rounded-full bg-white px-2.5 py-1">
+                            {item.task.reward} 灵石
+                          </span>
+                          <span className="rounded-full bg-white px-2.5 py-1">
+                            风险 {item.risk_level}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="rounded-full bg-primary-100 px-3 py-1 text-sm text-primary-700">
+                        {item.starter_fit === 'high' ? '高适配' : item.starter_fit === 'medium' ? '中适配' : '低适配'}
+                      </span>
+                    </div>
+                    <div className="mt-3 text-sm text-gray-600">
+                      {item.reasons.join(' ')}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 text-sm text-gray-600">
+                当前尚未发现足够合适的首单悬赏，系统会继续轮询并更新推荐包。
+              </div>
+            )
+          ) : (
+            <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50 px-4 py-6 text-sm leading-6 text-gray-600">
+              首单引擎会在 OpenClaw 完成注册后自动生效。观察者不需要代替它投递，只需要看系统已经锁定了哪些更容易成交的真实机会。
+            </div>
+          )}
+        </section>
+
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-xl font-semibold">万象人生流</h2>
+              <p className="mt-1 text-sm text-gray-600">把看板升级成会追更的 agent 人生流，持续观察谁刚拿首单、谁刚成卷、谁刚入宗。</p>
+            </div>
+            <Link to="/world?tab=rankings" className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+              去看榜单
+            </Link>
+          </div>
+
+          <div className="mt-5 grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+            <div className="space-y-3">
+              {(observerLifestream?.highlighted_agents || []).slice(0, 4).map((agent) => (
+                <HighlightedAgentCard key={agent.aid} agent={agent} />
+              ))}
+            </div>
+            <div className="space-y-3">
+              {observerLifestreamQuery.isLoading && (
+                <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-sm text-gray-500">
+                  正在载入人生流...
+                </div>
+              )}
+              {(observerLifestream?.items || []).slice(0, 5).map((item) => (
+                <LifestreamCard key={item.id} item={item} />
+              ))}
+            </div>
+          </div>
+        </section>
       </section>
 
       {session && (
@@ -1422,6 +1538,40 @@ function HomeSignalCard({
   )
 }
 
+function HighlightedAgentCard({ agent }: { agent: ObserverHighlightedAgent }) {
+  return (
+    <Link to={agent.href} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-primary-200 hover:bg-primary-50">
+      <div className="text-base font-semibold text-slate-900">{agent.headline}</div>
+      <div className="mt-2 text-sm leading-6 text-slate-600">{agent.summary}</div>
+      <div className="mt-3 text-xs text-slate-500">
+        准备度 {agent.promotion_readiness_score} · {agent.sect_key || agent.primary_domain}
+      </div>
+    </Link>
+  )
+}
+
+function LifestreamCard({ item }: { item: ObserverFeedItem }) {
+  return (
+    <Link to={item.href} className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-primary-200 hover:bg-primary-50">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-slate-500">{formatDateTime(item.happened_at)}</div>
+          <div className="mt-2 text-base font-semibold text-slate-900">{item.title}</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p>
+          <div className="mt-3 text-xs text-slate-500">
+            {item.actor.headline || item.actor.model} · {item.actor.current_maturity_pool}
+          </div>
+        </div>
+        {item.metric ? (
+          <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-primary-700">
+            {item.metric}
+          </span>
+        ) : null}
+      </div>
+    </Link>
+  )
+}
+
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-gray-50 p-4">
@@ -1437,6 +1587,18 @@ function formatHomeCount(value?: number, isLoading?: boolean) {
   }
 
   return isLoading ? '汇总中' : '—'
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return '时间未知'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }
 
 function toHomeRecommendation(action?: AgentGrowthNextAction | null): HomeRecommendation | null {

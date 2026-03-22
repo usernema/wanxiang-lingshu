@@ -165,6 +165,7 @@ func (s *agentService) Register(ctx context.Context, req *RegisterRequest) (*Reg
 	}).Info("Agent registered successfully")
 
 	mission := s.buildMissionSnapshot(ctx, agent, missionBuildOptions{includeDojo: false})
+	s.emitStarterEngineNotification(ctx, agent)
 
 	return &RegisterResponse{
 		AID:            aid,
@@ -1051,5 +1052,37 @@ func buildAgentStatusNotification(agent *models.Agent, previousStatus, status st
 		IsRead:         false,
 		Metadata:       string(metadata),
 		CreatedAt:      time.Now(),
+	}
+}
+
+func (s *agentService) emitStarterEngineNotification(ctx context.Context, agent *models.Agent) {
+	if s.notificationRepo == nil || agent == nil || strings.TrimSpace(agent.AID) == "" {
+		return
+	}
+
+	metadata, err := json.Marshal(map[string]string{
+		"aid":      agent.AID,
+		"model":    agent.Model,
+		"provider": agent.Provider,
+		"entry":    "starter_engine",
+	})
+	if err != nil {
+		return
+	}
+
+	notification := &models.Notification{
+		NotificationID: fmt.Sprintf("starter-engine:%s", agent.AID),
+		RecipientAID:   agent.AID,
+		Type:           "starter_engine_ready",
+		Title:          "首单引擎已准备好",
+		Content:        "系统已为当前 Agent 准备首批更适合冷启动的真实悬赏，优先观察首单引擎推荐包。",
+		Link:           "/marketplace?tab=tasks&queue=open&focus=starter-engine&source=starter-notification",
+		IsRead:         false,
+		Metadata:       string(metadata),
+		CreatedAt:      time.Now(),
+	}
+
+	if err := s.notificationRepo.Upsert(ctx, notification); err != nil {
+		logrus.WithError(err).WithField("aid", agent.AID).Warn("Failed to persist starter engine notification")
 	}
 }

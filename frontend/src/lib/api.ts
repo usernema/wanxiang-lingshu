@@ -96,6 +96,204 @@ export type AgentPublicStats = {
   active_agents: number;
 };
 
+export type PublicResumeBattleStats = {
+  completed_as_worker: number;
+  completed_as_employer: number;
+  total_completed: number;
+  reward_earned: number;
+  reward_spent: number;
+  distinct_employers: number;
+  first_completed_at?: string | null;
+  last_completed_at?: string | null;
+  post_count: number;
+  skill_count: number;
+  experience_card_count: number;
+  employer_grant_count: number;
+  template_from_work_count: number;
+  public_signal_count: number;
+};
+
+export type PublicResumeTask = {
+  task_id: string;
+  employer_aid: string;
+  worker_aid?: string | null;
+  title: string;
+  description: string;
+  reward: string | number;
+  status: string;
+  role: string;
+  completed_at?: string | null;
+  created_at: string;
+  href: string;
+};
+
+export type PublicResumeSkill = {
+  skill_id: string;
+  name: string;
+  description?: string | null;
+  category?: string | null;
+  price: string | number;
+  purchase_count: number;
+  view_count: number;
+  rating?: string | number | null;
+  status: string;
+  created_at: string;
+  updated_at?: string | null;
+  href: string;
+};
+
+export type PublicResumePost = {
+  post_id: string;
+  title: string;
+  category?: string | null;
+  comment_count: number;
+  like_count: number;
+  view_count: number;
+  created_at: string;
+  updated_at?: string | null;
+  href: string;
+};
+
+export type PublicResumeExperienceCard = {
+  card_id: string;
+  source_task_id: string;
+  category?: string | null;
+  scenario_key: string;
+  title: string;
+  summary: string;
+  outcome_status: string;
+  accepted_on_first_pass: boolean;
+  revision_count: number;
+  quality_score: number;
+  delivery_latency_hours?: number | null;
+  is_cross_employer_validated: boolean;
+  created_at: string;
+  updated_at?: string | null;
+  href: string;
+};
+
+export type ObserverActor = AgentProfile & {
+  growth_score: number;
+  promotion_readiness_score: number;
+  primary_domain: string;
+  current_maturity_pool: string;
+  sect_key?: string | null;
+};
+
+export type ObserverFeedItem = {
+  id: string;
+  type: string;
+  happened_at: string;
+  title: string;
+  summary: string;
+  metric?: string | null;
+  href: string;
+  actor: ObserverActor;
+};
+
+export type ObserverHighlightedAgent = {
+  aid: string;
+  headline: string;
+  summary: string;
+  href: string;
+  primary_domain: string;
+  sect_key?: string | null;
+  promotion_readiness_score: number;
+};
+
+export type ObserverLifestreamResponse = {
+  items: ObserverFeedItem[];
+  highlighted_agents: ObserverHighlightedAgent[];
+};
+
+export type PublicResumeResponse = {
+  agent: ObserverActor;
+  growth: {
+    recommended_task_scope: string;
+    completed_task_count: number;
+    active_skill_count: number;
+    total_task_count: number;
+    published_draft_count: number;
+    employer_template_count: number;
+    template_reuse_count: number;
+    experience_card_count: number;
+    cross_employer_validated_count: number;
+    growth_score: number;
+    risk_score: number;
+    promotion_readiness_score: number;
+    evaluation_summary: string;
+  };
+  wallet: {
+    balance: number;
+    frozen_balance: number;
+    total_earned: number;
+    total_spent: number;
+  };
+  battle_stats: PublicResumeBattleStats;
+  highlights: string[];
+  recent_completed_tasks: PublicResumeTask[];
+  recent_skills: PublicResumeSkill[];
+  recent_posts: PublicResumePost[];
+  recent_experience_cards: PublicResumeExperienceCard[];
+  timeline: ObserverFeedItem[];
+};
+
+export type RankingEntry = {
+  rank: number;
+  aid?: string | null;
+  headline?: string;
+  model?: string;
+  provider?: string;
+  primary_domain?: string;
+  sect_key?: string | null;
+  metric_label: string;
+  metric_value: number | string;
+  summary: string;
+  href: string;
+};
+
+export type RankingsOverviewResponse = {
+  boards: {
+    sect_weekly: RankingEntry[];
+    rising_rookie: RankingEntry[];
+    win_streak: RankingEntry[];
+    first_scroll_fame: RankingEntry[];
+    employer_favorite: RankingEntry[];
+  };
+  updated_at: string;
+};
+
+export type StarterTaskRecommendation = {
+  task: {
+    id: number;
+    task_id: string;
+    employer_aid: string;
+    worker_aid?: string | null;
+    escrow_id?: string | null;
+    title: string;
+    description: string;
+    requirements?: string | null;
+    reward: string | number;
+    status: string;
+    created_at: string;
+    updated_at?: string | null;
+    completed_at?: string | null;
+    cancelled_at?: string | null;
+  };
+  match_score: number;
+  starter_fit: string;
+  risk_level: string;
+  reasons: string[];
+  summary: string;
+};
+
+export type StarterTaskPackResponse = {
+  agent_aid: string;
+  stage: string;
+  summary: string;
+  recommendations: StarterTaskRecommendation[];
+};
+
 export type AgentMissionStep = {
   key: string;
   actor: "machine" | "human" | "observer" | string;
@@ -733,6 +931,33 @@ export async function fetchAgentPublicStats() {
 export async function fetchCurrentAgentGrowth() {
   const response = await api.get("/v1/agents/me/growth");
   return response.data as AgentGrowthProfileResponse;
+}
+
+export async function fetchAgentPublicResume(aid: string) {
+  const response = await api.get(`/v1/agents/${encodeURIComponent(aid)}/resume`);
+  return response.data.data as PublicResumeResponse;
+}
+
+export async function fetchObserverLifestream(limit = 20) {
+  const response = await api.get("/v1/observer/lifestream", {
+    params: { limit },
+  });
+  return response.data.data as ObserverLifestreamResponse;
+}
+
+export async function fetchRankingsOverview() {
+  const response = await api.get("/v1/rankings/overview");
+  return response.data.data as RankingsOverviewResponse;
+}
+
+export async function fetchStarterTaskPack(agentAID: string, limit = 6) {
+  const response = await api.get("/v1/marketplace/tasks/starter-pack", {
+    params: {
+      agent_aid: agentAID,
+      limit,
+    },
+  });
+  return response.data as StarterTaskPackResponse;
 }
 
 export async function fetchCurrentAgentMission() {

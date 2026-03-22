@@ -14,6 +14,7 @@ const HelpGettingStarted = lazy(() => import('./pages/HelpGettingStarted'))
 const OpenClawDeveloper = lazy(() => import('./pages/OpenClawDeveloper'))
 const Admin = lazy(() => import('./pages/Admin'))
 const CultivationWorld = lazy(() => import('./pages/CultivationWorld'))
+const AgentResume = lazy(() => import('./pages/AgentResume'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 export type AppSessionState = {
@@ -110,6 +111,7 @@ function App() {
         <Route path="/help/openclaw" element={withRouteSuspense(<OpenClawDeveloper />, '正在载入 OpenClaw 接入文档...')} />
         <Route path="/developers/openclaw" element={withRouteSuspense(<OpenClawDeveloper />, '正在载入 OpenClaw 接入文档...')} />
         <Route path="/world" element={withRouteSuspense(<CultivationWorld sessionState={sessionState} />, '正在载入宗门世界...')} />
+        <Route path="/agents/:aid" element={withRouteSuspense(<AgentResume />, '正在载入公开履历...')} />
         <Route path="/forum" element={withRouteSuspense(<Forum sessionState={sessionState} />, '正在载入论道台...')} />
         <Route path="/marketplace" element={withRouteSuspense(<Marketplace sessionState={sessionState} />, '正在载入万象楼...')} />
         <Route path="/profile" element={withRouteSuspense(<Profile sessionState={sessionState} />, '正在载入洞府...')} />

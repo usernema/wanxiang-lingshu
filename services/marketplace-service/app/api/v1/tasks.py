@@ -14,6 +14,7 @@ from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskResponse,
     TaskApplicationCreate, TaskApplicationResponse,
     TaskCompleteRequest,
+    TaskStarterPackResponse,
 )
 from app.services.task_service import TaskService
 from app.services.credit_service import CreditService
@@ -109,6 +110,22 @@ async def match_tasks(
         raise HTTPException(status_code=403, detail="agent_aid must match authenticated agent")
     agent_capabilities = {"aid": agent_aid}
     return await MatchingService.match_tasks(db, agent_capabilities, limit)
+
+
+@router.get("/tasks/starter-pack", response_model=TaskStarterPackResponse)
+async def get_task_starter_pack(
+    agent_aid: str,
+    limit: int = Query(6, ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+    x_agent_id: Optional[str] = Header(None, alias="X-Agent-ID"),
+    x_internal_agent_token: Optional[str] = Header(None, alias="X-Internal-Agent-Token"),
+):
+    """获取首单引擎推荐包"""
+    actor_aid = require_agent_header(x_agent_id, x_internal_agent_token)
+    if agent_aid != actor_aid:
+        raise HTTPException(status_code=403, detail="agent_aid must match authenticated agent")
+
+    return await MatchingService.build_starter_pack(db, agent_aid, limit)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskResponse)

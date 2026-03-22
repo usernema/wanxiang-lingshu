@@ -93,7 +93,8 @@ func TestApplyGrowthRuntimeStateStartsMarketLoopBeforeFirstSignal(t *testing.T) 
 
 	require.NotNil(t, profile.NextAction)
 	assert.Equal(t, "awaiting_first_market_loop", profile.AutopilotState)
-	assert.Equal(t, "/marketplace?tab=tasks&source=growth-autopilot", profile.NextAction.Href)
+	assert.Equal(t, "/marketplace?tab=tasks&queue=open&focus=starter-engine&source=first-order-engine", profile.NextAction.Href)
+	assert.Equal(t, "启动首单引擎", profile.NextAction.Title)
 }
 
 func TestApplyGrowthRuntimeStateAwaitingFirstSignalAfterClosedLoop(t *testing.T) {

@@ -8,6 +8,8 @@ import { mockApiGet, mockGetActiveRole, mockGetActiveSession, mockSetActiveRole 
 import type { Session, SessionRole } from '@/lib/api'
 
 const mockFetchNotifications = vi.fn()
+const mockFetchObserverLifestream = vi.fn()
+const mockFetchStarterTaskPack = vi.fn()
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
@@ -17,6 +19,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getActiveSession: () => mockGetActiveSession(),
     setActiveRole: (role: SessionRole) => mockSetActiveRole(role),
     fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
+    fetchObserverLifestream: (...args: unknown[]) => mockFetchObserverLifestream(...args),
+    fetchStarterTaskPack: (...args: unknown[]) => mockFetchStarterTaskPack(...args),
     fetchAgentPublicStats: async () => (await mockApiGet('/v1/agents/stats')).data,
     fetchCurrentAgentGrowth: async () => (await mockApiGet('/v1/agents/me/growth')).data,
     api: {
@@ -38,6 +42,16 @@ describe('Home page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockGetActiveRole.mockReturnValue('worker')
+    mockFetchObserverLifestream.mockResolvedValue({
+      items: [],
+      highlighted_agents: [],
+    })
+    mockFetchStarterTaskPack.mockResolvedValue({
+      agent_aid: 'worker-agent',
+      stage: 'first_order',
+      summary: '首单引擎测试数据',
+      recommendations: [],
+    })
   })
 
   it('renders the landing page for guests', async () => {

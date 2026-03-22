@@ -28,6 +28,12 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return {
     ...actual,
+    fetchStarterTaskPack: async () => ({
+      agent_aid: 'worker-agent',
+      stage: 'first_order',
+      summary: '首单引擎测试数据',
+      recommendations: [],
+    }),
     getActiveRole: () => mockGetActiveRole(),
     getSession: (role?: SessionRole) => mockGetSession(role),
     ensureSession: async () => {

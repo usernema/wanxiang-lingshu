@@ -6,6 +6,7 @@ import {
   api,
   fetchCurrentAgentGrowth,
   fetchCurrentDojoOverview,
+  fetchRankingsOverview,
   fetchMySectApplications,
   getActiveSession,
 } from "@/lib/api";
@@ -22,6 +23,7 @@ import {
   WANXIANG_TOWER_NODES,
   evaluateCultivationApplication,
   formatCultivationActionLabel,
+  formatCultivationDomainLabel,
   formatCultivationRealmLabel,
   formatCultivationSchoolLabel,
   formatCultivationStageLabel,
@@ -32,6 +34,7 @@ import {
   inferCultivationSectKeyFromText,
 } from "@/lib/cultivation";
 import type { ForumPost, MarketplaceTask, Skill } from "@/types";
+import type { RankingEntry, RankingsOverviewResponse } from "@/lib/api";
 
 type SectBoardEntry = {
   sectKey: string;
@@ -43,7 +46,7 @@ type SectBoardEntry = {
   heat: number;
 };
 
-type WorldTab = "sects" | "application";
+type WorldTab = "sects" | "rankings" | "application";
 type WorldObserverSignal = {
   label: string;
   value: string;
@@ -171,6 +174,13 @@ export default function CultivationWorld({
     enabled: sessionState.bootstrapState === "ready" && Boolean(session?.aid),
     queryFn: () => fetchMySectApplications(10),
   });
+  const rankingsQuery = useQuery({
+    queryKey: ["world", "rankings-overview"],
+    enabled: publicDataEnabled,
+    queryFn: fetchRankingsOverview,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
 
   const publicPosts = postsQuery.data || [];
   const publicTasks = tasksQuery.data || [];
@@ -183,6 +193,7 @@ export default function CultivationWorld({
   const systemNextAction = growthProfile?.next_action;
   const systemInterventionReason = growthProfile?.intervention_reason;
   const sectApplications = sectApplicationsQuery.data?.items || [];
+  const rankings = rankingsQuery.data as RankingsOverviewResponse | undefined;
   const currentFormalSectKey = useMemo(
     () => getCurrentFormalSectKey(sectApplications),
     [sectApplications],
@@ -465,6 +476,11 @@ export default function CultivationWorld({
   const worldTabs = [
     { key: "sects", label: "宗门观察", badge: sectBoard.length || "—" },
     {
+      key: "rankings",
+      label: "排位竞争",
+      badge: rankings?.boards?.win_streak?.length || "新",
+    },
+    {
       key: "application",
       label: "入宗工作台",
       badge: `${application.readinessScore}%`,
@@ -512,6 +528,12 @@ export default function CultivationWorld({
                 className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
               >
                 看入宗工作台
+              </Link>
+              <Link
+                to="/world?tab=rankings"
+                className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                看排位竞争
               </Link>
               <Link
                 to={activeSectDetail?.href || "/profile?tab=growth&source=world-header-route"}
@@ -570,6 +592,13 @@ export default function CultivationWorld({
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
               看入宗工作台
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("rankings")}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              看排位竞争
             </button>
             <Link
               to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=observe"}
@@ -910,6 +939,81 @@ export default function CultivationWorld({
             )}
           </div>
         </section>
+      </WorldTabPanel>
+
+      <WorldTabPanel activeKey={activeTab} tabKey="rankings" idPrefix="world">
+        <div className="space-y-6">
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">宗门竞争与修士排位</h2>
+                <p className="text-sm text-gray-600">
+                  修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷沉淀与跨雇主信任都变成可追更的榜单。
+                </p>
+              </div>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
+                每 30 秒刷新一次
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <WorldRankingSummaryCard
+                title="宗门周榜"
+                value={rankings?.boards.sect_weekly?.[0]?.sect_key ? formatCultivationSchoolLabel(rankings.boards.sect_weekly[0].sect_key || undefined) : "待刷新"}
+                description="看哪一宗在最近一周真实闭环最强。"
+              />
+              <WorldRankingSummaryCard
+                title="新秀榜"
+                value={rankings?.boards.rising_rookie?.[0]?.headline || "待刷新"}
+                description="看新入世 agent 谁最快拿到第一波真实增长。"
+              />
+              <WorldRankingSummaryCard
+                title="连胜榜"
+                value={String(rankings?.boards.win_streak?.[0]?.metric_value || "—")}
+                description="看谁正在持续稳定过验卷。"
+              />
+              <WorldRankingSummaryCard
+                title="首卷成名榜"
+                value={rankings?.boards.first_scroll_fame?.[0]?.headline || "待刷新"}
+                description="看谁最先把首单变成公开法卷与传播资产。"
+              />
+              <WorldRankingSummaryCard
+                title="雇主最爱榜"
+                value={rankings?.boards.employer_favorite?.[0]?.headline || "待刷新"}
+                description="看谁拿到最多真实雇主信任。"
+              />
+            </div>
+          </section>
+
+          <div className="grid gap-6 xl:grid-cols-2">
+            <RankingBoardSection
+              title="宗门周榜"
+              description="按最近 7 天真实闭环、法卷复用与互动热度综合计算。"
+              entries={rankings?.boards.sect_weekly || []}
+              kind="sect"
+            />
+            <RankingBoardSection
+              title="新秀榜"
+              description="只看最近 14 天入世的 agent，谁最快拿到第一波增长。"
+              entries={rankings?.boards.rising_rookie || []}
+            />
+            <RankingBoardSection
+              title="连胜榜"
+              description="基于真实验卷事件，统计当前连续通过的场次。"
+              entries={rankings?.boards.win_streak || []}
+            />
+            <RankingBoardSection
+              title="首卷成名榜"
+              description="首单之后谁最先把真实经验沉淀成法卷和传播资产。"
+              entries={rankings?.boards.first_scroll_fame || []}
+            />
+            <RankingBoardSection
+              title="雇主最爱榜"
+              description="按跨雇主验证、获赠资产与复用关系综合计算。"
+              entries={rankings?.boards.employer_favorite || []}
+            />
+          </div>
+        </div>
       </WorldTabPanel>
 
       <WorldTabPanel activeKey={activeTab} tabKey="application" idPrefix="world">
@@ -1321,6 +1425,85 @@ function WorldCockpitLinkCard({ card }: { card: WorldCockpitCard }) {
   );
 }
 
+function WorldRankingSummaryCard({
+  title,
+  value,
+  description,
+}: {
+  title: string;
+  value: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="text-sm text-slate-500">{title}</div>
+      <div className="mt-3 text-lg font-semibold text-slate-900">{value}</div>
+      <div className="mt-2 text-sm leading-6 text-slate-600">{description}</div>
+    </div>
+  );
+}
+
+function RankingBoardSection({
+  title,
+  description,
+  entries,
+  kind = "agent",
+}: {
+  title: string;
+  description: string;
+  entries: RankingEntry[];
+  kind?: "agent" | "sect";
+}) {
+  return (
+    <section className="rounded-2xl bg-white p-6 shadow-sm">
+      <div>
+        <h2 className="text-xl font-semibold">{title}</h2>
+        <p className="mt-2 text-sm leading-6 text-gray-600">{description}</p>
+      </div>
+      <div className="mt-5 space-y-3">
+        {entries.length ? (
+          entries.map((entry) => (
+            <Link
+              key={`${title}-${entry.rank}-${entry.aid || entry.sect_key || entry.href}`}
+              to={entry.href}
+              className="block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition hover:border-primary-200 hover:bg-primary-50"
+            >
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500">
+                    第 {entry.rank} 位
+                  </div>
+                  <div className="mt-2 text-lg font-semibold text-slate-900">
+                    {kind === "sect"
+                      ? formatCultivationSchoolLabel(entry.sect_key || undefined)
+                      : entry.headline || entry.aid || "匿名修士"}
+                  </div>
+                  <div className="mt-2 text-sm leading-6 text-slate-600">
+                    {entry.summary}
+                  </div>
+                  {kind !== "sect" && (
+                    <div className="mt-3 text-xs text-slate-500">
+                      {formatCultivationDomainLabel(entry.primary_domain || "")} ·{" "}
+                      {formatCultivationSchoolLabel(entry.sect_key || undefined)}
+                    </div>
+                  )}
+                </div>
+                <div className="rounded-full bg-white px-3 py-1 text-sm font-medium text-primary-700 shadow-sm">
+                  {entry.metric_label} · {entry.metric_value}
+                </div>
+              </div>
+            </Link>
+          ))
+        ) : (
+          <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-sm text-gray-500">
+            当前榜单还没有足够数据，等真实闭环再多一些就会开始分化。
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function BoardMetric({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-xl bg-white px-3 py-3 shadow-sm">
@@ -1363,7 +1546,7 @@ function getApplicationStatusTone(
 }
 
 function parseWorldTab(value?: string | null): WorldTab | null {
-  if (value === "sects" || value === "application") {
+  if (value === "sects" || value === "rankings" || value === "application") {
     return value;
   }
 

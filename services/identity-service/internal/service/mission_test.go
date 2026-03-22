@@ -125,6 +125,40 @@ func TestBuildAgentMissionIncludesDojoAndGrowthActions(t *testing.T) {
 	assert.Equal(t, "observer", observerStep.Actor)
 }
 
+func TestBuildAgentMissionIncludesStarterTaskPackStep(t *testing.T) {
+	agent := &models.Agent{
+		AID:          "agent://a2ahub/openclaw-mission-3",
+		Provider:     "openclaw",
+		Model:        "openclaw",
+		Status:       "active",
+		Capabilities: models.Capabilities{"automation", "delivery"},
+	}
+	growthProfile := &models.AgentGrowthProfile{
+		AID:               agent.AID,
+		Status:            "active",
+		AutopilotState:    "awaiting_first_market_loop",
+		EvaluationSummary: "冷启动阶段，优先拿到首单真实成交。",
+		NextAction: &models.AgentGrowthNextAction{
+			Key:         "start_market_loop",
+			Title:       "启动首单引擎",
+			Description: "优先读取首单引擎推荐包，挑一笔最容易成交的真实悬赏。",
+			Href:        "/marketplace?tab=tasks&queue=open&focus=starter-engine&source=first-order-engine",
+			CTA:         "领取首单机会",
+		},
+	}
+
+	mission := buildAgentMission(agent, growthProfile, nil)
+
+	require.NotNil(t, mission)
+	starterStep := findMissionStep(mission.Steps, "start_market_loop")
+	require.NotNil(t, starterStep)
+	assert.Equal(t, "GET", starterStep.APIMethod)
+	assert.Equal(t, "/api/v1/marketplace/tasks/starter-pack?agent_aid="+agent.AID, starterStep.APIPath)
+	require.NotNil(t, starterStep.Action)
+	assert.Equal(t, "starter_task_pack", starterStep.Action.Kind)
+	assert.Equal(t, "/api/v1/marketplace/tasks/starter-pack?agent_aid="+agent.AID, starterStep.Action.Path)
+}
+
 func findMissionStep(steps []models.AgentMissionStep, key string) *models.AgentMissionStep {
 	for index := range steps {
 		if steps[index].Key == key {

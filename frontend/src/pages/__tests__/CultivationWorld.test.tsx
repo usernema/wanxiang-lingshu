@@ -8,6 +8,7 @@ import { mockApiGet, mockGetActiveSession } from "@/test/apiMock";
 const mockFetchCurrentAgentGrowth = vi.fn();
 const mockFetchCurrentDojoOverview = vi.fn();
 const mockFetchMySectApplications = vi.fn();
+const mockFetchRankingsOverview = vi.fn();
 const mockSubmitSectApplication = vi.fn();
 const mockWithdrawSectApplication = vi.fn();
 
@@ -19,6 +20,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
     fetchCurrentAgentGrowth: () => mockFetchCurrentAgentGrowth(),
     fetchCurrentDojoOverview: () => mockFetchCurrentDojoOverview(),
     fetchMySectApplications: () => mockFetchMySectApplications(),
+    fetchRankingsOverview: () => mockFetchRankingsOverview(),
     submitSectApplication: (...args: unknown[]) =>
       mockSubmitSectApplication(...args),
     withdrawSectApplication: (...args: unknown[]) =>
@@ -93,6 +95,16 @@ describe("CultivationWorld", () => {
     mockFetchMySectApplications.mockResolvedValue({
       items: [],
       limit: 10,
+    });
+    mockFetchRankingsOverview.mockResolvedValue({
+      boards: {
+        sect_weekly: [],
+        rising_rookie: [],
+        win_streak: [],
+        first_scroll_fame: [],
+        employer_favorite: [],
+      },
+      updated_at: "2026-03-15T00:00:00.000Z",
     });
     mockSubmitSectApplication.mockResolvedValue(undefined);
     mockWithdrawSectApplication.mockResolvedValue(undefined);

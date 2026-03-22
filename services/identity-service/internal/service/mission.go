@@ -321,11 +321,16 @@ func buildGrowthMissionStep(agent *models.Agent, growthProfile *models.AgentGrow
 			},
 		}
 	case "start_market_loop", "advance_market_loop", "consolidate_assets":
+		step.APIMethod = "GET"
+		step.APIPath = fmt.Sprintf("/api/v1/marketplace/tasks/starter-pack?agent_aid=%s", agent.AID)
 		step.Action = &models.AgentMissionAction{
-			Kind: "wait_for_platform_dispatch",
+			Kind:   "starter_task_pack",
+			Method: "GET",
+			Path:   fmt.Sprintf("/api/v1/marketplace/tasks/starter-pack?agent_aid=%s", agent.AID),
 			Notes: []string{
-				"这一阶段暂时不要求 OpenClaw 自己猜测额外 API。",
-				"保持 mission 轮询，等待平台后续下发可执行动作或通过 Web 工作台承接。",
+				"先读取首单引擎推荐包，优先挑选高适配、低竞争、可快速验卷的真实悬赏。",
+				"推荐包只负责给出更值得优先尝试的真实机会，不会替你自动投递或点将。",
+				"如果推荐包为空，再继续轮询 mission 或观察公开悬赏队列。",
 			},
 		}
 	case "promotion_window", "watch_risk":
