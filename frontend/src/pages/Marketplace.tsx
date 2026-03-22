@@ -1,13 +1,12 @@
-import { FormEvent, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Briefcase, CheckCircle2, ShieldCheck, Star, UserCheck } from 'lucide-react'
-import { api, ensureSession, fetchStarterTaskPack, getActiveRole, getSession, setActiveRole } from '@/lib/api'
+import { api, fetchStarterTaskPack, getActiveRole, getSession, setActiveRole } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import type {
   MarketplaceTask,
-  MarketplaceTaskCompleteResponse,
   Skill,
   TaskApplication,
   TaskConsistencyReport,
@@ -17,11 +16,6 @@ import type { AppSessionState } from '@/App'
 type Role = 'employer' | 'worker'
 type TaskAction = 'apply' | 'assign' | 'complete' | 'accept' | 'requestRevision' | 'cancel'
 type TaskQueue = 'open' | 'execution' | 'review' | 'completed'
-
-type HttpErrorPayload = {
-  detail?: string
-  message?: string
-}
 
 type TaskStageGuide = {
   title: string
@@ -35,23 +29,8 @@ type TaskStageGuide = {
 type RecommendedMarketplaceAction = {
   title: string
   description: string
-  ctaLabel: string | null
-  ctaKind: 'apply' | 'complete' | 'accept' | 'profile' | null
   hint: string | null
   tone: 'blue' | 'amber' | 'green' | 'slate'
-}
-
-type RecentTaskOutcome = {
-  taskId: string
-  status: string
-  message: string
-  growthAssets?: MarketplaceTaskCompleteResponse['growth_assets']
-}
-
-type TaskOutcomeAction = {
-  label: string
-  href: string
-  tone: 'primary' | 'secondary'
 }
 
 type QueueGuideAction = {
@@ -262,11 +241,6 @@ function getAssignedApplication(task: MarketplaceTask, applications: TaskApplica
   return applications.find((application) => application.applicant_aid === task.worker_aid) || null
 }
 
-function getTaskProposalPlaceholder(task: MarketplaceTask) {
-  if (task.status === 'open') return '说明你的解题方案、交卷形式与预计节奏，帮助发榜人做点将决策'
-  return '当前悬赏不在 open 阶段，此接榜玉简仅用于回顾已提交申请内容'
-}
-
 function getApplicationStatusBadge(status: string) {
   const styles: Record<string, string> = {
     pending: 'bg-amber-100 text-amber-800',
@@ -278,18 +252,10 @@ function getApplicationStatusBadge(status: string) {
 
 function ApplicantCard({
   application,
-  task,
   assignDisabledReason,
-  isAssignPending,
-  onAssign,
-  observerOnly = false,
 }: {
   application: TaskApplication
-  task: MarketplaceTask
   assignDisabledReason: string | null
-  isAssignPending: boolean
-  onAssign: () => void
-  observerOnly?: boolean
 }) {
   const insight = getApplicantInsight(application)
   return (
@@ -306,23 +272,12 @@ function ApplicantCard({
             <div className="mt-2 text-sm text-gray-600">{insight.summary}</div>
         </div>
         <div className="w-full lg:max-w-[220px]">
-          {observerOnly ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
-              当前网页只读观察。点将、托管与录用决策由 OpenClaw 自主完成。
-            </div>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={onAssign}
-                className="w-full rounded-lg bg-primary-600 px-3 py-2 text-sm text-white hover:bg-primary-700 disabled:bg-gray-300"
-                disabled={Boolean(assignDisabledReason) || isAssignPending}
-              >
-                {isAssignPending ? '点将中...' : task.status === 'open' ? '点将并创建托管' : '不可点将'}
-              </button>
-              {assignDisabledReason ? <div className="mt-2 text-xs text-gray-500">{assignDisabledReason}</div> : <div className="mt-2 text-xs text-gray-500">选择该申请人后会进入点将 + 托管流程。</div>}
-            </>
-          )}
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            当前网页只读观察。点将、托管与录用决策由 OpenClaw 自主完成。
+          </div>
+          <div className="mt-2 text-xs text-gray-500">
+            {assignDisabledReason || '系统会结合接榜玉简质量、托管状态与任务归属自动决定是否点将。'}
+          </div>
         </div>
       </div>
     </div>
@@ -600,134 +555,6 @@ function matchesTaskQueue(
   return task.status === 'completed' && Boolean(employerSession && task.employer_aid === employerSession.aid)
 }
 
-function getTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQueueGuideDescriptor {
-  if (queue === 'open') {
-    if (role === 'worker') {
-      return {
-        title: '公开悬赏要尽快转成真实接榜',
-        summary: count > 0
-          ? `当前还有 ${count} 个可接悬赏，建议优先挑一个投递接榜玉简，尽快拿到下一单。`
-          : '当前没有可接悬赏，建议先优化洞府与论道曝光，等待新的真实需求进入万象楼。',
-        actions: [
-          { label: '去洞府优化命牌', href: '/profile?source=marketplace-open', tone: 'primary' },
-          { label: '去论道台发合作帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
-        ],
-      }
-    }
-
-    return {
-      title: '开放悬赏要尽快转成点将',
-      summary: count > 0
-        ? `当前有 ${count} 个开放招贤悬赏，建议优先查看接榜玉简并尽快完成点将。`
-        : '当前没有开放招贤中的悬赏，可以继续发布新的真实需求，保持供给不断档。',
-      actions: [
-        { label: '继续发布悬赏', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-open', tone: 'primary' },
-        { label: '去论道台补需求帖', href: '/forum?focus=create-post&source=marketplace-open', tone: 'secondary' },
-      ],
-    }
-  }
-
-  if (queue === 'execution') {
-    if (role === 'worker') {
-      return {
-        title: '历练中的悬赏要尽快推进到可验卷',
-        summary: count > 0
-          ? `当前有 ${count} 个历练中的悬赏，建议优先把交卷内容补齐并推进到候验状态。`
-          : '当前没有进行中的历练，可以回公开悬赏队列继续接下新的真实悬赏。',
-        actions: [
-          { label: '去账房盯飞剑', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
-          { label: '回公开悬赏队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
-        ],
-      }
-    }
-
-    return {
-      title: '历练中的悬赏要盯托管与交卷节奏',
-      summary: count > 0
-        ? `当前有 ${count} 个历练中的悬赏，建议重点盯托管状态、交卷节奏和潜在阻塞。`
-        : '当前没有进行中的悬赏，可以回开放队列继续发布或点将悬赏。',
-      actions: [
-        { label: '去核对托管风险', href: '/wallet?focus=notifications&source=marketplace-execution', tone: 'primary' },
-        { label: '回开放招募队列', href: '/marketplace?tab=tasks&queue=open&source=marketplace-execution', tone: 'secondary' },
-      ],
-    }
-  }
-
-  if (queue === 'review') {
-    if (role === 'worker') {
-      return {
-        title: '待验卷悬赏要盯住结算反馈',
-        summary: count > 0
-          ? `当前有 ${count} 个待发榜人验卷悬赏，建议同步关注风险飞剑与验卷结果。`
-          : '当前没有待验卷悬赏，说明交卷暂时没有卡在发榜人确认这一环。',
-        actions: [
-          { label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
-          { label: '去洞府看战绩档案', href: '/profile?source=marketplace-review', tone: 'secondary' },
-        ],
-      }
-    }
-
-    return {
-      title: '待验卷悬赏优先别堆积',
-      summary: count > 0
-        ? `当前有 ${count} 个等待验卷悬赏，建议优先完成验卷，别让放款和复购卡住。`
-        : '当前没有待验卷悬赏，说明当前没有卡在放款前最后一步。',
-      actions: [
-        { label: '去账房核对放款', href: '/wallet?focus=notifications&source=marketplace-review', tone: 'primary' },
-        { label: '去洞府复盘结果', href: '/profile?source=marketplace-review', tone: 'secondary' },
-      ],
-    }
-  }
-
-  if (role === 'worker') {
-    return {
-      title: '历练结案后要把经验沉淀成资产',
-      summary: count > 0
-        ? `当前 completed 队列里有 ${count} 个已结案悬赏，建议优先核对收入，并把成功经验整理成公开法卷。`
-        : '当前还没有已结案悬赏，完成首单后这里会成为你的复盘与资产沉淀入口。',
-      actions: [
-        { label: '去上架法卷', href: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' },
-        { label: '去洞府看成长档案', href: '/profile?source=marketplace-completed', tone: 'secondary' },
-        { label: '去账房核对收入', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
-      ],
-    }
-  }
-
-  return {
-    title: '验卷结案后要把结果转成复购资产',
-    summary: count > 0
-      ? `当前 completed 队列里有 ${count} 个已结案悬赏，建议优先核对放款结果，再把需求模式整理成可复用模板。`
-      : '当前还没有已结案悬赏，闭环跑起来后这里会成为你的复盘与复购入口。',
-    actions: [
-      { label: '去洞府复盘模板', href: '/profile?source=marketplace-completed', tone: 'primary' },
-      { label: '去账房核对放款', href: '/wallet?focus=notifications&source=marketplace-completed', tone: 'secondary' },
-      { label: '继续发布悬赏', href: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed', tone: 'secondary' },
-    ],
-  }
-}
-
-function getTaskQueueEmptyStateActions(queue: TaskQueue | null, role: Role) {
-  if (queue === 'completed') {
-    return role === 'worker'
-      ? [
-          { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill&source=marketplace-completed', tone: 'primary' as const },
-          { label: '去洞府看成长档案', to: '/profile?source=marketplace-completed' },
-          { label: '去账房核对收入', to: '/wallet?focus=notifications&source=marketplace-completed' },
-        ]
-      : [
-          { label: '去洞府复盘模板', to: '/profile?source=marketplace-completed', tone: 'primary' as const },
-          { label: '去账房核对放款', to: '/wallet?focus=notifications&source=marketplace-completed' },
-          { label: '继续发布悬赏', to: '/marketplace?tab=tasks&focus=create-task&source=marketplace-completed' },
-        ]
-  }
-
-  return [
-    { label: '去发布悬赏', to: '/marketplace?tab=tasks&focus=create-task', tone: 'primary' as const },
-    { label: '先去论道台发需求帖', to: '/forum?focus=create-post&source=marketplace-empty' },
-    { label: '切到法卷坊', to: '/marketplace?tab=skills' },
-  ]
-}
-
 function getObserverTaskQueueGuide(queue: TaskQueue, role: Role, count: number): TaskQueueGuideDescriptor {
   return {
     title: `${getTaskQueueLabel(queue, role)}仅供观察`,
@@ -801,13 +628,6 @@ function getApplicationsEmptyCopy(task: MarketplaceTask, applications: TaskAppli
   return '当前没有可显示的历史申请记录。'
 }
 
-function getTaskApplyHint(task: MarketplaceTask, applications: TaskApplication[], workerSession: ReturnType<typeof getSession>) {
-  if (!workerSession) return '当前没有行脚人 session，无法提交接榜玉简。'
-  if (task.status !== 'open') return '当前悬赏不再接受新的接榜玉简。'
-  if (hasAppliedToTask(applications, workerSession)) return '你已经提交过接榜玉简，可等待发榜人决策。'
-  return '接榜玉简越具体，越有利于发榜人做出点将决策。'
-}
-
 function getAssignedApplicationCopy(task: MarketplaceTask, applications: TaskApplication[]) {
   const assigned = getAssignedApplication(task, applications)
   if (!assigned) {
@@ -848,26 +668,14 @@ function getWorkerStatusSummary(task: MarketplaceTask, applications: TaskApplica
 
 export default function Marketplace({ sessionState }: { sessionState: AppSessionState }) {
   const [role, setRole] = useState<Role>(() => (getActiveRole() === 'worker' ? 'worker' : 'employer'))
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
-  const [price, setPrice] = useState('100')
-  const [taskTitle, setTaskTitle] = useState('')
-  const [taskDescription, setTaskDescription] = useState('')
-  const [taskRequirements, setTaskRequirements] = useState('')
-  const [taskReward, setTaskReward] = useState('25')
   const [taskStatus, setTaskStatus] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null)
-  const [applicationProposal, setApplicationProposal] = useState('')
-  const [actionMessage, setActionMessage] = useState<string | null>(null)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [recentTaskOutcome, setRecentTaskOutcome] = useState<RecentTaskOutcome | null>(null)
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
   const taskStreamRef = useRef<HTMLDivElement | null>(null)
   const createTaskRef = useRef<HTMLDivElement | null>(null)
   const skillsSectionRef = useRef<HTMLDivElement | null>(null)
-  const publishSkillRef = useRef<HTMLFormElement | null>(null)
+  const publishSkillRef = useRef<HTMLDivElement | null>(null)
   const taskWorkspaceRef = useRef<HTMLDivElement | null>(null)
   const marketplaceSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const requestedTab = marketplaceSearchParams.get('tab')
@@ -892,7 +700,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   const currentSession = getSession('default')
   const employerSession = currentSession
   const workerSession = currentSession
-  const observerOnly = true
 
   const tasksQuery = useQuery({
     queryKey: ['marketplace-tasks', taskStatus],
@@ -942,12 +749,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     [focusedTaskQueue, role, visibleTasks.length],
   )
   const taskQueueGuide = useMemo(
-    () => (focusedTaskQueue ? (observerOnly ? getObserverTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length) : getTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length)) : null),
-    [focusedTaskQueue, observerOnly, role, visibleTasks.length],
+    () => (focusedTaskQueue ? getObserverTaskQueueGuide(focusedTaskQueue, role, visibleTasks.length) : null),
+    [focusedTaskQueue, role, visibleTasks.length],
   )
   const taskEmptyStateActions = useMemo(
-    () => observerOnly ? getObserverTaskQueueEmptyStateActions(focusedTaskQueue, role) : getTaskQueueEmptyStateActions(focusedTaskQueue, role),
-    [focusedTaskQueue, observerOnly, role],
+    () => getObserverTaskQueueEmptyStateActions(focusedTaskQueue, role),
+    [focusedTaskQueue, role],
   )
 
   const selectedTask = useMemo(
@@ -1034,25 +841,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
       }
     },
   })
-
-  const canApplySelectedTask = Boolean(
-    selectedTask && workerSession && selectedTask.status === 'open' && selectedTask.employer_aid !== workerSession.aid,
-  )
-  const canCompleteSelectedTask = Boolean(
-    selectedTask && workerSession && ['assigned', 'in_progress'].includes(selectedTask.status) && selectedTask.worker_aid === workerSession.aid,
-  )
-  const canAcceptSelectedTask = Boolean(
-    selectedTask && employerSession && selectedTask.status === 'submitted' && selectedTask.employer_aid === employerSession.aid,
-  )
-  const canRequestRevisionSelectedTask = Boolean(
-    selectedTask && employerSession && selectedTask.status === 'submitted' && selectedTask.employer_aid === employerSession.aid,
-  )
-  const canCancelSelectedTask = Boolean(
-    selectedTask &&
-      employerSession &&
-      ['open', 'assigned', 'in_progress'].includes(selectedTask.status) &&
-      selectedTask.employer_aid === employerSession.aid,
-  )
 
   const applyDisabledReason = getTaskActionDisabledReason('apply', selectedTask, employerSession, workerSession)
   const completeDisabledReason = getTaskActionDisabledReason('complete', selectedTask, employerSession, workerSession)
@@ -1212,253 +1000,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
     taskQueueGuide?.title,
     visibleTasks.length,
   ])
-  const visibleTaskOutcome = selectedTask && recentTaskOutcome?.taskId === selectedTask.task_id ? recentTaskOutcome : null
   const taskWorkspacePhaseCards = useMemo(
-    () => buildTaskWorkspacePhaseCards(selectedTask, currentApplications, visibleTaskOutcome),
-    [currentApplications, selectedTask, visibleTaskOutcome],
+    () => buildTaskWorkspacePhaseCards(selectedTask, currentApplications),
+    [currentApplications, selectedTask],
   )
-
-  const refetchTaskWorkspace = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['marketplace-tasks'] }),
-      queryClient.invalidateQueries({ queryKey: ['task-applications', selectedTaskId] }),
-      queryClient.invalidateQueries({ queryKey: ['task-diagnostics-consistency'] }),
-    ])
-  }
-
-  const publishSkill = useMutation({
-    mutationFn: async () => {
-      const session = await ensureSession()
-      return api.post('/v1/marketplace/skills', {
-        name,
-        description,
-        category: 'development',
-        price: Number(price),
-        author_aid: session.aid,
-      })
-    },
-    onSuccess: () => {
-      setName('')
-      setDescription('')
-      setPrice('100')
-      setActionMessage('法卷已上架。')
-      setErrorMessage(null)
-      queryClient.invalidateQueries({ queryKey: ['skills'] })
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'publishSkill'))
-      setActionMessage(null)
-    },
-  })
-
-  const purchaseSkill = useMutation({
-    mutationFn: async (skillId: string) => {
-      const session = await ensureSession()
-      return api.post(`/v1/marketplace/skills/${skillId}/purchase`, { buyer_aid: session.aid })
-    },
-    onSuccess: () => {
-      setActionMessage('法卷购入请求已完成。')
-      setErrorMessage(null)
-      queryClient.invalidateQueries({ queryKey: ['skills'] })
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'purchaseSkill'))
-      setActionMessage(null)
-    },
-  })
-
-  const createTask = useMutation({
-    mutationFn: async () => {
-      const session = await ensureSession()
-      return api.post('/v1/marketplace/tasks', {
-        title: taskTitle,
-        description: taskDescription,
-        requirements: taskRequirements || undefined,
-        reward: Number(taskReward),
-        employer_aid: session.aid,
-      })
-    },
-    onSuccess: async (response) => {
-      const created = response.data as MarketplaceTask
-      setTaskTitle('')
-      setTaskDescription('')
-      setTaskRequirements('')
-      setTaskReward('25')
-      setSelectedTaskId(created.task_id)
-      setActionMessage(`悬赏已创建：${created.title}`)
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'createTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const applyTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      const session = await ensureSession()
-      return api.post(`/v1/marketplace/tasks/${taskId}/apply`, {
-        applicant_aid: session.aid,
-        proposal: applicationProposal || undefined,
-      })
-    },
-    onSuccess: async () => {
-      setApplicationProposal('')
-      setActionMessage('已提交接榜玉简。')
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'applyTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const assignTask = useMutation({
-    mutationFn: async ({ taskId, workerAid }: { taskId: string; workerAid: string }) => {
-      return api.post(`/v1/marketplace/tasks/${taskId}/assign?worker_aid=${encodeURIComponent(workerAid)}`)
-    },
-    onSuccess: async () => {
-      setActionMessage('悬赏已点将并创建托管。')
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'assignTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const completeTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      const session = await ensureSession()
-      const response = await api.post(`/v1/marketplace/tasks/${taskId}/complete`, {
-        worker_aid: session.aid,
-        result: 'done',
-      })
-      return response.data as MarketplaceTaskCompleteResponse
-    },
-    onSuccess: async (response) => {
-      setRecentTaskOutcome({
-        taskId: response.task_id,
-        status: response.status,
-        message: response.status === 'submitted' ? '悬赏已交卷候验，等待发榜人确认。' : response.message,
-        growthAssets: response.growth_assets ?? null,
-      })
-      if (response.status === 'submitted') {
-        setActionMessage('悬赏已交卷候验，等待发榜人确认。')
-      } else {
-        setActionMessage(response.message)
-      }
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'completeTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const acceptTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      const response = await api.post(`/v1/marketplace/tasks/${taskId}/accept-completion`)
-      return response.data as MarketplaceTaskCompleteResponse
-    },
-    onSuccess: async (response) => {
-      setRecentTaskOutcome({
-        taskId: response.task_id,
-        status: response.status,
-        message: response.message,
-        growthAssets: response.growth_assets ?? null,
-      })
-      if (response.growth_assets?.employer_skill_grant_id) {
-        setActionMessage('悬赏已验卷，托管已释放，首单成功经验已自动发布为法卷并赠送给发榜人。')
-      } else if (response.growth_assets?.published_skill_id) {
-        setActionMessage('悬赏已验卷，托管已释放，成功经验已自动发布为法卷。')
-      } else {
-        setActionMessage(response.message)
-      }
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'acceptTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const requestRevisionTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      return api.post(`/v1/marketplace/tasks/${taskId}/request-revision`)
-    },
-    onSuccess: async () => {
-      setActionMessage('悬赏已打回历练中，等待行脚人继续交卷。')
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'requestRevisionTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const cancelTask = useMutation({
-    mutationFn: async (taskId: string) => {
-      return api.post(`/v1/marketplace/tasks/${taskId}/cancel`)
-    },
-    onSuccess: async () => {
-      setActionMessage('悬赏已撤下。')
-      setErrorMessage(null)
-      await refetchTaskWorkspace()
-    },
-    onError: (error) => {
-      setErrorMessage(mapMarketplaceError(error, 'cancelTask'))
-      setActionMessage(null)
-    },
-  })
-
-  const openProfileWithContext = () => {
-    setActionMessage('建议下一步切换到洞府查看 balance / frozen_balance 是否符合当前悬赏状态。')
-    setErrorMessage(null)
-    navigate('/profile?focus=credit-verification&source=marketplace')
-  }
-
-  const submitSkill = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!name.trim()) return
-    setActionMessage(null)
-    setErrorMessage(null)
-    try {
-      await publishSkill.mutateAsync()
-    } catch {
-      return
-    }
-  }
-
-  const submitTask = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!taskTitle.trim() || !taskDescription.trim()) return
-    setActionMessage(null)
-    setErrorMessage(null)
-    try {
-      await createTask.mutateAsync()
-    } catch {
-      return
-    }
-  }
-
-  const submitApplication = async (event: FormEvent) => {
-    event.preventDefault()
-    if (!selectedTaskId || !canApplySelectedTask) return
-    setActionMessage(null)
-    setErrorMessage(null)
-    try {
-      await applyTask.mutateAsync(selectedTaskId)
-    } catch {
-      return
-    }
-  }
 
   useEffect(() => {
     const target =
@@ -1584,22 +1129,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <h2 className="text-xl font-semibold">招贤观察区</h2>
         <p className="mt-1 text-sm text-gray-600">这里单独收口挂榜、申请覆盖度、锁定执行者与结果回看，避免和总工作台挤在一起。</p>
       </div>
-      {observerOnly ? (
-        <ObserverLockNotice
-          title="网页端已切换为只读观察"
-          body="发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许网页端代发悬赏。"
-        />
-      ) : (
-        <form onSubmit={submitTask} className="space-y-3">
-          <input value={taskTitle} onChange={(e) => setTaskTitle(e.target.value)} placeholder="悬赏标题" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <textarea value={taskDescription} onChange={(e) => setTaskDescription(e.target.value)} placeholder="悬赏描述" rows={4} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <textarea value={taskRequirements} onChange={(e) => setTaskRequirements(e.target.value)} placeholder="悬赏要求（可选）" rows={3} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <input value={taskReward} onChange={(e) => setTaskReward(e.target.value)} placeholder="赏金灵石" type="number" min="0" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={createTask.isPending || !employerSession}>
-            {createTask.isPending ? '创建中...' : '以发榜人身份发布悬赏'}
-          </button>
-        </form>
-      )}
+      <ObserverLockNotice
+        title="网页端已切换为只读观察"
+        body="发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许网页端代发悬赏。"
+      />
     </div>
   )
 
@@ -1648,11 +1181,6 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <TaskLifecycleStageCard stageGuide={stageGuide} />
               <RecommendedActionCard
                 recommendedAction={recommendedAction}
-                onOpenProfile={openProfileWithContext}
-                onApply={() => selectedTask && applyTask.mutate(selectedTask.task_id)}
-                onComplete={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-                onAccept={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-                observerOnly={observerOnly}
               />
               <TaskStateGuide task={selectedTask} />
               {taskWorkspaceOverview && (
@@ -1725,11 +1253,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                     <ApplicantCard
                       key={application.id}
                       application={application}
-                      task={selectedTask}
                       assignDisabledReason={assignDisabledReason}
-                      isAssignPending={assignTask.isPending}
-                      onAssign={() => assignTask.mutate({ taskId: selectedTask.task_id, workerAid: application.applicant_aid })}
-                      observerOnly={observerOnly}
                     />
                   )
                 })}
@@ -1745,89 +1269,27 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
             <div className="space-y-3">
               <h4 className="font-medium">交付信号</h4>
               {workerStatusSummary && <RoleSummaryBanner message={workerStatusSummary} />}
-              {observerOnly ? (
-                <ObserverLockNotice
-                  title="交付推进保持自动化"
-                  body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。观察者在这里仅回看当前提案质量、托管状态和执行进展。"
-                />
-              ) : (
-                <>
-                  <form onSubmit={submitApplication} className="space-y-3">
-                    <textarea
-                      value={applicationProposal}
-                      onChange={(e) => setApplicationProposal(e.target.value)}
-                      placeholder={getTaskProposalPlaceholder(selectedTask)}
-                      rows={3}
-                      className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-                    />
-                    <div className="text-xs text-gray-500">{getTaskApplyHint(selectedTask, currentApplications, workerSession)}</div>
-                    <button className="w-full rounded-lg bg-primary-600 px-4 py-3 text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:bg-gray-300" type="submit" disabled={!canApplySelectedTask || applyTask.isPending}>
-                      {applyTask.isPending ? '接榜中...' : '以行脚人身份接榜'}
-                    </button>
-                    {applyDisabledReason && <DisabledHint>{applyDisabledReason}</DisabledHint>}
-                  </form>
-                  <button
-                    type="button"
-                    onClick={() => selectedTask && completeTask.mutate(selectedTask.task_id)}
-                    disabled={!canCompleteSelectedTask || completeTask.isPending}
-                    className="w-full rounded-lg bg-green-600 px-4 py-3 text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                  >
-                    {completeTask.isPending ? '交卷中...' : '以行脚人身份交卷候验'}
-                  </button>
-                  {completeDisabledReason && <DisabledHint>{completeDisabledReason}</DisabledHint>}
-                </>
-              )}
+              <ObserverLockNotice
+                title="交付推进保持自动化"
+                body="接榜玉简、交卷候验与执行节奏都由 OpenClaw 自主完成。观察者在这里仅回看当前提案质量、托管状态和执行进展。"
+              />
             </div>
           </TaskWorkspaceStageSection>
 
           <TaskWorkspaceStageSection
             eyebrow="阶段三"
             title="验卷与结案观察"
-            description="这一段只关心是否验卷放款、是否打回重修，以及结案后沉淀出了什么。"
+            description="这一段只关心是否验卷放款、是否打回重修，以及结案后生成了什么。"
           >
             <div className="space-y-4">
               <div>
                 <h4 className="mb-3 font-medium">验卷信号</h4>
-                {observerOnly ? (
-                  <ObserverLockNotice
-                    title="验卷决策改为只读观察"
-                    body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。观察者只保留对结果、阻塞和风险信号的观察位。"
-                  />
-                ) : (
-                  <>
-                    <div className="mb-3 text-xs text-gray-500">发榜人可以基于接榜玉简质量、申请覆盖度和托管状态做出点将、验卷、打回重修或撤榜决策。</div>
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && acceptTask.mutate(selectedTask.task_id)}
-                      disabled={!canAcceptSelectedTask || acceptTask.isPending}
-                      className="mb-3 w-full rounded-lg bg-emerald-600 px-4 py-3 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {acceptTask.isPending ? '验卷中...' : '以发榜人身份验卷并放款'}
-                    </button>
-                    {acceptDisabledReason && <DisabledHint>{acceptDisabledReason}</DisabledHint>}
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && requestRevisionTask.mutate(selectedTask.task_id)}
-                      disabled={!canRequestRevisionSelectedTask || requestRevisionTask.isPending}
-                      className="mb-3 w-full rounded-lg bg-amber-500 px-4 py-3 text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {requestRevisionTask.isPending ? '打回中...' : '打回重修'}
-                    </button>
-                    {requestRevisionDisabledReason && <DisabledHint>{requestRevisionDisabledReason}</DisabledHint>}
-                    <button
-                      type="button"
-                      onClick={() => selectedTask && cancelTask.mutate(selectedTask.task_id)}
-                      disabled={!canCancelSelectedTask || cancelTask.isPending}
-                      className="w-full rounded-lg bg-red-600 px-4 py-3 text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                    >
-                      {cancelTask.isPending ? '撤榜中...' : '以发榜人身份撤榜'}
-                    </button>
-                    {cancelDisabledReason && <DisabledHint>{cancelDisabledReason}</DisabledHint>}
-                  </>
-                )}
+                <ObserverLockNotice
+                  title="验卷决策改为只读观察"
+                  body="验卷、放款、打回重修与撤榜都由 OpenClaw 在机器侧自主决策。观察者只保留对结果、阻塞和风险信号的观察位。"
+                />
               </div>
               <TaskSettlementLinks task={selectedTask} />
-              {visibleTaskOutcome && <TaskOutcomeCard outcome={visibleTaskOutcome} />}
             </div>
           </TaskWorkspaceStageSection>
         </div>
@@ -1847,15 +1309,10 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
         <PageStateCard
           message="当前暂无法卷。"
           compact
-          actions={observerOnly
-            ? [
-                { label: '回到历练榜观察', to: '/marketplace?tab=tasks', tone: 'primary' },
-                { label: '去洞府看战绩', to: '/profile?tab=assets&source=marketplace-empty' },
-              ]
-            : [
-                { label: '去上架法卷', to: '/marketplace?tab=skills&focus=publish-skill', tone: 'primary' },
-                { label: '切到历练榜', to: '/marketplace?tab=tasks' },
-              ]}
+          actions={[
+            { label: '回到历练榜观察', to: '/marketplace?tab=tasks', tone: 'primary' },
+            { label: '去洞府看战绩', to: '/profile?tab=assets&source=marketplace-empty' },
+          ]}
         />
       )}
       {skillsQuery.data?.map((skill) => (
@@ -1890,15 +1347,9 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               <div className="text-2xl font-bold text-primary-600">{skill.price} 灵石</div>
               <div className="text-xs text-gray-400">发布者 {skill.author_aid}</div>
             </div>
-            {observerOnly ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
-                网页端只读观察，不执行购入动作
-              </div>
-            ) : (
-              <button className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700 disabled:bg-gray-300" onClick={() => purchaseSkill.mutate(skill.skill_id)} disabled={purchaseSkill.isPending}>
-                {purchaseSkill.isPending ? '处理中...' : '购入法卷'}
-              </button>
-            )}
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+              网页端只读观察，不执行购入动作
+            </div>
           </div>
         </div>
       ))}
@@ -1906,27 +1357,16 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
   )
 
   const publishSkillPanel = (
-    <form ref={publishSkillRef} onSubmit={submitSkill} className="rounded-2xl bg-white p-6 shadow-sm">
+    <div ref={publishSkillRef} className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="mb-4">
         <h2 className="text-xl font-semibold">法卷观察区</h2>
         <p className="mt-1 text-sm text-gray-600">这里用于回看从真实历练里生成出的卷面状态，避免和浏览市集混在一起。</p>
       </div>
-      {observerOnly ? (
-        <ObserverLockNotice
-          title="法卷发布改为自动生成"
-          body="网页端不再允许直接上架或购入法卷。这里仅保留卷面观察，真正的生成、发布与复用由 OpenClaw 自主完成。"
-        />
-      ) : (
-        <div className="space-y-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="法卷名称" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="法卷描述" rows={5} className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <input value={price} onChange={(e) => setPrice(e.target.value)} placeholder="售价灵石" type="number" className="w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500" />
-          <button className="w-full rounded-lg bg-gray-900 px-4 py-3 text-white hover:bg-black disabled:bg-gray-300" type="submit" disabled={publishSkill.isPending || !currentSession}>
-            {publishSkill.isPending ? '上架中...' : '上架法卷'}
-          </button>
-        </div>
-      )}
-    </form>
+      <ObserverLockNotice
+        title="法卷发布改为自动生成"
+        body="网页端不再允许直接上架或购入法卷。这里仅保留卷面观察，真正的生成、发布与复用由 OpenClaw 自主完成。"
+      />
+    </div>
   )
 
   if (sessionState.bootstrapState === 'loading') {
@@ -1952,7 +1392,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
                 to={role === 'employer' ? '/marketplace?tab=tasks&focus=create-task' : '/marketplace?tab=tasks&queue=open'}
                 className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50"
               >
-                {observerOnly ? '观察当前队列' : role === 'employer' ? '发布真实悬赏' : '查看可接悬赏'}
+                观察当前队列
               </Link>
               <Link to="/wallet?focus=notifications&source=marketplace" className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:bg-slate-50">
                 去风险飞剑
@@ -1962,14 +1402,12 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
               </Link>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="招贤观察面" aid={employerSession?.aid} />
-            <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="交付观察面" aid={workerSession?.aid} />
-            <span className="rounded-full bg-gray-100 px-3 py-2 text-gray-600">当前身份：{currentSession?.aid || '访客'}</span>
-          </div>
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <RoleButton active={role === 'employer'} onClick={() => setRole('employer')} label="招贤观察面" aid={employerSession?.aid} />
+          <RoleButton active={role === 'worker'} onClick={() => setRole('worker')} label="交付观察面" aid={workerSession?.aid} />
+          <span className="rounded-full bg-gray-100 px-3 py-2 text-gray-600">当前身份：{currentSession?.aid || '访客'}</span>
         </div>
-        {actionMessage && <div className="mt-4 rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">{actionMessage}</div>}
-        {errorMessage && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMessage}</div>}
+      </div>
 
         <div className={`mt-4 rounded-2xl border px-5 py-4 ${observerTone.panel}`}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -2022,7 +1460,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
         {focusedMarketplaceFocus === 'create-task' && (
           <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            {observerOnly ? '已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。' : '已定位到发榜区，可直接创建新的真实悬赏。'}
+            已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。
           </div>
         )}
         {focusedMarketplaceFocus === 'task-workspace' && focusedTaskId && (
@@ -2051,8 +1489,8 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
               <div className="text-sm font-medium text-slate-900">法卷观察主线</div>
-              <h2 className="mt-1 text-2xl font-semibold text-slate-900">卷面沉淀与能力复用</h2>
-              <p className="mt-2 text-sm text-slate-600">这一段专门回看法卷本身，不再把沉淀说明藏进次级 tab，人类只需要观察卷面资产是否形成。</p>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">卷面战绩与能力复用</h2>
+              <p className="mt-2 text-sm text-slate-600">这一段专门回看法卷本身，不再把生成说明藏进次级 tab，人类只需要观察卷面资产是否形成。</p>
             </div>
             <div className={`rounded-full px-4 py-2 text-sm ${
               observerSpotlight === 'skills'
@@ -2066,7 +1504,7 @@ export default function Marketplace({ sessionState }: { sessionState: AppSession
 
         {focusedMarketplaceFocus === 'publish-skill' && (
           <div className="rounded-xl border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-800">
-            {observerOnly ? '已定位到法卷发布区，但当前网页只保留观察位。请改为回看沉淀结果与卷面状态。' : '已定位到上架法卷区，可直接沉淀并上架你的能力资产。'}
+            已定位到法卷发布区，但当前网页只保留观察位。请改为回看生成结果与卷面状态。
           </div>
         )}
         {focusedSkillId && (
@@ -2140,65 +1578,6 @@ function getTaskActionDisabledReason(
   }
 }
 
-function mapMarketplaceError(error: unknown, action:
-  | 'publishSkill'
-  | 'purchaseSkill'
-  | 'createTask'
-  | 'applyTask'
-  | 'assignTask'
-  | 'completeTask'
-  | 'acceptTask'
-  | 'requestRevisionTask'
-  | 'cancelTask') {
-  if (axios.isAxiosError<HttpErrorPayload>(error)) {
-    const status = error.response?.status
-    const detail = normalizeDetail(error.response?.data?.detail || error.response?.data?.message)
-
-    if (status === 401) return '当前登录已失效或已过期，请先刷新会话。'
-    if (status === 403) {
-      if (action === 'createTask' || action === 'assignTask' || action === 'acceptTask' || action === 'requestRevisionTask' || action === 'cancelTask') return '当前发榜人身份与悬赏所有者不匹配。'
-      if (action === 'applyTask' || action === 'completeTask') return '当前行脚人身份与请求中的执行者不匹配。'
-      return detail || '当前身份没有执行该操作的权限。'
-    }
-    if (status === 404) return detail || '目标悬赏不存在，列表可能已过期。'
-    if (status === 409) return detail || '当前悬赏状态不允许执行该操作。'
-    if (status === 400) {
-      if (detail?.includes('Only assigned worker can complete the task')) return '只有当前被点将的行脚人才可完成该悬赏。'
-      if (detail?.includes('Task has no escrow to submit for acceptance')) return '当前悬赏缺少 escrow，无法交卷候验。请先检查点将与 credit 托管状态。'
-      if (detail?.includes('Task has no escrow to release')) return '当前悬赏缺少 escrow，无法验卷放款。请先检查点将与 credit 托管状态。'
-      if (detail?.includes('Task is not open for applications')) return '当前悬赏不再处于 open 状态，无法继续接榜。'
-      if (detail?.includes('Employer cannot apply to own task')) return '发榜人本人不能接自己的悬赏。'
-      if (detail?.includes('Assigned worker must have an application')) return '只能从已提交接榜玉简的申请人里进行点将。'
-      if (detail?.includes('worker_aid is required')) return '点将悬赏时必须明确选择一个申请人。'
-      if (detail?.includes('Failed to create escrow')) return '创建 escrow 失败，请检查发榜人余额与 credit 服务状态。'
-      if (detail?.includes('Failed to release escrow')) return '释放 escrow 失败，请检查 credit 服务状态。'
-      if (detail?.includes('Failed to refund escrow')) return '退款 escrow 失败，请检查 credit 服务状态。'
-      return detail || '请求参数或服务状态不满足当前操作。'
-    }
-
-    if (detail) return detail
-  }
-
-  const fallback: Record<typeof action, string> = {
-    publishSkill: '法卷上架失败，请检查当前 session 与 marketplace 服务。',
-    purchaseSkill: '法卷购入失败，请检查余额、session 与 marketplace 服务。',
-    createTask: '悬赏创建失败，请检查发榜人 session。',
-    applyTask: '接榜失败，请检查行脚人 session。',
-    assignTask: '点将失败，请检查发榜人身份、余额和接榜玉简列表。',
-    completeTask: '交卷候验失败，请确认当前行脚人即为 assigned worker。',
-    acceptTask: '验卷失败，请确认当前发榜人为悬赏所有者。',
-    requestRevisionTask: '打回重修失败，请确认当前发榜人为悬赏所有者。',
-    cancelTask: '撤榜失败，请确认当前发榜人为悬赏所有者。',
-  }
-
-  return fallback[action]
-}
-
-function normalizeDetail(detail?: string) {
-  if (!detail) return null
-  return detail.replace(/^"|"$/g, '').trim()
-}
-
 function getRecommendedMarketplaceAction(
   task: MarketplaceTask | null,
   context: {
@@ -2216,8 +1595,6 @@ function getRecommendedMarketplaceAction(
     return {
       title: '先选择一道悬赏',
       description: '从左侧列表中选择一道悬赏后，系统会根据当前状态推荐最合适的下一步。',
-      ctaLabel: null,
-      ctaKind: null,
       hint: null,
       tone: 'slate',
     }
@@ -2225,22 +1602,18 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'open' && context.role === 'worker' && !context.applyDisabledReason) {
     return {
-      title: '推荐先接下这道悬赏',
-      description: '当前悬赏仍处于 open 状态，最顺的下一步是先以行脚人身份投递接榜玉简。',
-      ctaLabel: '立即接榜',
-      ctaKind: 'apply',
-      hint: '提交接榜玉简后，发榜人侧就能看到申请列表并继续点将。',
+      title: '推荐观察接榜是否已发出',
+      description: '当前悬赏仍处于 open 状态，最顺的下一步是观察 OpenClaw 是否已投递接榜玉简。',
+      hint: '一旦机器侧投递接榜玉简，发榜人侧就能看到申请列表并继续点将。',
       tone: 'blue',
     }
   }
 
   if (task.status === 'open' && context.applications.length > 0) {
     return {
-      title: '推荐切到接榜玉简完成点将',
-      description: '当前悬赏已经具备申请人，下一步最适合由发榜人选择申请人并创建 escrow。',
-      ctaLabel: null,
-      ctaKind: null,
-      hint: '下方“接榜玉简”中的点将按钮就是当前推荐动作。',
+      title: '推荐观察系统锁定执行者',
+      description: '当前悬赏已经具备申请人，下一步最适合观察系统如何选择申请人并创建 escrow。',
+      hint: '重点看申请质量、托管状态与最终锁定的执行者。',
       tone: 'amber',
     }
   }
@@ -2249,8 +1622,6 @@ function getRecommendedMarketplaceAction(
     return {
       title: '推荐先推进历练启动',
       description: '当前悬赏已经完成点将并建立托管，下一步重点是让行脚人尽快开始历练。',
-      ctaLabel: null,
-      ctaKind: null,
       hint: '可以先看上方阶段卡、申请摘要和当前托管状态，确认执行信息是否完整。',
       tone: 'amber',
     }
@@ -2258,22 +1629,18 @@ function getRecommendedMarketplaceAction(
 
   if (task.status === 'in_progress' && context.role === 'worker' && !context.completeDisabledReason) {
     return {
-      title: '推荐先交卷候验',
-      description: '当前悬赏已经进入 in_progress，且当前行脚人就是被点将执行者，可以先提交交卷等待验卷。',
-      ctaLabel: '提交交卷',
-      ctaKind: 'complete',
-      hint: '提交后会进入待验卷状态，由发榜人决定放款或打回重修。',
+      title: '推荐观察交卷候验',
+      description: '当前悬赏已经进入 in_progress，下一步重点是观察被点将的行脚人何时提交交卷。',
+      hint: '交卷后会进入待验卷状态，由发榜人决定放款或打回重修。',
       tone: 'amber',
     }
   }
 
   if (task.status === 'submitted' && !context.acceptDisabledReason) {
     return {
-      title: '推荐验卷并放款',
-      description: '当前悬赏已经收到交卷，下一步最适合由发榜人验卷，通过后再释放托管并生成成长资产。',
-      ctaLabel: '立即验卷',
-      ctaKind: 'accept',
-      hint: '如果结果不满足预期，也可以使用下方“打回重修”。',
+      title: '推荐观察验卷与放款',
+      description: '当前悬赏已经收到交卷，下一步最适合观察发榜人验卷结果、托管释放与成长资产生成。',
+      hint: '如果结果不满足预期，系统也可能打回重修而不是直接放款。',
       tone: 'amber',
     }
   }
@@ -2282,8 +1649,6 @@ function getRecommendedMarketplaceAction(
     return {
       title: '推荐去洞府验证灵石变化',
       description: '悬赏已经 completed，接下来最有价值的是切到洞府确认赏格和资金状态是否符合预期。',
-      ctaLabel: '查看洞府',
-      ctaKind: 'profile',
       hint: '重点关注 balance、frozen_balance 与 credit 解释区。',
       tone: 'green',
     }
@@ -2293,8 +1658,6 @@ function getRecommendedMarketplaceAction(
     return {
       title: '推荐去洞府验证退款结果',
       description: '悬赏已经 cancelled，下一步最适合确认发榜人侧资金是否已回到可解释状态。',
-      ctaLabel: '查看洞府',
-      ctaKind: 'profile',
       hint: '重点关注 frozen_balance 是否回落，以及 credit 解释区是否能说明当前状态。',
       tone: 'slate',
     }
@@ -2303,8 +1666,6 @@ function getRecommendedMarketplaceAction(
   return {
     title: '当前动作受限，建议先看阻塞原因',
     description: '系统暂时不建议直接执行下一步操作，请先参考上方阶段卡和下方 disabled reason。',
-    ctaLabel: null,
-    ctaKind: null,
     hint: context.applyDisabledReason || context.completeDisabledReason || context.cancelDisabledReason || null,
     tone: 'slate',
   }
@@ -2312,18 +1673,8 @@ function getRecommendedMarketplaceAction(
 
 function RecommendedActionCard({
   recommendedAction,
-  onOpenProfile,
-  onApply,
-  onComplete,
-  onAccept,
-  observerOnly = false,
 }: {
   recommendedAction: RecommendedMarketplaceAction
-  onOpenProfile: () => void
-  onApply: () => void
-  onComplete: () => void
-  onAccept: () => void
-  observerOnly?: boolean
 }) {
   const toneClass =
     recommendedAction.tone === 'green'
@@ -2334,28 +1685,14 @@ function RecommendedActionCard({
           ? 'border-blue-200 bg-blue-50 text-blue-800'
           : 'border-slate-200 bg-slate-50 text-slate-700'
 
-  const handleClick = () => {
-    if (recommendedAction.ctaKind === 'apply') return onApply()
-    if (recommendedAction.ctaKind === 'complete') return onComplete()
-    if (recommendedAction.ctaKind === 'accept') return onAccept()
-    if (recommendedAction.ctaKind === 'profile') return onOpenProfile()
-  }
-
   return (
     <div className={`rounded-xl border p-4 ${toneClass}`}>
       <div className="text-xs font-medium uppercase tracking-wide opacity-80">推荐下一步动作</div>
       <div className="mt-1 text-base font-semibold">{recommendedAction.title}</div>
       <div className="mt-2 text-sm opacity-90">{recommendedAction.description}</div>
-      {!observerOnly && recommendedAction.ctaLabel && (
-        <button type="button" onClick={handleClick} className="mt-4 rounded-lg bg-white/80 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-white">
-          {recommendedAction.ctaLabel}
-        </button>
-      )}
-      {observerOnly && (
-        <div className="mt-4 rounded-lg bg-white/70 px-4 py-3 text-sm text-gray-800">
-          当前网页只保留观察位。推荐动作仍由 OpenClaw 在机器侧自主执行。
-        </div>
-      )}
+      <div className="mt-4 rounded-lg bg-white/70 px-4 py-3 text-sm text-gray-800">
+        当前网页只保留观察位。推荐动作仍由 OpenClaw 在机器侧自主执行。
+      </div>
       {recommendedAction.hint && <div className="mt-3 text-sm opacity-90">提示：{recommendedAction.hint}</div>}
     </div>
   )
@@ -2501,7 +1838,6 @@ function TaskLifecycleStageCard({ stageGuide }: { stageGuide: TaskStageGuide }) 
 function buildTaskWorkspacePhaseCards(
   task: MarketplaceTask | null,
   applications: TaskApplication[],
-  outcome: RecentTaskOutcome | null,
 ): TaskWorkspacePhaseCardDescriptor[] {
   if (!task) {
     return [
@@ -2531,9 +1867,9 @@ function buildTaskWorkspacePhaseCards(
       },
       {
         key: 'asset',
-        title: '结果与沉淀',
+        title: '结果与资产',
         summary: '结案后会在这里观察法卷、模板和赠送资产。',
-        cta: '等待沉淀结果',
+        cta: '等待结果生成',
         tone: 'slate',
         current: false,
       },
@@ -2573,7 +1909,7 @@ function buildTaskWorkspacePhaseCards(
           ? `托管 ${task.escrow_id} 已建立，当前重点是推进执行与交卷节奏。`
           : '当前已进入执行，但 escrow 信息缺失，建议优先核对托管状态。'
         : isReviewStage || isAssetStage
-          ? '执行阶段已经结束，系统焦点已转到验卷、结算或沉淀。'
+          ? '执行阶段已经结束，系统焦点已转到验卷、结算或资产生成。'
           : '点将并建立托管后，这里会进入执行阶段。',
       cta: isExecutionStage ? '推进执行' : isReviewStage || isAssetStage ? '执行已完成' : '等待进入执行',
       tone: isExecutionStage ? (task.escrow_id ? 'amber' : 'primary') : isReviewStage || isAssetStage ? 'green' : 'slate',
@@ -2595,22 +1931,18 @@ function buildTaskWorkspacePhaseCards(
     },
     {
       key: 'asset',
-      title: '结果与沉淀',
-      summary: outcome
-        ? getTaskOutcomeTitle(outcome)
-        : task.status === 'completed'
-          ? '当前任务已经完成，建议立即回洞府、法卷坊和账房核对沉淀结果。'
-          : task.status === 'cancelled'
-            ? '当前任务已终止，重点转为核对退款和冻结回落。'
-            : '验卷完成后，系统会自动尝试沉淀法卷、模板与赠送资产。',
-      cta: outcome
-        ? '查看沉淀结果'
-        : task.status === 'completed'
-          ? '查看结案结果'
-          : task.status === 'cancelled'
-            ? '查看退款结果'
-            : '等待沉淀触发',
-      tone: outcome || task.status === 'completed' ? 'green' : task.status === 'cancelled' ? 'slate' : 'slate',
+      title: '结果与资产',
+      summary: task.status === 'completed'
+        ? '当前任务已经完成，建议立即回洞府、法卷坊和账房核对结果。'
+        : task.status === 'cancelled'
+          ? '当前任务已终止，重点转为核对退款和冻结回落。'
+          : '验卷完成后，系统会自动尝试生成法卷、模板与赠送资产。',
+      cta: task.status === 'completed'
+        ? '查看结案结果'
+        : task.status === 'cancelled'
+          ? '查看退款结果'
+          : '等待结果生成',
+      tone: task.status === 'completed' ? 'green' : task.status === 'cancelled' ? 'slate' : 'slate',
       current: isAssetStage,
     },
   ]
@@ -2748,7 +2080,7 @@ function TaskStateGuide({ task }: { task: MarketplaceTask }) {
     submitted: '当前悬赏处于 submitted：行脚人已提交交卷，发榜人可以验卷放款或打回重修。',
     completed: '当前悬赏处于 completed：悬赏已完成，托管应已释放，不再允许 assign / complete / cancel。',
     cancelled: '当前悬赏处于 cancelled：悬赏已撤下，不再允许 apply / assign / complete / cancel。',
-  }[task.status] || '当前悬赏状态未知，请结合服务端状态判断可执行操作。'
+  }[task.status] || '当前悬赏状态未知，请结合服务端状态判断下一步应观察什么。'
 
   return (
     <div className="rounded-xl bg-blue-50 p-4 text-sm text-blue-800">
@@ -2784,143 +2116,6 @@ function TaskSettlementLinks({ task }: { task: MarketplaceTask }) {
       </div>
     </div>
   )
-}
-
-function TaskOutcomeCard({ outcome }: { outcome: RecentTaskOutcome }) {
-  const isAccepted = outcome.status === 'completed'
-  const growthAssets = outcome.growthAssets
-  const actions = buildTaskOutcomeActions(outcome)
-
-  return (
-    <div className={`rounded-xl border p-4 ${isAccepted ? 'border-green-200 bg-green-50 text-green-900' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
-      <div className="text-xs font-medium uppercase tracking-wide opacity-80">{isAccepted ? '本次悬赏沉淀结果' : '验卷后预期沉淀'}</div>
-      <div className="mt-1 text-base font-semibold">{getTaskOutcomeTitle(outcome)}</div>
-      <div className="mt-2 text-sm opacity-90">{getTaskOutcomeDescription(outcome)}</div>
-      {growthAssets && (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <OutcomeMetric label="法卷草稿" value={growthAssets.skill_draft_id || '未生成'} />
-          <OutcomeMetric label="发榜模板" value={growthAssets.employer_template_id || '未生成'} />
-          <OutcomeMetric label="获赠记录" value={growthAssets.employer_skill_grant_id || '未生成'} />
-          <OutcomeMetric label="已发布法卷" value={growthAssets.published_skill_id || '未发布'} />
-        </div>
-      )}
-      {actions.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-3">
-          {actions.map((action) => (
-            <Link
-              key={`${action.label}-${action.href}`}
-              to={action.href}
-              className={action.tone === 'primary'
-                ? 'rounded-lg bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100'
-                : 'rounded-lg border border-white/70 bg-transparent px-4 py-2 text-sm font-medium hover:bg-white/40'}
-            >
-              {action.label}
-            </Link>
-          ))}
-        </div>
-      )}
-      <div className="mt-3 text-sm opacity-90">{outcome.message}</div>
-    </div>
-  )
-}
-
-function OutcomeMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-white/70 px-4 py-3 text-sm text-gray-700">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 font-medium break-all">{value}</div>
-    </div>
-  )
-}
-
-function getTaskOutcomeTitle(outcome: RecentTaskOutcome) {
-  if (outcome.status === 'submitted') return '悬赏已交卷候验，等待成长资产在验卷后落地'
-  if (outcome.growthAssets?.employer_skill_grant_id) return '验卷完成，法卷已自动发布并赠送给发榜人'
-  if (outcome.growthAssets?.published_skill_id) return '验卷完成，成功经验已自动沉淀为法卷'
-  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) return '验卷完成，成长资产已成功沉淀'
-  return '验卷完成，托管已释放'
-}
-
-function getTaskOutcomeDescription(outcome: RecentTaskOutcome) {
-  if (outcome.status === 'submitted') {
-    return '当前托管仍处于待验卷阶段。发榜人确认后，平台会尝试生成法卷草稿、发榜模板，以及首单赠送法卷。'
-  }
-
-  if (outcome.growthAssets?.employer_skill_grant_id) {
-    return '这次真实悬赏已经完成从交卷 → 自动沉淀 → 发榜人可复购的闭环。建议立即查看赠送法卷和模板复用入口。'
-  }
-
-  if (outcome.growthAssets?.published_skill_id) {
-    return '这次真实悬赏的成功经验已经沉淀成公开法卷，可以直接回到万象楼查看定价、曝光和后续成交。'
-  }
-
-  if (outcome.growthAssets?.skill_draft_id || outcome.growthAssets?.employer_template_id) {
-    return '这次悬赏已经沉淀出可复用资产，建议继续回洞府查看模板、草稿和后续复用路径。'
-  }
-
-  return '本次悬赏已完成并释放托管，但当前没有返回新的公开战绩。建议优先核对风险飞剑和洞府。'
-}
-
-function buildTaskOutcomeActions(outcome: RecentTaskOutcome): TaskOutcomeAction[] {
-  const growthAssets = outcome.growthAssets
-  const actions: TaskOutcomeAction[] = []
-
-  if (outcome.status === 'submitted') {
-    actions.push({ label: '去看风险飞剑', href: '/wallet?focus=notifications&source=marketplace-submitted', tone: 'primary' })
-    actions.push({ label: '去洞府看战绩档案', href: '/profile?source=marketplace-submitted', tone: 'secondary' })
-    return actions
-  }
-
-  if (growthAssets?.employer_skill_grant_id && growthAssets.published_skill_id) {
-    actions.push({
-      label: '去查看获赠法卷',
-      href: buildGiftedSkillMarketplaceHref(growthAssets.employer_skill_grant_id, growthAssets.published_skill_id),
-      tone: 'primary',
-    })
-  } else if (growthAssets?.published_skill_id) {
-    actions.push({
-      label: '去查看新发布法卷',
-      href: buildSkillMarketplaceHref(growthAssets.published_skill_id, 'task-acceptance'),
-      tone: 'primary',
-    })
-  }
-
-  if (growthAssets?.employer_template_id || growthAssets?.skill_draft_id) {
-    actions.push({
-      label: growthAssets?.employer_template_id ? '去洞府复用模板' : '去洞府查看草稿',
-      href: '/profile?source=marketplace-growth',
-      tone: actions.length === 0 ? 'primary' : 'secondary',
-    })
-  }
-
-  actions.push({
-    label: '去风险飞剑中心',
-    href: '/wallet?focus=notifications&source=marketplace-acceptance',
-    tone: actions.length === 0 ? 'primary' : 'secondary',
-  })
-
-  return actions.slice(0, 3)
-}
-
-function buildSkillMarketplaceHref(skillId: string, source = 'marketplace') {
-  return `/marketplace?${new URLSearchParams({
-    tab: 'skills',
-    skill_id: skillId,
-    source,
-  }).toString()}`
-}
-
-function buildGiftedSkillMarketplaceHref(grantId: string, skillId: string) {
-  return `/marketplace?${new URLSearchParams({
-    tab: 'skills',
-    source: 'gifted-grant',
-    grant_id: grantId,
-    skill_id: skillId,
-  }).toString()}`
-}
-
-function DisabledHint({ children }: { children: ReactNode }) {
-  return <div className="text-xs text-gray-500">{children}</div>
 }
 
 function RoleButton({ active, onClick, label, aid }: { active: boolean; onClick: () => void; label: string; aid?: string }) {
