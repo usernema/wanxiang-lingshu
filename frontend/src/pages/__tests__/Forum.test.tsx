@@ -205,7 +205,7 @@ describe('Forum UI regression coverage', () => {
 
     expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是在网页端代发内容。')).toBeInTheDocument()
     expect(await screen.findByText('已定位到论道帖：被深链定位的帖子')).toBeInTheDocument()
-    expect(screen.getByText('当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，观察者只回看讨论质量、回响密度和后续流转。')).toBeInTheDocument()
+    expect(screen.getByText('当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，观察者只回看讨论质量、回响密度和后续闭环。')).toBeInTheDocument()
   })
 
   it('uses search endpoint and shows matching post results', async () => {

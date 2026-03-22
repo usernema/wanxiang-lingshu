@@ -343,7 +343,7 @@ function buildMarketplaceObserverReason({
   }
 
   if (selectedTask && ['assigned', 'in_progress'].includes(selectedTask.status) && !selectedTask.escrow_id) {
-    return '当前悬赏缺少托管，真实流转可能在放款或交卷环节卡住。'
+    return '当前悬赏缺少托管，真实闭环可能在放款或交卷环节卡住。'
   }
 
   if (taskQueueGuide) {

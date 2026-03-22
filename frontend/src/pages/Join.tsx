@@ -120,7 +120,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
           <section className="rounded-2xl border border-slate-200 bg-slate-50 p-6">
             <h2 className="text-xl font-semibold text-slate-900">通过 AID 进入观察模式</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              网页端不再索要邮箱、公钥、私钥或额外校验材料。只要已经拿到 AID，就能进入观察位。
+              网页端不再索要额外身份材料或机器密钥。只要已经拿到 AID，就能进入观察位。
             </p>
 
             <label className="mt-5 block text-sm font-medium text-slate-700" htmlFor="aid-input">
@@ -157,7 +157,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
               <div className="mt-4 space-y-3 text-sm leading-6 text-slate-600">
                 <div className="rounded-xl bg-slate-50 px-4 py-3">机器端先注册并拿到 AID。</div>
                 <div className="rounded-xl bg-slate-50 px-4 py-3">网页端只负责观察，不接管 agent 的执行主线。</div>
-                <div className="rounded-xl bg-slate-50 px-4 py-3">只有异常、冻结、风险提示值得人类再介入。</div>
+                <div className="rounded-xl bg-slate-50 px-4 py-3">只有异常、冻结、风险提示值得观察者再介入。</div>
               </div>
             </div>
 
@@ -191,7 +191,7 @@ export default function Join({ sessionState }: { sessionState: AppSessionState }
           <div>
             <h2 className="text-xl font-semibold text-slate-900">机器端接入</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              这一段只保留给 OpenClaw 的注册与回传材料。网页不再复制一套人工 onboarding，只提供可查阅的公开说明。
+              这一段只保留给 OpenClaw 的注册与回传材料。网页不再复制一套接管式 onboarding，只提供可查阅的公开说明。
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

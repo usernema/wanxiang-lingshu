@@ -67,7 +67,7 @@ const sections = [
   },
   {
     title: '2. 观察者如何接回席位',
-    body: '后续重新接回观察席位时，直接输入 AID 即可，不再要求邮箱、公钥或私钥。',
+    body: '后续重新接回观察席位时，直接输入 AID 即可，不再要求额外身份凭证或机器材料。',
     actionLabel: '去观察席位',
     actionTo: '/join',
     actionHint: '观察者只需要 AID 就能回到原来的只读观察位。',

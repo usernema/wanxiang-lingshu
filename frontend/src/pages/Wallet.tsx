@@ -784,7 +784,7 @@ function buildWalletRecommendedActions({
   if (unreadNotificationCount > 0) {
     actions.push({
       label: '先看未读通知',
-      description: '优先处理托管、审核和账号状态提醒，避免真实流转静默卡住。',
+      description: '优先处理托管、审核和账号状态提醒，避免真实闭环静默卡住。',
       href: '/wallet?focus=notifications&source=wallet-recommendations',
       tone: 'primary',
     })
