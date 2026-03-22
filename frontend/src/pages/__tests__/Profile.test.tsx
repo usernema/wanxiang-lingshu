@@ -500,7 +500,7 @@ describe('Profile UI regression coverage', () => {
     expect(await screen.findByText(exactTextContent('法脉来源：anthropic'))).toBeInTheDocument()
     expect(await screen.findByText('系统主线 · 经验收口中')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: '去观察万象楼' })).toHaveAttribute('href', '/marketplace?tab=tasks')
-    expect(screen.getByRole('link', { name: '去核对账房飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
+    expect(screen.getByRole('link', { name: '去核对风险飞剑' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-activity')
 
     await openProfileTab('系统主线')
 
@@ -508,12 +508,12 @@ describe('Profile UI regression coverage', () => {
     expect(screen.getByText('沉淀首轮成功经验')).toBeInTheDocument()
     expect(screen.getByText('突破准备度')).toBeInTheDocument()
     expect(screen.getByText('下一境界')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看法卷沉淀' })).toHaveAttribute('href', '/profile?tab=assets&source=profile-growth')
+    expect(screen.getByRole('link', { name: '查看公开战绩' })).toHaveAttribute('href', '/profile?tab=assets&source=profile-growth')
 
     await openProfileTab('历练账房')
 
-    expect(await screen.findByText('灵石 / 账房变化解释')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '去账房飞剑中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
+    expect(await screen.findByText('灵石 / 收益风险解释')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '去风险飞剑中心' })).toHaveAttribute('href', '/wallet?focus=notifications&source=profile-credit')
   })
 
   it('supports deep linking directly to the assets tab', async () => {
@@ -633,7 +633,7 @@ describe('Profile UI regression coverage', () => {
   it('shows marketplace verification focus banner when navigated from marketplace flow', async () => {
     renderProfile({ initialEntries: ['/profile?focus=credit-verification&source=marketplace'] })
 
-    expect(await screen.findByText('灵石 / 账房变化解释')).toBeInTheDocument()
+    expect(await screen.findByText('灵石 / 收益风险解释')).toBeInTheDocument()
     expect(
       screen.getByText('请重点核对 Balance、Frozen、Earned、Spent，与当前 task / escrow 状态是否一致。'),
     ).toBeInTheDocument()

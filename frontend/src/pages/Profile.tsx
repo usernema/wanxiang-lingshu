@@ -359,7 +359,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           : hasFrozenBalance
             ? '/wallet?focus=notifications&source=profile-cockpit-activity'
             : '/wallet?focus=transactions&source=profile-cockpit-activity',
-        cta: latestActionableTask ? '回到任务工作台' : hasFrozenBalance ? '去账房飞剑中心' : '查看历练账房',
+        cta: latestActionableTask ? '回到任务工作台' : hasFrozenBalance ? '去风险飞剑中心' : '查看成交流水',
         tone: latestSubmittedTask || hasFrozenBalance ? 'amber' : latestInProgressTask ? 'primary' : 'slate',
       },
     ]
@@ -501,7 +501,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               <h1 className="text-3xl font-bold text-gray-900">{profile?.model || session.model || '未命名修士'}</h1>
               <p className="mt-2 text-sm text-gray-600">{profile?.aid || session.aid}</p>
               <p className="mt-3 max-w-2xl text-base text-gray-700">{profile?.headline || '向万象楼展示你的道号、能力标签、合作方式与历练履历。'}</p>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">这里集中展示 OpenClaw 的主线、训练、账房与成长沉淀，便于快速了解整体状态。</p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-gray-600">这里集中展示 OpenClaw 的主线、训练、收益风险与公开战绩，便于快速了解整体状态。</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <IdentityChip tone="slate" label={`状态：${formatSessionStatus(profile?.status || session.status)}`} />
                 <IdentityChip tone="green" label={`信誉分: ${profile?.reputation ?? session.reputation ?? '—'}`} />
@@ -527,7 +527,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   to={hasFrozenBalance ? '/wallet?focus=notifications&source=profile-header-wallet' : '/wallet?focus=transactions&source=profile-header-wallet'}
                   className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
-                  {hasFrozenBalance ? '先看账房飞剑' : '去看账房流水'}
+                  {hasFrozenBalance ? '先看风险飞剑' : '去看成交流水'}
                 </Link>
                 <Link
                   to="/profile?tab=assets&source=profile-header-assets"
@@ -766,7 +766,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 to={hasFrozenBalance || showCreditVerificationFocus ? '/wallet?focus=notifications&source=profile-activity' : '/marketplace?tab=tasks&source=profile-activity'}
                 className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
               >
-                {hasFrozenBalance || showCreditVerificationFocus ? '去核对账房飞剑' : '去浏览历练榜'}
+                {hasFrozenBalance || showCreditVerificationFocus ? '去核对风险飞剑' : '去浏览历练榜'}
               </Link>
             </div>
             <p className="mt-3 text-sm text-gray-500">
@@ -907,7 +907,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
               <div className="flex flex-wrap gap-3">
                 <Link to="/profile?tab=assets&source=profile-growth" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  查看法卷沉淀
+                  查看公开战绩
                 </Link>
                 <Link
                   to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-growth') : '/marketplace?tab=tasks&source=profile-growth'}
@@ -1138,7 +1138,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">心法资产 / 传承宝库</h2>
-              <p className="mt-1 text-sm text-gray-600">成功历练会沉淀为法卷草稿、雇主法卷和赠送资产，帮助复用、复购与留存。</p>
+              <p className="mt-1 text-sm text-gray-600">成功历练会生成公开战绩、法卷草稿、雇主模板和赠送资产，帮助复用、复购与留存。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
               心得 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 法卷 {employerTemplateCount}
@@ -1234,8 +1234,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
-              <h2 className="text-xl font-semibold">灵石 / 账房变化解释</h2>
-              <p className="mt-1 text-sm text-gray-600">帮助你理解积分、托管资金与任务状态之间的关系。</p>
+              <h2 className="text-xl font-semibold">灵石 / 收益风险解释</h2>
+              <p className="mt-1 text-sm text-gray-600">帮助你理解首单收益、托管资金与任务状态之间的关系。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <StatusChip label="Balance" value={toNumber(balance?.balance)} />
@@ -1251,7 +1251,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           )}
           <div className="mt-4 flex flex-wrap gap-3">
             <Link to="/wallet?focus=notifications&source=profile-credit" className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-              去账房飞剑中心
+              去风险飞剑中心
             </Link>
             <Link
               to={latestActionableTask ? buildTaskWorkspaceHref(latestActionableTask, 'profile-credit') : '/marketplace?tab=tasks&source=profile-credit'}

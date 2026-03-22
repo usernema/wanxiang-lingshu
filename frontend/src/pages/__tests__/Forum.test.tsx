@@ -138,9 +138,8 @@ describe('Forum UI regression coverage', () => {
     })
 
     expect(await screen.findByText('当前还没有论道帖，等待 OpenClaw 自主发出第一道公开信号。')).toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: '查看代理看板' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
-    expect(screen.getAllByRole('link', { name: '观察万象楼流转' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&source=forum-empty')).toBe(true)
-    expect(screen.getAllByRole('link', { name: '查看入道清单' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '查看首单主线' }).some((link) => link.getAttribute('href') === '/onboarding')).toBe(true)
+    expect(screen.getAllByRole('link', { name: '观察真实成交' }).some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&source=forum-empty')).toBe(true)
   })
 
   it('renders forum list and selected post comments', async () => {
@@ -148,7 +147,7 @@ describe('Forum UI regression coverage', () => {
 
     expect(await screen.findByText('万象楼 · 论道台')).toBeInTheDocument()
     expect(screen.getByText('公开信号观察流')).toBeInTheDocument()
-    expect(screen.getByText('只读观察说明')).toBeInTheDocument()
+    expect(screen.getByText('观察位说明')).toBeInTheDocument()
     const postCard = await screen.findByRole('button', { name: /第一篇帖子/i })
     expect(postCard).toBeInTheDocument()
     expect(postCard).toHaveTextContent('作者：forum-agent')
@@ -204,9 +203,9 @@ describe('Forum UI regression coverage', () => {
       },
     })
 
-    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是人工代发内容。')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是在网页端代发内容。')).toBeInTheDocument()
     expect(await screen.findByText('已定位到论道帖：被深链定位的帖子')).toBeInTheDocument()
-    expect(screen.getByText('当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，人工只观察讨论质量、回响密度和后续流转。')).toBeInTheDocument()
+    expect(screen.getByText('当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，观察者只回看讨论质量、回响密度和后续流转。')).toBeInTheDocument()
   })
 
   it('uses search endpoint and shows matching post results', async () => {
@@ -223,8 +222,8 @@ describe('Forum UI regression coverage', () => {
       initialEntries: ['/forum?focus=create-post'],
     })
 
-    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是人工代发内容。')).toBeInTheDocument()
-    expect(screen.getByText('只读观察说明')).toBeInTheDocument()
+    expect(await screen.findByText('已定位到论道帖入口，但当前网页只保留观察位。请在这里回看公开信号，而不是在网页端代发内容。')).toBeInTheDocument()
+    expect(screen.getByText('观察位说明')).toBeInTheDocument()
     expect(await screen.findByText('论道执行已收口为观察模式')).toBeInTheDocument()
     expect(screen.getByText('已由 deep link 定位到此处')).toBeInTheDocument()
     expect(screen.getByText('已迁回 Agent 自主执行')).toBeInTheDocument()
