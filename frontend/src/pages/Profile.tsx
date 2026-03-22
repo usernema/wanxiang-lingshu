@@ -217,7 +217,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     () => [
       { key: 'dashboard', label: '命牌面板', badge: `${profileStrength.score}%` },
       { key: 'growth', label: '系统主线', badge: growthProfile ? autopilotStateLabel : '待判定' },
-      { key: 'assets', label: '心法资产', badge: reusableAssetCount || '—' },
+      { key: 'assets', label: '公开战绩', badge: reusableAssetCount || '—' },
       { key: 'activity', label: '历练账房', badge: recentTasks.length || '—' },
     ],
     [autopilotStateLabel, growthProfile, profileStrength.score, recentTasks.length, reusableAssetCount],
@@ -227,7 +227,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     if (hasFrozenBalance) return `当前有 ${toNumber(balance?.frozen_balance)} 灵石仍在冻结，建议优先看账房与关联任务。`
     if (latestSubmittedTask) return `当前有任务正处于候验卷阶段，建议优先观察验收与放款。`
     if ((dojoOverview?.open_mistake_count || 0) > 0) return `道场当前仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题，建议优先观察补训是否推进。`
-    if (taskSummary.completed > 0 && reusableAssetCount === 0) return '已经出现成功闭环，但尚未形成稳定心法资产，建议优先生成公开战绩。'
+    if (taskSummary.completed > 0 && reusableAssetCount === 0) return '已经出现成功闭环，但尚未形成稳定公开战绩，建议优先生成公开战绩。'
     return null
   }, [
     balance?.frozen_balance,
@@ -261,8 +261,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         tone: hasFrozenBalance ? 'amber' : 'green',
       },
       {
-        label: '心法资产',
-        value: reusableAssetCount > 0 ? `${reusableAssetCount} 份可复用资产` : '尚未形成资产库',
+        label: '公开战绩',
+        value: reusableAssetCount > 0 ? `${reusableAssetCount} 份复用证据` : '尚未形成战绩库',
         tone: reusableAssetCount > 0 ? 'green' : 'slate',
       },
       {
@@ -327,10 +327,10 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           (dojoOverview?.open_mistake_count || 0) > 0
             ? `道场仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题与 ${dojoOverview?.pending_plan_count || 0} 条待补训计划，建议继续纠错。`
             : reusableAssetCount > 0
-              ? `当前已生成 ${reusableAssetCount} 份可复用资产，可继续复用、赠送或发榜。`
+              ? `当前已生成 ${reusableAssetCount} 份复用证据，可继续复用、赠送或发榜。`
               : taskSummary.completed > 0
                 ? '已经出现成功闭环，但公开战绩仍偏少，建议优先把经验生成心法。'
-                : '当前还没有稳定资产库，先完成首单闭环再生成第一份公开资产。',
+                : '当前还没有稳定战绩库，先完成首单闭环再生成第一份公开战绩。',
         href:
           (dojoOverview?.open_mistake_count || 0) > 0
             ? '/profile?tab=growth&source=profile-cockpit-training'
@@ -339,7 +339,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           (dojoOverview?.open_mistake_count || 0) > 0
             ? '去看训练场'
             : reusableAssetCount > 0
-              ? '查看心法资产'
+              ? '查看公开战绩'
               : '去生成战绩',
         tone:
           (dojoOverview?.open_mistake_count || 0) > 0
@@ -415,7 +415,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       {
         key: 'asset',
         title: '公开战绩',
-        summary: latestPublicAsset?.name || latestGiftedAsset?.title || latestDraftAsset?.title || latestTemplateAsset?.title || '还没有形成可复用资产',
+        summary: latestPublicAsset?.name || latestGiftedAsset?.title || latestDraftAsset?.title || latestTemplateAsset?.title || '还没有形成公开战绩',
         detail: latestPublicAsset
           ? `${latestPublicAsset.purchase_count || 0} 次复用 · 公开法卷`
           : latestGiftedAsset
@@ -424,13 +424,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               ? `经验草稿 · 来源 ${latestDraftAsset.source_task_id}`
               : latestTemplateAsset
                 ? `雇主模板 · 复用 ${latestTemplateAsset.reuse_count} 次`
-                : '首单之后生成出来的法卷、模板和赠送资产会集中出现在这里。',
+                : '首单之后生成出来的法卷、模板和获赠证据会集中出现在这里。',
         href: latestPublicAsset?.skill_id
           ? buildSkillMarketplaceHref(latestPublicAsset.skill_id, 'profile-pulse-asset')
           : latestGiftedAsset?.skill_id
             ? buildGiftedSkillMarketplaceHref(latestGiftedAsset.grant_id, latestGiftedAsset.skill_id)
             : '/profile?tab=assets',
-        cta: reusableAssetCount > 0 ? '看公开战绩' : '等待资产长出',
+        cta: reusableAssetCount > 0 ? '看公开战绩' : '等待战绩长出',
         tone: reusableAssetCount > 0 ? 'green' : 'amber',
       },
       {
@@ -533,7 +533,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   to="/profile?tab=assets&source=profile-header-assets"
                   className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
                 >
-                  看心法资产
+                  看公开战绩
                 </Link>
               </div>
             </div>
@@ -604,7 +604,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               onClick={() => setActiveTab('assets')}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              看心法资产
+              看公开战绩
             </button>
             <button
               type="button"
@@ -1137,8 +1137,8 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           <div className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-semibold">心法资产 / 传承宝库</h2>
-              <p className="mt-1 text-sm text-gray-600">成功闭环会生成公开战绩、法卷草稿、雇主模板和赠送资产，帮助复用、复购与留存。</p>
+              <h2 className="text-xl font-semibold">公开战绩 / 传承宝库</h2>
+              <p className="mt-1 text-sm text-gray-600">成功闭环会生成公开战绩、法卷草稿、雇主模板和获赠证据，帮助复用、复购与留存。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
               心得 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 法卷 {employerTemplateCount}
@@ -1282,7 +1282,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
           <ActivitySection
             title="已成法卷"
-            emptyText="当前还没有公开法卷。完成真实闭环后，系统会继续自动生成首卷法卷与可复用资产。"
+            emptyText="当前还没有公开法卷。完成真实闭环后，系统会继续自动生成首卷法卷与复用证据。"
             items={recentSkills.map((skill) => ({
               id: skill.skill_id,
               title: skill.name,

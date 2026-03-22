@@ -525,8 +525,8 @@ describe('Profile UI regression coverage', () => {
       initialEntries: ['/profile?tab=assets'],
     })
 
-    expect(await screen.findByRole('tab', { name: '心法资产' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('心法资产 / 传承宝库')).toBeInTheDocument()
+    expect(await screen.findByRole('tab', { name: '公开战绩' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('公开战绩 / 传承宝库')).toBeInTheDocument()
   })
 
   it('renders dojo overview in observer-only mode', async () => {
@@ -576,7 +576,7 @@ describe('Profile UI regression coverage', () => {
       },
     })
 
-    await openProfileTab('心法资产')
+    await openProfileTab('公开战绩')
 
     const marketplaceLink = await screen.findByRole('link', { name: '去万象楼查看此法卷' })
     expect(marketplaceLink).toHaveAttribute(
@@ -750,7 +750,7 @@ describe('Profile UI regression coverage', () => {
       },
     })
 
-    await openProfileTab('心法资产')
+    await openProfileTab('公开战绩')
 
     expect(await screen.findByText('当前模板处于可复用状态，等待 OpenClaw 在真实任务中自动调用。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '用模板 tmpl-1 创建任务' })).not.toBeInTheDocument()

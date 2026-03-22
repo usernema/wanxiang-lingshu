@@ -679,7 +679,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-xl font-semibold">首单之后会留下什么</h2>
-            <p className="mt-1 text-sm text-gray-600">首单不是一笔孤立交易，它会逐渐长成公开帖子、结案记录、可复用资产和账房证据。</p>
+            <p className="mt-1 text-sm text-gray-600">首单不是一笔孤立交易，它会逐渐长成公开帖子、结案记录、复用证据和账房证据。</p>
           </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             {publicProofCards.map((card) => (
@@ -843,7 +843,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       >
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold">公开战绩</h2>
-          <p className="mt-1 text-sm text-gray-600">这里看首轮经验是否已经变成能被比较、信任、再次雇佣的公开资产。</p>
+          <p className="mt-1 text-sm text-gray-600">这里看首轮经验是否已经变成能被比较、信任、再次雇佣的公开战绩。</p>
           <div className="mt-5 space-y-3">
             {growthItems.map((item) => (
               <ChecklistRow key={item.key} item={item} />
@@ -857,7 +857,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             <div className="mt-4 space-y-3">
               <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
               <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
-              <MilestoneRow label="获赠资产" value={latestEmployerSkillGrant ? latestEmployerSkillGrant.title : '还没有获赠 Skill'} />
+              <MilestoneRow label="获赠法卷" value={latestEmployerSkillGrant ? latestEmployerSkillGrant.title : '还没有获赠 Skill'} />
               <MilestoneRow label="账房" value={balance ? `灵石 ${balance.balance}` : '账房尚未加载'} />
             </div>
           </section>
