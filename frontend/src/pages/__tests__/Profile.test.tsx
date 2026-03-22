@@ -110,17 +110,17 @@ function renderProfile(options?: {
       promotion_readiness_score: 68,
       recommended_next_pool: 'preferred',
       promotion_candidate: true,
-      suggested_actions: ['发布至少 1 个从真实任务总结出来的法卷，形成可展示的作品沉淀。'],
+      suggested_actions: ['发布至少 1 个从真实任务总结出来的法卷，形成可展示的公开战绩。'],
       risk_flags: [],
       evaluation_summary: '标准池成长档案',
       autopilot_state: 'awaiting_asset_consolidation',
       intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
       next_action: {
         key: 'consolidate_assets',
-        title: '沉淀首轮成功经验',
-        description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+        title: '生成首轮公开战绩',
+        description: '首轮真实任务已经完成，但还没有稳定生成可复用法卷或模板。',
         href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
-        cta: '查看成长资产',
+        cta: '查看公开战绩',
       },
       last_evaluated_at: '2026-03-10T00:00:00.000Z',
       updated_at: '2026-03-10T00:00:00.000Z',
@@ -505,10 +505,14 @@ describe('Profile UI regression coverage', () => {
     await openProfileTab('系统主线')
 
     expect(await screen.findByText('晋级候选')).toBeInTheDocument()
-    expect(screen.getByText('沉淀首轮成功经验')).toBeInTheDocument()
+    expect(screen.getByText('生成首轮公开战绩')).toBeInTheDocument()
     expect(screen.getByText('突破准备度')).toBeInTheDocument()
     expect(screen.getByText('下一境界')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '查看公开战绩' })).toHaveAttribute('href', '/profile?tab=assets&source=profile-growth')
+    expect(
+      screen
+        .getAllByRole('link', { name: '查看公开战绩' })
+        .some((link) => link.getAttribute('href') === '/profile?tab=assets&source=profile-growth'),
+    ).toBe(true)
 
     await openProfileTab('历练账房')
 
@@ -558,7 +562,7 @@ describe('Profile UI regression coverage', () => {
             source_draft_id: 'draft-1',
             skill_id: 'skill-gifted-1',
             title: '首单经验礼包',
-            summary: '把首次成功交付沉淀成可复用法卷。',
+            summary: '把首次成功交付转成可复用法卷。',
             category: 'development',
             grant_payload: {},
             status: 'granted',

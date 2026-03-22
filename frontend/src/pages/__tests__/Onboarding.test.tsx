@@ -71,7 +71,7 @@ describe('Onboarding deep links', () => {
             membership_level: 'member',
             trust_level: 'trusted',
             headline: '可执行复杂交付',
-            bio: '擅长真实流转',
+            bio: '擅长首单闭环',
             created_at: '2026-03-09T00:00:00.000Z',
           },
         }
@@ -193,7 +193,7 @@ describe('Onboarding deep links', () => {
               promotion_readiness_score: 35,
               recommended_next_pool: 'standard',
               promotion_candidate: false,
-              suggested_actions: ['沉淀首轮经验。'],
+              suggested_actions: ['生成首轮公开战绩。'],
               risk_flags: [],
               evaluation_summary: 'observed profile',
               forum_post_count: 1,
@@ -201,10 +201,10 @@ describe('Onboarding deep links', () => {
               intervention_reason: '建议继续保留 AID 观察位，确保用户能稳定接收系统告警。',
               next_action: {
                 key: 'consolidate_assets',
-                title: '沉淀首轮成功经验',
-                description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+                title: '生成首轮公开战绩',
+                description: '首轮真实任务已经完成，但还没有稳定生成可复用法卷或模板。',
                 href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
-                cta: '查看成长资产',
+                cta: '查看公开战绩',
               },
               last_evaluated_at: '2026-03-13T00:00:00.000Z',
               updated_at: '2026-03-13T00:00:00.000Z',
@@ -219,24 +219,24 @@ describe('Onboarding deep links', () => {
           data: {
             aid: 'worker-agent',
             generated_at: '2026-03-13T00:00:00.000Z',
-            summary: '系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。',
+            summary: '系统已经判断当前应先生成首轮公开战绩，再继续扩大真实样本。',
             autopilot_state: 'awaiting_asset_consolidation',
             observer_hint: '当前只需要观察结果与告警，不要接管 OpenClaw 的执行过程。',
             next_action: {
               key: 'consolidate_assets',
-              title: '沉淀首轮成功经验',
-              description: '首轮真实任务已经完成，但还没有稳定沉淀为可复用法卷或模板。',
+              title: '生成首轮公开战绩',
+              description: '首轮真实任务已经完成，但还没有稳定生成可复用法卷或模板。',
               href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
-              cta: '查看成长资产',
+              cta: '查看公开战绩',
             },
             steps: [
               {
                 key: 'consolidate_assets',
                 actor: 'machine',
-                title: '沉淀首轮成功经验',
-                description: '把首轮成功任务收口成稳定可复用的能力资产。',
+                title: '生成首轮公开战绩',
+                description: '把首轮成功任务转成稳定可复用的能力资产。',
                 href: '/marketplace?tab=skills&focus=publish-skill&source=growth-autopilot',
-                cta: '查看成长资产',
+                cta: '查看公开战绩',
                 api_method: 'GET',
                 api_path: '/api/v1/marketplace/skills',
                 action: {
@@ -250,7 +250,7 @@ describe('Onboarding deep links', () => {
                 title: '保留必要观察位',
                 description: '当前只需要看系统结论、账房提醒和必要告警。',
                 href: '/onboarding?tab=next',
-                cta: '查看观察看板',
+                cta: '查看首单主线',
               },
             ],
           },
@@ -268,8 +268,8 @@ describe('Onboarding deep links', () => {
     expect(await screen.findByText('首单引擎')).toBeInTheDocument()
     expect(screen.getByText('首单轨道')).toBeInTheDocument()
     expect(screen.getByText('首单之后会留下什么')).toBeInTheDocument()
-    expect((await screen.findAllByText('沉淀首轮成功经验')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText('系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('生成首轮公开战绩')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('系统已经判断当前应先生成首轮公开战绩，再继续扩大真实样本。')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '真实闭环' })).toHaveAttribute('href', '#onboarding-flow')
@@ -283,7 +283,7 @@ describe('Onboarding deep links', () => {
     const taskLoopLinks = screen.getAllByRole('link', { name: '查看历练闭环' })
     expect(taskLoopLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-worker-2&focus=task-workspace&source=onboarding')).toBe(true)
 
-    const assetLinks = screen.getAllByRole('link', { name: '查看成长资产' })
+    const assetLinks = screen.getAllByRole('link', { name: '查看公开战绩' })
     expect(assetLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gift-1')).toBe(true)
     expect(screen.getAllByRole('link', { name: '查看系统说明' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })

@@ -227,7 +227,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     if (hasFrozenBalance) return `当前有 ${toNumber(balance?.frozen_balance)} 灵石仍在冻结，建议优先看账房与关联任务。`
     if (latestSubmittedTask) return `当前有任务正处于候验卷阶段，建议优先观察验收与放款。`
     if ((dojoOverview?.open_mistake_count || 0) > 0) return `道场当前仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题，建议优先观察补训是否推进。`
-    if (taskSummary.completed > 0 && reusableAssetCount === 0) return '已经出现成功历练，但尚未形成稳定心法资产，建议优先收口经验沉淀。'
+    if (taskSummary.completed > 0 && reusableAssetCount === 0) return '已经出现成功闭环，但尚未形成稳定心法资产，建议优先生成公开战绩。'
     return null
   }, [
     balance?.frozen_balance,
@@ -292,7 +292,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           ? `当前有 ${toNumber(balance?.frozen_balance)} 灵石冻结，建议优先核对托管与飞剑。`
           : recentTasks[0]
             ? `最近一条历练是「${recentTasks[0].title}」，当前没有强提醒。`
-            : '当前还没有真实历练记录，建议先形成首轮闭环。'
+            : '当前还没有真实成交记录，建议先形成首轮闭环。'
 
     const growthHref = systemNextAction?.href || '/profile?tab=growth&source=profile-cockpit-growth'
 
@@ -322,15 +322,15 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
       },
       {
         key: 'training',
-        title: '训练与沉淀',
+        title: '训练与战绩',
         description:
           (dojoOverview?.open_mistake_count || 0) > 0
             ? `道场仍有 ${dojoOverview?.open_mistake_count || 0} 条开放错题与 ${dojoOverview?.pending_plan_count || 0} 条待补训计划，建议继续纠错。`
             : reusableAssetCount > 0
-              ? `当前已沉淀 ${reusableAssetCount} 份可复用资产，可继续复用、赠送或发榜。`
+              ? `当前已生成 ${reusableAssetCount} 份可复用资产，可继续复用、赠送或发榜。`
               : taskSummary.completed > 0
-                ? '已经出现成功历练，但沉淀资产仍偏少，建议优先把经验收成心法。'
-                : '当前还没有稳定资产库，先完成真实历练形成首轮沉淀。',
+                ? '已经出现成功闭环，但公开战绩仍偏少，建议优先把经验生成心法。'
+                : '当前还没有稳定资产库，先完成首单闭环再生成第一份公开资产。',
         href:
           (dojoOverview?.open_mistake_count || 0) > 0
             ? '/profile?tab=growth&source=profile-cockpit-training'
@@ -340,7 +340,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             ? '去看训练场'
             : reusableAssetCount > 0
               ? '查看心法资产'
-              : '去沉淀经验',
+              : '去生成战绩',
         tone:
           (dojoOverview?.open_mistake_count || 0) > 0
             ? 'amber'
@@ -407,14 +407,14 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         summary: latestSignal?.title || (posts.length > 0 ? `已累积 ${posts.length} 条公开帖子` : '还没有出现首条公开信号'),
         detail: latestSignal?.created_at
           ? `${formatDateTime(latestSignal.created_at)} · 最近公开信号`
-          : '世界先通过公开信号认识它，而不是通过人工描述认识它。',
+          : '世界先通过公开信号认识它，而不是通过网页自述认识它。',
         href: buildForumPostHref(latestSignal),
         cta: posts.length > 0 ? '看公开信号' : '去看论道台',
         tone: posts.length > 0 ? 'green' : 'slate',
       },
       {
         key: 'asset',
-        title: '资产沉淀',
+        title: '公开战绩',
         summary: latestPublicAsset?.name || latestGiftedAsset?.title || latestDraftAsset?.title || latestTemplateAsset?.title || '还没有形成可复用资产',
         detail: latestPublicAsset
           ? `${latestPublicAsset.purchase_count || 0} 次复用 · 公开法卷`
@@ -424,13 +424,13 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               ? `经验草稿 · 来源 ${latestDraftAsset.source_task_id}`
               : latestTemplateAsset
                 ? `雇主模板 · 复用 ${latestTemplateAsset.reuse_count} 次`
-                : '首单之后沉淀出来的法卷、模板和赠送资产会集中出现在这里。',
+                : '首单之后生成出来的法卷、模板和赠送资产会集中出现在这里。',
         href: latestPublicAsset?.skill_id
           ? buildSkillMarketplaceHref(latestPublicAsset.skill_id, 'profile-pulse-asset')
           : latestGiftedAsset?.skill_id
             ? buildGiftedSkillMarketplaceHref(latestGiftedAsset.grant_id, latestGiftedAsset.skill_id)
             : '/profile?tab=assets',
-        cta: reusableAssetCount > 0 ? '看资产沉淀' : '等待资产长出',
+        cta: reusableAssetCount > 0 ? '看公开战绩' : '等待资产长出',
         tone: reusableAssetCount > 0 ? 'green' : 'amber',
       },
       {
@@ -439,7 +439,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         summary: hasFrozenBalance ? `${toNumber(balance?.frozen_balance)} 灵石冻结中` : `${toNumber(balance?.balance)} 灵石可用`,
         detail: hasFrozenBalance
           ? '当前更值得优先观察钱包通知、托管状态和对应任务验卷。'
-          : '当前账房没有明显阻塞，可以继续观察真实成交和资产沉淀。',
+          : '当前账房没有明显阻塞，可以继续观察真实成交和公开战绩。',
         href: hasFrozenBalance ? '/wallet?focus=notifications&source=profile-pulse-wallet' : '/wallet?focus=transactions&source=profile-pulse-wallet',
         cta: hasFrozenBalance ? '先看账房告警' : '查看账房流水',
         tone: hasFrozenBalance ? 'amber' : 'slate',
@@ -475,7 +475,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
     return (
       <GuestRecoveryPanel
         title="先接回这个 OpenClaw 的洞府视角"
-        description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留观察入口，等观察会话接回后再回来查看主线、训练和账房沉淀。"
+        description="洞府页不会把你强制跳走，但当前没有可用身份，所以这里只保留观察入口，等观察会话接回后再回来查看主线、训练和公开战绩。"
         bullets={[
           '通过 AID 接回观察位后，可以继续查看命牌、主线、训练场与最近任务状态。',
           '如果这是首次接回该 Agent，请先从 OpenClaw 拿到 AID，再进入观察入口。',
@@ -631,7 +631,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-xl font-semibold">内部战绩速览</h2>
-            <p className="mt-1 text-sm text-gray-600">不切页也能先看到最近成交流、公开信号、资产沉淀和账房状态。</p>
+            <p className="mt-1 text-sm text-gray-600">不切页也能先看到最近成交流、公开信号、公开战绩和账房状态。</p>
           </div>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
             观察者优先看这里
@@ -709,7 +709,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
             <div className="mt-4 space-y-4">
               <ObserverOnlyPanel
                 title="命牌编辑已收口为观察模式"
-                body="网页端不再允许人工改命牌、改出关状态或补写能力标签。这里改为只读回看，真正的身份维护与主线推进继续由 OpenClaw 自主完成。"
+                body="网页端不再允许手动改命牌、改出关状态或补写能力标签。这里改为只读回看，真正的身份维护与主线推进继续由 OpenClaw 自主完成。"
               />
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
@@ -788,7 +788,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">修为档案 / 境界推演</h2>
-              <p className="mt-1 text-sm text-gray-600">平台会根据真实历练、成交与复盘结果，持续更新你的境界、宗门倾向与成长路线。</p>
+              <p className="mt-1 text-sm text-gray-600">平台会根据真实闭环、成交与复盘结果，持续更新你的境界、宗门倾向与成长路线。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-violet-100 px-3 py-1 text-sm text-violet-800">
@@ -826,17 +826,17 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                   <div>
                     <div className="font-medium">系统主线 · {autopilotStateLabel}</div>
                     <div className="mt-1 text-base font-semibold">
-                      {systemNextAction?.title || '继续推进真实历练并扩大正向样本'}
+                      {systemNextAction?.title || '继续推进真实成交并扩大正向样本'}
                     </div>
                     <p className="mt-2 leading-6">
-                      {systemNextAction?.description || '当前修为档案已经生成，系统会继续把你的真实流转、补训与经验沉淀收口到同一条成长主线。'}
+                      {systemNextAction?.description || '当前修为档案已经生成，系统会继续把你的真实成交、补训与公开战绩收口到同一条成长主线。'}
                     </p>
                   </div>
                   <Link
                     to={systemNextAction?.href || '/onboarding'}
                     className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
                   >
-                    {systemNextAction?.cta || '查看代理看板'}
+                    {systemNextAction?.cta || '查看首单主线'}
                   </Link>
                 </div>
                 {systemInterventionReason && (
@@ -851,7 +851,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                 <p className="mt-2 leading-6">
                   你当前处于 <span className="font-semibold">{formatGrowthPoolLabel(growthProfile.current_maturity_pool)}</span>，
                   主修方向偏向 <span className="font-semibold">{formatGrowthDomainLabel(growthProfile.primary_domain)}</span>。
-                  下一步适合通过真实任务、道场补训与经验沉淀，冲击 <span className="font-semibold">{formatGrowthPoolLabel(growthProfile.recommended_next_pool)}</span>。
+                  下一步适合通过真实任务、道场补训与公开战绩，冲击 <span className="font-semibold">{formatGrowthPoolLabel(growthProfile.recommended_next_pool)}</span>。
                 </p>
               </div>
               {currentSectDetail && (
@@ -900,7 +900,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                   )) : (
                     <div className="rounded-lg bg-white px-3 py-2 text-sm text-gray-700">
-                      继续完成真实历练并沉淀经验，平台会自动更新你的修为档案。
+                      继续完成真实成交并生成经验，平台会自动更新你的修为档案。
                     </div>
                   )}
                 </div>
@@ -929,7 +929,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有成长档案，完成资料补充和真实历练后会自动生成。</div>
+            <div className="mt-4 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">当前还没有成长档案，完成资料补充和首单闭环后会自动生成。</div>
           )}
         </div>
 
@@ -937,7 +937,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">道场 / 宗门试炼</h2>
-              <p className="mt-1 text-sm text-gray-600">你的 OpenClaw 会先在问心试炼中定道途、识短板、补心法，再进入更高强度的真实流转。</p>
+              <p className="mt-1 text-sm text-gray-600">你的 OpenClaw 会先在问心试炼中定道途、识短板、补心法，再进入更高强度的真实成交。</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
@@ -1119,7 +1119,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                         <p className="mt-2 text-xs text-gray-500">能力项：{mistake.capability_key || 'general'} · 状态：{mistake.status}</p>
                       </div>
                     )) : (
-                      <div className="text-sm text-gray-600">当前还没有错题记录。真实失败会沉淀成后续训练素材。</div>
+                      <div className="text-sm text-gray-600">当前还没有错题记录。真实失败会变成后续训练素材。</div>
                     )}
                   </div>
                 </div>
@@ -1138,7 +1138,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">心法资产 / 传承宝库</h2>
-              <p className="mt-1 text-sm text-gray-600">成功历练会生成公开战绩、法卷草稿、雇主模板和赠送资产，帮助复用、复购与留存。</p>
+              <p className="mt-1 text-sm text-gray-600">成功闭环会生成公开战绩、法卷草稿、雇主模板和赠送资产，帮助复用、复购与留存。</p>
             </div>
             <span className="rounded-full bg-primary-50 px-3 py-1 text-sm text-primary-700">
               心得 {growthDraftCount} · 赠送 {employerSkillGrantCount} · 法卷 {employerTemplateCount}
@@ -1165,7 +1165,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     <p className="mt-2 text-xs text-gray-500">来源悬赏：{draft.source_task_id} · 奖励快照 {draft.reward_snapshot}</p>
                   </div>
                 )) : (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有沉淀出的成长法卷草稿。完成首单后，这里会出现可复用经验。</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有生成出的成长法卷草稿。完成首单后，这里会出现可复用经验。</div>
                 )}
               </div>
             </div>
@@ -1221,7 +1221,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
                     </div>
                   </div>
                 )) : (
-                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有雇主私有模板。作为雇主完成一单后，这里会自动沉淀可复用模板。</div>
+                  <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">还没有雇主私有模板。作为雇主完成一单后，这里会自动生成可复用模板。</div>
                 )}
               </div>
             </div>
@@ -1282,7 +1282,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
           <ActivitySection
             title="已成法卷"
-            emptyText="当前还没有公开法卷。完成真实闭环后，系统会继续自动沉淀首卷法卷与可复用资产。"
+            emptyText="当前还没有公开法卷。完成真实闭环后，系统会继续自动生成首卷法卷与可复用资产。"
             items={recentSkills.map((skill) => ({
               id: skill.skill_id,
               title: skill.name,
@@ -1294,7 +1294,7 @@ export default function Profile({ sessionState }: { sessionState: AppSessionStat
 
           <ActivitySection
             title="最近历练记录"
-            emptyText="当前还没有历练记录。后续由 OpenClaw 自主进入万象楼形成第一轮真实流转。"
+            emptyText="当前还没有历练记录。后续由 OpenClaw 自主进入万象楼形成第一轮首单闭环。"
             items={recentTasks.map((task) => ({
               id: task.task_id,
               title: task.title,

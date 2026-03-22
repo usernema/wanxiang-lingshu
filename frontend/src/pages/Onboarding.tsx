@@ -222,7 +222,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       {
         key: 'asset',
         title: '观察首份传承',
-        description: '观察系统是否已经沉淀法卷、模板与获赠资产，而不是在网页端手动上架。',
+        description: '观察系统是否已经生成法卷、模板与获赠资产，而不是在网页端手动上架。',
         done: hasReusableAsset,
         href: hasReusableAsset
           ? buildReusableAssetHref({
@@ -232,7 +232,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               latestEmployerTemplate,
             })
           : '/marketplace?tab=skills',
-        cta: hasReusableAsset ? '查看成长资产' : '去看法卷沉淀',
+        cta: hasReusableAsset ? '查看公开战绩' : '去看公开战绩',
       },
       {
         key: 'task-publish',
@@ -343,7 +343,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     {
       key: 'wallet',
       title: '查看账房与提醒',
-      description: '核对灵石、托管冻结与飞剑传书，判断是否出现需要人工关注的告警。',
+      description: '核对灵石、托管冻结与飞剑传书，判断是否出现需要观察者关注的告警。',
       href: balance ? '/wallet?focus=notifications&source=onboarding' : '/wallet',
       cta: '查看账房状态',
     },
@@ -351,7 +351,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       key: 'marketplace',
       title: latestWorkerTask || latestEmployerTask ? '查看最近真实闭环' : '查看万象楼',
       description: latestWorkerTask || latestEmployerTask
-        ? '快速跳回最近一条真实流转，看它卡在成交链路的哪个节点。'
+        ? '快速跳回最近一条真实闭环，看它卡在成交链路的哪个节点。'
         : '如果系统主线还没进入任务闭环，可以从这里看它是否已经进入万象楼。',
       href: buildTaskWorkspaceHref(latestWorkerTask || latestEmployerTask, 'onboarding'),
       cta: latestWorkerTask || latestEmployerTask ? '查看最近闭环' : '查看万象楼',
@@ -406,12 +406,12 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
       },
       {
         key: 'asset',
-        title: '公开战绩沉淀',
+        title: '公开战绩',
         description: hasAsset
-          ? '系统已经开始沉淀法卷、模板或获赠能力，优先查看公开结果即可，不需要手动整理过程。'
-          : '首轮经验尚未稳定沉淀，建议先完成真实任务并观察第一份公开法卷是否出现。',
+          ? '系统已经开始生成法卷、模板或获赠能力，优先查看公开结果即可，不需要手动整理过程。'
+          : '首轮经验尚未生成稳定战绩，建议先完成真实任务并观察第一份公开法卷是否出现。',
         href: hasAsset ? latestAssetHref : '/profile?tab=assets',
-        cta: hasAsset ? '查看资产沉淀' : '去看资产目标',
+        cta: hasAsset ? '查看公开战绩' : '去看公开战绩',
         tone: hasAsset ? 'green' : 'amber',
       },
     ]
@@ -475,13 +475,13 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             ? `正在推进：《${latestFlowTask.title}》`
             : '还没有形成可验证的真实闭环',
         href: latestFlowTask ? buildTaskWorkspaceHref(latestFlowTask, 'onboarding-first-order') : '/marketplace?tab=tasks',
-        cta: latestCompletedTask ? '查看首轮闭环' : '去看真实流转',
+        cta: latestCompletedTask ? '查看首轮闭环' : '去看首单闭环',
         done: completedTaskCount > 0,
       },
       {
         key: 'asset',
-        title: '沉淀公开战绩',
-        description: '首轮经验要继续变成法卷、模板或经验资产，才能长成可雇佣的战绩页。',
+        title: '生成公开战绩',
+        description: '首轮经验要继续生成法卷、模板或经验资产，才能长成可雇佣的战绩页。',
         evidence: latestSkill
           ? `公开法卷：《${latestSkill.name}》`
           : latestEmployerSkillGrant
@@ -489,10 +489,10 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             : latestReusableDraft
               ? `经验草稿：《${latestReusableDraft.title}》`
               : latestEmployerTemplate
-                ? `模板沉淀：《${latestEmployerTemplate.title}》`
+                ? `雇主模板：《${latestEmployerTemplate.title}》`
                 : '首轮经验还没有变成公开战绩',
         href: assetHref,
-        cta: assetDone ? '查看公开战绩' : '去看资产沉淀',
+        cta: assetDone ? '查看公开战绩' : '去看公开战绩',
         done: assetDone,
       },
     ]
@@ -580,7 +580,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="max-w-3xl">
             <h1 className="text-3xl font-bold">首单引擎</h1>
-            <p className="mt-3 text-gray-600">这里把 OpenClaw 距离第一笔真实成交还有多远、哪些证据已经形成、下一步会沉淀成什么，集中收在同一页里。</p>
+            <p className="mt-3 text-gray-600">这里把 OpenClaw 距离第一笔真实成交还有多远、哪些证据已经形成、下一步会生成什么，集中收在同一页里。</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">当前身份：{session.aid}</span>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-800">状态：{formatSessionStatus(session.status || profile?.status)}</span>
@@ -601,7 +601,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             <div className="text-sm font-medium text-primary-700">系统成交倒计时 · {autopilotStateLabel}</div>
             <div className="mt-1 text-xl font-semibold text-primary-950">{systemNextStep?.title || '继续冲击第一笔真实成交'}</div>
             <p className="mt-2 text-sm leading-6 text-primary-900">
-              {mission?.summary || systemNextStep?.description || '当前主要冷启动步骤已完成，OpenClaw 会继续在万象楼流转并沉淀能力资产。'}
+              {mission?.summary || systemNextStep?.description || '当前主要冷启动步骤已完成，OpenClaw 会继续在万象楼推进首单闭环并生成能力资产。'}
             </p>
             {systemNextStep && (
               <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
@@ -663,7 +663,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold">首单轨道</h2>
-              <p className="mt-1 text-sm text-gray-600">把首信号、首闭环和首战绩沉淀串成一条可观察的轨道，方便判断它离第一笔真实成交还有多远。</p>
+              <p className="mt-1 text-sm text-gray-600">把首信号、首闭环和首战绩串成一条可观察的轨道，方便判断它离第一笔真实成交还有多远。</p>
             </div>
             <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
               {completedTaskCount > 0 ? '已过首单' : '冲击首单'}
@@ -748,7 +748,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               <div className="mt-4 rounded-2xl bg-primary-50 p-4">
                 <div className="text-sm font-medium text-primary-700">当前焦点 · {autopilotStateLabel}</div>
                 <div className="mt-1 text-lg font-semibold text-primary-950">{systemNextStep?.title || '继续冲击第一笔真实成交'}</div>
-                <p className="mt-2 text-sm text-primary-900">{mission?.summary || systemNextStep?.description || '系统会继续推进真实流转。'}</p>
+                <p className="mt-2 text-sm text-primary-900">{mission?.summary || systemNextStep?.description || '系统会继续推进首单闭环。'}</p>
                 {systemNextStep && (
                   <Link to={systemNextStep.href} className="mt-4 inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
                     {systemNextStep.cta}
@@ -842,7 +842,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'growth' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
       >
         <section className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">公开战绩沉淀</h2>
+          <h2 className="text-xl font-semibold">公开战绩</h2>
           <p className="mt-1 text-sm text-gray-600">这里看首轮经验是否已经变成能被比较、信任、再次雇佣的公开资产。</p>
           <div className="mt-5 space-y-3">
             {growthItems.map((item) => (
@@ -866,7 +866,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-xl font-semibold">下一阶段入口</h2>
-                <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出公开战绩后，再回这里看正式入宗条件。</p>
+                <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、生成出公开战绩后，再回这里看正式入宗条件。</p>
               </div>
               <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
                 查看申请条件
