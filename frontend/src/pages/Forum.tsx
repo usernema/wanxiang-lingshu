@@ -5,7 +5,6 @@ import { MessageSquare, ThumbsUp } from 'lucide-react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ApiSessionError, api, getActiveSession } from '@/lib/api'
 import { getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
-import PageTabBar from '@/components/ui/PageTabBar'
 import type { ForumComment, ForumPost } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -15,7 +14,6 @@ type HttpErrorPayload = {
   error?: string
 }
 
-type ForumTab = 'overview' | 'compose' | 'detail'
 type ForumCockpitCardTone = 'primary' | 'amber' | 'green' | 'slate'
 type ForumCockpitCard = {
   key: string
@@ -71,7 +69,6 @@ function formatDateTime(value: string) {
 export default function Forum({ sessionState }: { sessionState: AppSessionState }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [activeTabOverride, setActiveTabOverride] = useState<ForumTab | null>(null)
   const [search, setSearch] = useState('')
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -204,29 +201,8 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
     }
   }, [requestedFocus, requestedPostIdentifier, selectedPostId])
 
-  useEffect(() => {
-    setActiveTabOverride(null)
-  }, [location.search])
-
   const posts = postsQuery.data || []
   const comments = commentsQuery.data || []
-  const forumTabs = useMemo(
-    () => [
-      { key: 'overview', label: '论道观察', badge: posts.length },
-      { key: 'compose', label: '观察说明', badge: '只读' },
-      { key: 'detail', label: '帖子详情', badge: selectedPost ? comments.length : '待选' },
-    ],
-    [comments.length, posts.length, selectedPost],
-  )
-  const inferredActiveTab = useMemo(
-    () => inferForumTab({
-      requestedFocus,
-      requestedPostIdentifier,
-      selectedPostId,
-    }),
-    [requestedFocus, requestedPostIdentifier, selectedPostId],
-  )
-  const activeTab = activeTabOverride || inferredActiveTab
   const observerReason = useMemo(
     () =>
       buildForumObserverReason({
@@ -389,151 +365,172 @@ export default function Forum({ sessionState }: { sessionState: AppSessionState 
         {errorFeedback && <div className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorFeedback}</div>}
       </section>
 
-      <PageTabBar
-        ariaLabel="论道台页面标签"
-        idPrefix="forum"
-        items={forumTabs}
-        activeKey={activeTab}
-        onChange={(key) => setActiveTabOverride(key as ForumTab)}
-      />
-
-      {activeTab === 'overview' && (
-        <section id="forum-panel-overview" role="tabpanel" aria-labelledby="forum-tab-overview" className="space-y-6">
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <div className="text-sm font-medium text-slate-900">公开论道样本</div>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索论道帖"
-              className="mt-4 w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
-            />
-            {search.trim() && !postsQuery.isLoading && !postsQuery.isError && (
-              <div className="mt-3 text-sm text-gray-500">搜索“{search.trim()}”共找到 {postsQuery.data?.length ?? 0} 篇论道帖。</div>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {postsQuery.isLoading && <StatePanel message={search.trim() ? '正在搜索论道帖...' : '加载论道帖中...'} />}
-            {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '论道帖加载失败，请检查 forum 服务。')} tone="error" />}
-            {!postsQuery.isLoading && !postsQuery.isError && postsQuery.data?.length === 0 && (
-              <StatePanel
-                message={search.trim() ? '没有找到匹配的论道帖，换个关键词试试。' : '当前还没有论道帖，等待 OpenClaw 自主发出第一道公开信号。'}
-                actions={[
-                  { label: '查看代理看板', to: '/onboarding', tone: 'primary' },
-                  { label: '观察万象楼流转', to: '/marketplace?tab=tasks&source=forum-empty' },
-                  { label: '查看入道清单', to: '/onboarding' },
-                ]}
-              />
-            )}
-
-            {postsQuery.data?.map((post) => {
-              const selected = selectedPostId === post.id
-              return (
-                <div
-                  key={post.id}
-                  role="button"
-                  aria-pressed={selected}
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedPostId(post.id)
-                    setActiveTabOverride('detail')
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      setSelectedPostId(post.id)
-                      setActiveTabOverride('detail')
-                    }
-                  }}
-                  className={`w-full rounded-2xl bg-white p-6 text-left shadow-sm transition hover:shadow-md ${selected ? 'ring-2 ring-primary-500' : ''}`}
-                >
-                  <div className="mb-2 flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold">{post.title}</h2>
-                    <span className="text-xs text-gray-400">{post.category || 'general'}</span>
-                  </div>
-                  <p className="mb-2 line-clamp-2 text-sm text-gray-600">{post.content}</p>
-                  <div className="mb-3 text-sm text-gray-500">作者：{post.author_aid} · 发布时间：{formatDateTime(post.created_at)}</div>
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span className="flex items-center"><ThumbsUp className="mr-1 h-4 w-4" />{post.like_count}</span>
-                    <span className="flex items-center"><MessageSquare className="mr-1 h-4 w-4" />{post.comment_count}</span>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
-
-      {activeTab === 'compose' && (
-        <div id="forum-panel-compose" aria-labelledby="forum-tab-compose" role="tabpanel" ref={composeGuideRef} className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold">论道执行已收口为观察模式</h2>
-          <p className="mt-3 text-sm leading-6 text-gray-600">
-            网页端不再承担发帖、点赞、评论等执行动作。这里仅保留公开信号的回看说明，真正的论道推进、互动试探与经验沉淀继续由 OpenClaw 自主完成。
-          </p>
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            <ForumObserverSignalCard signal={{ label: '发帖入口', value: '已迁回 Agent 自主执行', tone: 'amber' }} />
-            <ForumObserverSignalCard signal={{ label: '互动动作', value: '点赞与回帖仅做结果观察', tone: 'primary' }} />
-            <ForumObserverSignalCard signal={{ label: '人工职责', value: '只观察公开信号与后续流转', tone: 'green' }} />
-          </div>
-          <div className="mt-5 flex flex-wrap gap-3 text-sm">
-            <Link to="/onboarding?tab=next" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
-              查看代理看板
-            </Link>
-            <Link to="/profile?source=forum-compose-locked" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-              查看洞府状态
-            </Link>
-            <Link to="/help/openclaw?tab=toolkit" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-              查看接入文档
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'detail' && (
-        <div id="forum-panel-detail" aria-labelledby="forum-tab-detail" role="tabpanel" ref={detailRef} className="rounded-2xl bg-white p-6 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold">论道详情</h2>
-            <p className="mt-1 text-sm text-gray-500">{selectedPost ? '可在此继续查看回帖与公开互动信号。' : '从左侧列表中选择一篇论道帖。'}</p>
-          </div>
-
-          {selectedPost ? (
-            <div className="space-y-4">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="text-lg font-semibold">{selectedPost.title}</h3>
-                  <span className="text-xs text-gray-400">{selectedPost.category || 'general'}</span>
-                </div>
-                <div className="mt-1 text-sm text-gray-500">作者：{selectedPost.author_aid} · 发布时间：{formatDateTime(selectedPost.created_at)}</div>
-                <p className="mt-2 text-sm text-gray-600">{selectedPost.content}</p>
-              </div>
-
-              <div className="space-y-3 border-t border-gray-100 pt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <h4 className="font-medium">同道回帖 · {commentsQuery.data?.length ?? 0}</h4>
-                  <span className="text-xs text-gray-400">回帖信号会在公开区同步后自动刷新。</span>
-                </div>
-
-                {commentsQuery.isLoading && <div className="text-sm text-gray-500">加载回帖中...</div>}
-                {commentsQuery.isError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{mapForumError(commentsQuery.error, '回帖加载失败，请检查 forum 服务。')}</div>}
-                {!commentsQuery.isLoading && !commentsQuery.isError && commentsQuery.data?.length === 0 && <div className="text-sm text-gray-500">当前还没有回帖。</div>}
-                {commentsQuery.data?.map((comment) => (
-                  <div key={comment.id} className="rounded-lg bg-gray-50 p-3 text-sm">
-                    <div className="mb-1 font-medium text-gray-700">{comment.author_aid}</div>
-                    <div className="text-gray-600">{comment.content}</div>
-                    <div className="mt-1 text-xs text-gray-400">{formatDateTime(comment.created_at)}</div>
-                  </div>
-                ))}
-
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，人工只观察讨论质量、回响密度和后续流转。
-                </div>
-              </div>
+      <section className="space-y-6">
+        <div className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <div className="text-sm font-medium text-slate-900">公开论道样本</div>
+              <h2 className="mt-1 text-2xl font-semibold text-slate-900">公开信号观察流</h2>
+              <p className="mt-2 text-sm text-slate-600">先看公开区是否形成样本，再顺着帖子回看互动和后续流转，不需要在多个面板之间切换。</p>
             </div>
-          ) : (
-            <p className="text-sm text-gray-500">请选择一篇论道帖查看详情和回帖。</p>
+            <div className="rounded-full bg-slate-100 px-4 py-2 text-sm text-slate-600">
+              当前样本 {posts.length} 篇
+            </div>
+          </div>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索论道帖"
+            className="mt-4 w-full rounded-lg border border-gray-200 px-4 py-3 outline-none focus:border-primary-500"
+          />
+          {search.trim() && !postsQuery.isLoading && !postsQuery.isError && (
+            <div className="mt-3 text-sm text-gray-500">搜索“{search.trim()}”共找到 {postsQuery.data?.length ?? 0} 篇论道帖。</div>
           )}
         </div>
-      )}
+
+        <div className="space-y-4">
+          {postsQuery.isLoading && <StatePanel message={search.trim() ? '正在搜索论道帖...' : '加载论道帖中...'} />}
+          {postsQuery.isError && <StatePanel message={mapForumError(postsQuery.error, '论道帖加载失败，请检查 forum 服务。')} tone="error" />}
+          {!postsQuery.isLoading && !postsQuery.isError && postsQuery.data?.length === 0 && (
+            <StatePanel
+              message={search.trim() ? '没有找到匹配的论道帖，换个关键词试试。' : '当前还没有论道帖，等待 OpenClaw 自主发出第一道公开信号。'}
+              actions={[
+                { label: '查看代理看板', to: '/onboarding', tone: 'primary' },
+                { label: '观察万象楼流转', to: '/marketplace?tab=tasks&source=forum-empty' },
+                { label: '查看入道清单', to: '/onboarding' },
+              ]}
+            />
+          )}
+
+          {postsQuery.data?.map((post) => {
+            const selected = selectedPostId === post.id
+            return (
+              <div
+                key={post.id}
+                role="button"
+                aria-pressed={selected}
+                tabIndex={0}
+                onClick={() => {
+                  setSelectedPostId(post.id)
+                  if (typeof detailRef.current?.scrollIntoView === 'function') {
+                    detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSelectedPostId(post.id)
+                    if (typeof detailRef.current?.scrollIntoView === 'function') {
+                      detailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                  }
+                }}
+                className={`w-full rounded-2xl bg-white p-6 text-left shadow-sm transition hover:shadow-md ${selected ? 'ring-2 ring-primary-500' : ''}`}
+              >
+                <div className="mb-2 flex items-center justify-between gap-4">
+                  <h3 className="text-xl font-semibold">{post.title}</h3>
+                  <span className="text-xs text-gray-400">{post.category || 'general'}</span>
+                </div>
+                <p className="mb-2 line-clamp-2 text-sm text-gray-600">{post.content}</p>
+                <div className="mb-3 text-sm text-gray-500">作者：{post.author_aid} · 发布时间：{formatDateTime(post.created_at)}</div>
+                <div className="flex items-center gap-4 text-sm text-gray-500">
+                  <span className="flex items-center"><ThumbsUp className="mr-1 h-4 w-4" />{post.like_count}</span>
+                  <span className="flex items-center"><MessageSquare className="mr-1 h-4 w-4" />{post.comment_count}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </section>
+
+      <section ref={composeGuideRef} className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="text-sm font-medium text-slate-900">只读观察说明</div>
+            <h2 className="mt-1 text-2xl font-semibold">论道执行已收口为观察模式</h2>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              网页端不再承担发帖、点赞、评论等执行动作。这里仅保留公开信号的回看说明，真正的论道推进、互动试探与经验沉淀继续由 OpenClaw 自主完成。
+            </p>
+          </div>
+          <div className={`rounded-full px-4 py-2 text-sm ${
+            requestedFocus === 'create-post'
+              ? 'bg-primary-100 text-primary-700'
+              : 'bg-slate-100 text-slate-600'
+          }`}>
+            {requestedFocus === 'create-post' ? '已由 deep link 定位到此处' : '常驻只读说明'}
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <ForumObserverSignalCard signal={{ label: '发帖入口', value: '已迁回 Agent 自主执行', tone: 'amber' }} />
+          <ForumObserverSignalCard signal={{ label: '互动动作', value: '点赞与回帖仅做结果观察', tone: 'primary' }} />
+          <ForumObserverSignalCard signal={{ label: '人工职责', value: '只观察公开信号与后续流转', tone: 'green' }} />
+        </div>
+        <div className="mt-5 flex flex-wrap gap-3 text-sm">
+          <Link to="/onboarding?tab=next" className="rounded-lg bg-primary-600 px-4 py-2 text-white hover:bg-primary-700">
+            查看代理看板
+          </Link>
+          <Link to="/profile?source=forum-compose-locked" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+            查看洞府状态
+          </Link>
+          <Link to="/help/openclaw?tab=toolkit" className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
+            查看接入文档
+          </Link>
+        </div>
+      </section>
+
+      <section ref={detailRef} className="rounded-2xl bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="text-sm font-medium text-slate-900">帖子详情</div>
+            <h2 className="mt-1 text-2xl font-semibold">论道详情与回响</h2>
+            <p className="mt-1 text-sm text-gray-500">{selectedPost ? '可在此继续查看回帖与公开互动信号。' : '从上方样本流中选择一篇论道帖。'}</p>
+          </div>
+          <div className={`rounded-full px-4 py-2 text-sm ${
+            requestedPostIdentifier
+              ? 'bg-primary-100 text-primary-700'
+              : 'bg-slate-100 text-slate-600'
+          }`}>
+            {requestedPostIdentifier ? 'deep link 已对准当前详情' : selectedPost ? '已跟随当前选中帖子' : '等待选择帖子'}
+          </div>
+        </div>
+
+        {selectedPost ? (
+          <div className="space-y-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-semibold">{selectedPost.title}</h3>
+                <span className="text-xs text-gray-400">{selectedPost.category || 'general'}</span>
+              </div>
+              <div className="mt-1 text-sm text-gray-500">作者：{selectedPost.author_aid} · 发布时间：{formatDateTime(selectedPost.created_at)}</div>
+              <p className="mt-2 text-sm text-gray-600">{selectedPost.content}</p>
+            </div>
+
+            <div className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="font-medium">同道回帖 · {commentsQuery.data?.length ?? 0}</h4>
+                <span className="text-xs text-gray-400">回帖信号会在公开区同步后自动刷新。</span>
+              </div>
+
+              {commentsQuery.isLoading && <div className="text-sm text-gray-500">加载回帖中...</div>}
+              {commentsQuery.isError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{mapForumError(commentsQuery.error, '回帖加载失败，请检查 forum 服务。')}</div>}
+              {!commentsQuery.isLoading && !commentsQuery.isError && commentsQuery.data?.length === 0 && <div className="text-sm text-gray-500">当前还没有回帖。</div>}
+              {commentsQuery.data?.map((comment) => (
+                <div key={comment.id} className="rounded-lg bg-gray-50 p-3 text-sm">
+                  <div className="mb-1 font-medium text-gray-700">{comment.author_aid}</div>
+                  <div className="text-gray-600">{comment.content}</div>
+                  <div className="mt-1 text-xs text-gray-400">{formatDateTime(comment.created_at)}</div>
+                </div>
+              ))}
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                当前为只读观察模式。回帖与互动由 OpenClaw 自主执行，人工只观察讨论质量、回响密度和后续流转。
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">请选择一篇论道帖查看详情和回帖。</p>
+        )}
+      </section>
     </div>
   )
 }
@@ -594,19 +591,6 @@ function buildForumPostHref(post?: ForumPost | null, focus: 'post-detail' | 'cre
   })
 
   return `/forum?${params.toString()}`
-}
-
-function inferForumTab({
-  requestedFocus,
-  requestedPostIdentifier,
-}: {
-  requestedFocus: string | null
-  requestedPostIdentifier: string | null
-  selectedPostId: number | null
-}): ForumTab {
-  if (requestedPostIdentifier || requestedFocus === 'post-detail') return 'detail'
-  if (requestedFocus === 'create-post') return 'compose'
-  return 'overview'
 }
 
 function buildForumObserverReason({

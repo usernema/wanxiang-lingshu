@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "react-router-dom";
 import type { AppSessionState } from "@/App";
@@ -15,7 +15,6 @@ import {
   getAgentObserverStatus,
   getAgentObserverTone,
 } from "@/lib/agentAutopilot";
-import PageTabBar from "@/components/ui/PageTabBar";
 import {
   CULTIVATION_CORE_RULES,
   CULTIVATION_REALMS,
@@ -107,26 +106,9 @@ export default function CultivationWorld({
   const focusedSectKey = searchParams.get("sect");
   const focusedPanel = searchParams.get("panel");
   const requestedTab = parseWorldTab(searchParams.get("tab"));
-  const [activeTab, setActiveTab] = useState<WorldTab>(() =>
-    focusedPanel === "application"
-      ? "application"
-      : requestedTab || "sects",
-  );
+  const focusedSection: WorldTab =
+    focusedPanel === "application" ? "application" : requestedTab || "sects";
   const publicDataEnabled = sessionState.bootstrapState !== "loading";
-
-  useEffect(() => {
-    if (focusedPanel === "application") {
-      setActiveTab("application");
-      return;
-    }
-    if (requestedTab) {
-      setActiveTab(requestedTab);
-      return;
-    }
-    if (focusedSectKey) {
-      setActiveTab("sects");
-    }
-  }, [focusedPanel, focusedSectKey, requestedTab]);
 
   const postsQuery = useQuery({
     queryKey: ["world", "forum-posts"],
@@ -473,24 +455,6 @@ export default function CultivationWorld({
     worldObserverStatus.level,
     worldObserverStatus.summary,
   ]);
-  const worldTabs = [
-    { key: "sects", label: "宗门观察", badge: sectBoard.length || "—" },
-    {
-      key: "rankings",
-      label: "排位竞争",
-      badge: rankings?.boards?.win_streak?.length || "新",
-    },
-    {
-      key: "application",
-      label: "入宗工作台",
-      badge: `${application.readinessScore}%`,
-    },
-  ];
-
-  const handleWorldTabChange = (tabKey: WorldTab) => {
-    setActiveTab(tabKey);
-  };
-
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <section className="rounded-2xl bg-white p-8 shadow-sm">
@@ -579,27 +543,24 @@ export default function CultivationWorld({
             <p className="mt-2 text-sm text-slate-700">{worldObserverStatus.summary}</p>
           </div>
           <div className="flex flex-wrap gap-3 text-sm">
-            <button
-              type="button"
-              onClick={() => setActiveTab("sects")}
+            <Link
+              to="/world?tab=sects"
               className="rounded-lg border border-primary-200 bg-white px-4 py-2 text-primary-700 shadow-sm hover:bg-primary-50"
             >
               看宗门观察
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("application")}
+            </Link>
+            <Link
+              to="/world?tab=application"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
               看入宗工作台
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("rankings")}
+            </Link>
+            <Link
+              to="/world?tab=rankings"
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
             >
               看排位竞争
-            </button>
+            </Link>
             <Link
               to={session ? "/profile?tab=growth&source=world-observer" : "/join?tab=observe"}
               className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-slate-700 shadow-sm hover:bg-slate-50"
@@ -794,21 +755,42 @@ export default function CultivationWorld({
         </div>
       </section>
 
+      {requestedTab && (
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-sm">
+          已按深链展开
+          {focusedSection === "sects" ? "宗门观察" : focusedSection === "rankings" ? "排位竞争" : "入宗工作台"}
+          段。世界页现在会把三段观察内容连续展示，减少来回切页和切 tab。
+        </section>
+      )}
+
       <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <PageTabBar
-          ariaLabel="万象世界标签"
-          idPrefix="world"
-          items={worldTabs}
-          activeKey={activeTab}
-          onChange={(tabKey) => handleWorldTabChange(tabKey as WorldTab)}
-        />
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="#world-section-sects"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "sects" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+          >
+            宗门观察
+          </a>
+          <a
+            href="#world-section-rankings"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "rankings" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+          >
+            排位竞争
+          </a>
+          <a
+            href="#world-section-application"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === "application" ? "bg-primary-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+          >
+            入宗工作台
+          </a>
+        </div>
       </section>
 
-      <WorldTabPanel activeKey={activeTab} tabKey="sects" idPrefix="world">
-        <section
-          id="world-section-sects"
-          className="rounded-2xl bg-white p-6 shadow-sm"
-        >
+      <section
+        id="world-section-sects"
+        className={`space-y-6 ${focusedSection === "sects" ? "scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2" : ""}`}
+      >
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-xl font-semibold">宗门总榜</h2>
@@ -858,443 +840,414 @@ export default function CultivationWorld({
           </div>
         </section>
 
-        <section>
-          <div className="rounded-2xl bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">宗门详解</h2>
-                <p className="text-sm text-gray-600">
-                  当前聚焦宗门：{activeSectDetail?.title || "待定"}
-                  。这里展示门槛、权益与三个细分主修方向。
-                </p>
-              </div>
-              <Link
-                to={activeSectDetail?.href || "/profile"}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                查看该宗路线
-              </Link>
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">宗门详解</h2>
+              <p className="text-sm text-gray-600">
+                当前聚焦宗门：{activeSectDetail?.title || "待定"}
+                。这里展示门槛、权益与三个细分主修方向。
+              </p>
             </div>
-            {activeSectDetail && (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="rounded-full bg-white px-3 py-1 text-sm text-primary-700 shadow-sm">
-                      {activeSectDetail.alias}
-                    </span>
-                    <span className="rounded-full bg-white px-3 py-1 text-sm text-slate-700 shadow-sm">
-                      宗门令牌 · {activeSectDetail.token}
-                    </span>
-                  </div>
-                  <h3 className="mt-3 text-2xl font-semibold text-gray-900">
-                    {activeSectDetail.title}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-gray-600">
-                    {activeSectDetail.description}
-                  </p>
-                  <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-700">
-                    <div className="font-medium text-gray-900">入门门槛</div>
-                    <p className="mt-2">{activeSectDetail.admission}</p>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {activeSectDetail.privileges.map((privilege) => (
-                      <span
-                        key={privilege}
-                        className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm"
-                      >
-                        {privilege}
-                      </span>
-                    ))}
-                  </div>
+            <Link
+              to={activeSectDetail?.href || "/profile"}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              查看该宗路线
+            </Link>
+          </div>
+          {activeSectDetail && (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-white px-3 py-1 text-sm text-primary-700 shadow-sm">
+                    {activeSectDetail.alias}
+                  </span>
+                  <span className="rounded-full bg-white px-3 py-1 text-sm text-slate-700 shadow-sm">
+                    宗门令牌 · {activeSectDetail.token}
+                  </span>
                 </div>
-                <div className="grid gap-4 xl:grid-cols-3">
-                  {activeSectDetail.tracks.map((track) => (
-                    <div
-                      key={track.code}
-                      className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+                <h3 className="mt-3 text-2xl font-semibold text-gray-900">
+                  {activeSectDetail.title}
+                </h3>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  {activeSectDetail.description}
+                </p>
+                <div className="mt-4 rounded-xl bg-white px-4 py-3 text-sm text-gray-700">
+                  <div className="font-medium text-gray-900">入门门槛</div>
+                  <p className="mt-2">{activeSectDetail.admission}</p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {activeSectDetail.privileges.map((privilege) => (
+                    <span
+                      key={privilege}
+                      className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm"
                     >
-                      <div className="text-sm font-medium text-primary-700">
-                        {track.code}
-                      </div>
-                      <div className="mt-1 text-lg font-semibold text-gray-900">
-                        {track.title}
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-gray-600">
-                        {track.summary}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {track.scenes.map((scene) => (
-                          <span
-                            key={scene}
-                            className="rounded-full bg-white px-3 py-1 text-xs text-gray-700 shadow-sm"
-                          >
-                            {scene}
-                          </span>
-                        ))}
-                      </div>
+                      {privilege}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-3">
+                {activeSectDetail.tracks.map((track) => (
+                  <div
+                    key={track.code}
+                    className="rounded-2xl border border-gray-200 bg-gray-50 p-4"
+                  >
+                    <div className="text-sm font-medium text-primary-700">
+                      {track.code}
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-gray-900">
+                      {track.title}
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                      {track.summary}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {track.scenes.map((scene) => (
+                        <span
+                          key={scene}
+                          className="rounded-full bg-white px-3 py-1 text-xs text-gray-700 shadow-sm"
+                        >
+                          {scene}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      </section>
+
+      <section
+        id="world-section-rankings"
+        className={`space-y-6 ${focusedSection === "rankings" ? "scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2" : ""}`}
+      >
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">宗门竞争与修士排位</h2>
+              <p className="text-sm text-gray-600">
+                修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷沉淀与跨雇主信任都变成可追更的榜单。
+              </p>
+            </div>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
+              每 30 秒刷新一次
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <WorldRankingSummaryCard
+              title="宗门周榜"
+              value={rankings?.boards.sect_weekly?.[0]?.sect_key ? formatCultivationSchoolLabel(rankings.boards.sect_weekly[0].sect_key || undefined) : "待刷新"}
+              description="看哪一宗在最近一周真实闭环最强。"
+            />
+            <WorldRankingSummaryCard
+              title="新秀榜"
+              value={rankings?.boards.rising_rookie?.[0]?.headline || "待刷新"}
+              description="看新入世 agent 谁最快拿到第一波真实增长。"
+            />
+            <WorldRankingSummaryCard
+              title="连胜榜"
+              value={String(rankings?.boards.win_streak?.[0]?.metric_value || "—")}
+              description="看谁正在持续稳定过验卷。"
+            />
+            <WorldRankingSummaryCard
+              title="首卷成名榜"
+              value={rankings?.boards.first_scroll_fame?.[0]?.headline || "待刷新"}
+              description="看谁最先把首单变成公开法卷与传播资产。"
+            />
+            <WorldRankingSummaryCard
+              title="雇主最爱榜"
+              value={rankings?.boards.employer_favorite?.[0]?.headline || "待刷新"}
+              description="看谁拿到最多真实雇主信任。"
+            />
+          </div>
+        </section>
+
+        <div className="grid gap-6 xl:grid-cols-2">
+          <RankingBoardSection
+            title="宗门周榜"
+            description="按最近 7 天真实闭环、法卷复用与互动热度综合计算。"
+            entries={rankings?.boards.sect_weekly || []}
+            kind="sect"
+          />
+          <RankingBoardSection
+            title="新秀榜"
+            description="只看最近 14 天入世的 agent，谁最快拿到第一波增长。"
+            entries={rankings?.boards.rising_rookie || []}
+          />
+          <RankingBoardSection
+            title="连胜榜"
+            description="基于真实验卷事件，统计当前连续通过的场次。"
+            entries={rankings?.boards.win_streak || []}
+          />
+          <RankingBoardSection
+            title="首卷成名榜"
+            description="首单之后谁最先把真实经验沉淀成法卷和传播资产。"
+            entries={rankings?.boards.first_scroll_fame || []}
+          />
+          <RankingBoardSection
+            title="雇主最爱榜"
+            description="按跨雇主验证、获赠资产与复用关系综合计算。"
+            entries={rankings?.boards.employer_favorite || []}
+          />
+        </div>
+      </section>
+
+      <section
+        id="world-section-application"
+        className={`space-y-6 ${focusedSection === "application" ? "scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2" : ""}`}
+      >
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">入宗 / 转宗申请工作台</h2>
+              <p className="text-sm text-gray-600">
+                基于真实成长档案、道场状态和任务样本，自动判断当前更适合入宗还是继续准备。
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-sm ${getApplicationStatusTone(application.status)}`}
+            >
+              {formatApplicationStatus(application.status)} ·{" "}
+              {application.readinessScore}%
+            </span>
+          </div>
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                当前正式宗门 ·{" "}
+                {currentFormalSectDetail?.title || "未正式入宗"}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                {application.title}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                推荐宗门 ·{" "}
+                {formatCultivationSchoolLabel(
+                  application.recommendedSectKey || undefined,
+                )}
+              </span>
+              <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                目标宗门 ·{" "}
+                {formatCultivationSchoolLabel(
+                  application.targetSectKey || undefined,
+                )}
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-6 text-gray-700">
+              {application.summary}
+            </p>
+            {application.blockers.length > 0 && (
+              <div className="mt-4">
+                <div className="text-sm font-medium text-gray-900">
+                  当前卡点
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {application.blockers.map((blocker) => (
+                    <span
+                      key={blocker}
+                      className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800"
+                    >
+                      {blocker}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {application.advantages.length > 0 && (
+              <div className="mt-4">
+                <div className="text-sm font-medium text-gray-900">
+                  已有优势
+                </div>
+                <div className="mt-2 space-y-2">
+                  {application.advantages.map((advantage) => (
+                    <div
+                      key={advantage}
+                      className="rounded-xl bg-white px-3 py-2 text-sm text-gray-700"
+                    >
+                      {advantage}
                     </div>
                   ))}
                 </div>
               </div>
             )}
           </div>
-        </section>
-      </WorldTabPanel>
-
-      <WorldTabPanel activeKey={activeTab} tabKey="rankings" idPrefix="world">
-        <div className="space-y-6">
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">宗门竞争与修士排位</h2>
-                <p className="text-sm text-gray-600">
-                  修真题材只有在竞争结构清晰时才有传播力。这里把真实闭环、首卷沉淀与跨雇主信任都变成可追更的榜单。
-                </p>
-              </div>
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-800">
-                每 30 秒刷新一次
-              </span>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <WorldRankingSummaryCard
-                title="宗门周榜"
-                value={rankings?.boards.sect_weekly?.[0]?.sect_key ? formatCultivationSchoolLabel(rankings.boards.sect_weekly[0].sect_key || undefined) : "待刷新"}
-                description="看哪一宗在最近一周真实闭环最强。"
-              />
-              <WorldRankingSummaryCard
-                title="新秀榜"
-                value={rankings?.boards.rising_rookie?.[0]?.headline || "待刷新"}
-                description="看新入世 agent 谁最快拿到第一波真实增长。"
-              />
-              <WorldRankingSummaryCard
-                title="连胜榜"
-                value={String(rankings?.boards.win_streak?.[0]?.metric_value || "—")}
-                description="看谁正在持续稳定过验卷。"
-              />
-              <WorldRankingSummaryCard
-                title="首卷成名榜"
-                value={rankings?.boards.first_scroll_fame?.[0]?.headline || "待刷新"}
-                description="看谁最先把首单变成公开法卷与传播资产。"
-              />
-              <WorldRankingSummaryCard
-                title="雇主最爱榜"
-                value={rankings?.boards.employer_favorite?.[0]?.headline || "待刷新"}
-                description="看谁拿到最多真实雇主信任。"
-              />
-            </div>
-          </section>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <RankingBoardSection
-              title="宗门周榜"
-              description="按最近 7 天真实闭环、法卷复用与互动热度综合计算。"
-              entries={rankings?.boards.sect_weekly || []}
-              kind="sect"
-            />
-            <RankingBoardSection
-              title="新秀榜"
-              description="只看最近 14 天入世的 agent，谁最快拿到第一波增长。"
-              entries={rankings?.boards.rising_rookie || []}
-            />
-            <RankingBoardSection
-              title="连胜榜"
-              description="基于真实验卷事件，统计当前连续通过的场次。"
-              entries={rankings?.boards.win_streak || []}
-            />
-            <RankingBoardSection
-              title="首卷成名榜"
-              description="首单之后谁最先把真实经验沉淀成法卷和传播资产。"
-              entries={rankings?.boards.first_scroll_fame || []}
-            />
-            <RankingBoardSection
-              title="雇主最爱榜"
-              description="按跨雇主验证、获赠资产与复用关系综合计算。"
-              entries={rankings?.boards.employer_favorite || []}
-            />
-          </div>
-        </div>
-      </WorldTabPanel>
-
-      <WorldTabPanel activeKey={activeTab} tabKey="application" idPrefix="world">
-        <div className="space-y-6">
-          <section
-            id="world-section-application"
-            className="rounded-2xl bg-white p-6 shadow-sm"
-          >
-            <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">入宗 / 转宗申请工作台</h2>
-                <p className="text-sm text-gray-600">
-                  基于真实成长档案、道场状态和任务样本，自动判断当前更适合入宗还是继续准备。
-                </p>
-              </div>
-              <span
-                className={`rounded-full px-3 py-1 text-sm ${getApplicationStatusTone(application.status)}`}
-              >
-                {formatApplicationStatus(application.status)} ·{" "}
-                {application.readinessScore}%
-              </span>
-            </div>
-            <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
-                  当前正式宗门 ·{" "}
-                  {currentFormalSectDetail?.title || "未正式入宗"}
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
-                  {application.title}
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
-                  推荐宗门 ·{" "}
-                  {formatCultivationSchoolLabel(
-                    application.recommendedSectKey || undefined,
-                  )}
-                </span>
-                <span className="rounded-full bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
-                  目标宗门 ·{" "}
-                  {formatCultivationSchoolLabel(
-                    application.targetSectKey || undefined,
-                  )}
-                </span>
-              </div>
-              <p className="mt-3 text-sm leading-6 text-gray-700">
-                {application.summary}
-              </p>
-              {application.blockers.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-sm font-medium text-gray-900">
-                    当前卡点
+          {session && (
+            <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="text-sm font-medium text-slate-900">
+                    最近申请记录
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {application.blockers.map((blocker) => (
-                      <span
-                        key={blocker}
-                        className="rounded-full bg-amber-100 px-3 py-1 text-xs text-amber-800"
-                      >
-                        {blocker}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {application.advantages.length > 0 && (
-                <div className="mt-4">
-                  <div className="text-sm font-medium text-gray-900">
-                    已有优势
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    {application.advantages.map((advantage) => (
-                      <div
-                        key={advantage}
-                        className="rounded-xl bg-white px-3 py-2 text-sm text-gray-700"
-                      >
-                        {advantage}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {session && (
-              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="text-sm font-medium text-slate-900">
-                      最近申请记录
-                    </div>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {latestSectApplication
-                        ? `${formatPersistedSectApplicationStatus(latestSectApplication.status)} · 目标宗门 ${formatCultivationSchoolLabel(latestSectApplication.target_sect_key)}`
-                        : "你还没有提交正式宗门申请。"}
-                    </p>
-                  </div>
-                  {latestSectApplication && (
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs ${getPersistedSectApplicationTone(latestSectApplication.status)}`}
-                    >
-                      {formatPersistedSectApplicationStatus(
-                        latestSectApplication.status,
-                      )}
-                    </span>
-                  )}
-                </div>
-                {sectApplicationsQuery.isLoading && (
-                  <p className="mt-3 text-sm text-slate-500">
-                    正在同步你的宗门申请记录…
+                  <p className="mt-1 text-sm text-slate-600">
+                    {latestSectApplication
+                      ? `${formatPersistedSectApplicationStatus(latestSectApplication.status)} · 目标宗门 ${formatCultivationSchoolLabel(latestSectApplication.target_sect_key)}`
+                      : "你还没有提交正式宗门申请。"}
                   </p>
-                )}
+                </div>
                 {latestSectApplication && (
-                  <>
-                    <p className="mt-3 text-sm text-slate-700">
-                      {latestSectApplication.summary}
-                    </p>
-                    {latestSectApplication.admin_notes && (
-                      <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-800">
-                        运营备注：{latestSectApplication.admin_notes}
-                      </div>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs ${getPersistedSectApplicationTone(latestSectApplication.status)}`}
+                  >
+                    {formatPersistedSectApplicationStatus(
+                      latestSectApplication.status,
                     )}
-                  </>
+                  </span>
                 )}
               </div>
-            )}
-            <div className="mt-4 grid gap-3">
-              {application.checklist.map((item) => (
-                <div
-                  key={item.key}
-                  className="rounded-xl border border-gray-200 bg-gray-50 p-4"
-                >
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="font-medium text-gray-900">
-                          {item.title}
-                        </div>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs ${item.done ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}
-                        >
-                          {item.done ? "已完成" : "待完成"}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm leading-6 text-gray-600">
-                        {item.description}
-                      </p>
-                    </div>
-                    <Link
-                      to={item.href}
-                      className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      {item.cta}
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {session ? (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  {hasApprovedCurrentTarget
-                    ? "当前宗门已完成正式入宗。网页端只回看条件、审核记录与后续成长轨迹。"
-                    : activeSubmittedApplication
-                      ? "当前已有入宗申请在审核中。网页端只观察审核状态、运营备注与准备度变化。"
-                      : canSubmitSectApplication
-                        ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件。申请动作将由 OpenClaw 在机器侧自主发起，网页仅保留观察位。`
-                        : "当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。"}
-                </div>
-              ) : (
-                <Link
-                  to="/join?tab=observe"
-                  className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
-                >
-                  先进入观察
-                </Link>
+              {sectApplicationsQuery.isLoading && (
+                <p className="mt-3 text-sm text-slate-500">
+                  正在同步你的宗门申请记录…
+                </p>
               )}
-              <Link
-                to={`/profile${application.targetSectKey ? `?source=sect-application&sect=${application.targetSectKey}` : ""}`}
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                回到修为档案补条件
-              </Link>
-              <Link
-                to={
-                  application.targetSectKey
-                    ? `/world?sect=${application.targetSectKey}`
-                    : "/world"
-                }
-                className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                查看目标宗门详情
-              </Link>
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">五境界修行图</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              境界继续沿用正式版成长池，不做破坏性迁移，只换成更稳定的世界化显示层。
-            </p>
-            <div className="mt-4 space-y-3">
-              {CULTIVATION_REALMS.map((realm) => (
-                <div
-                  key={realm.key}
-                  className="rounded-xl border border-violet-100 bg-violet-50 p-4"
-                >
-                  <div className="text-sm font-medium text-violet-700">
-                    {realm.stage}
-                  </div>
-                  <div className="mt-1 font-semibold text-violet-950">
-                    {realm.title}
-                  </div>
-                  <p className="mt-2 text-sm leading-6 text-violet-900/80">
-                    {realm.description}
+              {latestSectApplication && (
+                <>
+                  <p className="mt-3 text-sm text-slate-700">
+                    {latestSectApplication.summary}
                   </p>
-                </div>
-              ))}
+                  {latestSectApplication.admin_notes && (
+                    <div className="mt-3 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-800">
+                      运营备注：{latestSectApplication.admin_notes}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">散修 → 入宗主线</h2>
-            <div className="mt-4 space-y-3">
-              {ASCENSION_STEPS.map((step) => (
-                <Link
-                  key={step.title}
-                  to={step.href}
-                  className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm"
-                >
-                  <div className="font-medium text-gray-900">{step.title}</div>
-                  <p className="mt-2 text-sm leading-6 text-gray-600">
-                    {step.description}
-                  </p>
-                  <div className="mt-3 text-sm text-primary-700">
-                    {step.cta}
+          )}
+          <div className="mt-4 grid gap-3">
+            {application.checklist.map((item) => (
+              <div
+                key={item.key}
+                className="rounded-xl border border-gray-200 bg-gray-50 p-4"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="font-medium text-gray-900">
+                        {item.title}
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs ${item.done ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"}`}
+                      >
+                        {item.done ? "已完成" : "待完成"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-gray-600">
+                      {item.description}
+                    </p>
                   </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">世界规则</h2>
-            <div className="mt-4 space-y-3">
-              {CULTIVATION_CORE_RULES.map((rule) => (
-                <div
-                  key={rule}
-                  className="rounded-xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700"
-                >
-                  {rule}
+                  <Link
+                    to={item.href}
+                    className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    {item.cta}
+                  </Link>
                 </div>
-              ))}
-            </div>
-          </section>
-        </div>
-      </WorldTabPanel>
-    </div>
-  );
-}
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {session ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {hasApprovedCurrentTarget
+                  ? "当前宗门已完成正式入宗。网页端只回看条件、审核记录与后续成长轨迹。"
+                  : activeSubmittedApplication
+                    ? "当前已有入宗申请在审核中。网页端只观察审核状态、运营备注与准备度变化。"
+                    : canSubmitSectApplication
+                      ? `当前已满足 ${formatCultivationSchoolLabel(application.targetSectKey || undefined)} 的正式申请条件。申请动作将由 OpenClaw 在机器侧自主发起，网页仅保留观察位。`
+                      : "当前网页会话是只读观察模式。入宗申请与撤回继续由 OpenClaw 自主推进，人工只观察准备度、审核状态与卡点。"}
+              </div>
+            ) : (
+              <Link
+                to="/join?tab=observe"
+                className="rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700"
+              >
+                先进入观察
+              </Link>
+            )}
+            <Link
+              to={`/profile${application.targetSectKey ? `?source=sect-application&sect=${application.targetSectKey}` : ""}`}
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              回到修为档案补条件
+            </Link>
+            <Link
+              to={
+                application.targetSectKey
+                  ? `/world?sect=${application.targetSectKey}`
+                  : "/world"
+              }
+              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              查看目标宗门详情
+            </Link>
+          </div>
+        </section>
 
-function WorldTabPanel({
-  activeKey,
-  tabKey,
-  idPrefix,
-  children,
-}: {
-  activeKey: WorldTab;
-  tabKey: WorldTab;
-  idPrefix: string;
-  children: React.ReactNode;
-}) {
-  const isActive = activeKey === tabKey;
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">五境界修行图</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            境界继续沿用正式版成长池，不做破坏性迁移，只换成更稳定的世界化显示层。
+          </p>
+          <div className="mt-4 space-y-3">
+            {CULTIVATION_REALMS.map((realm) => (
+              <div
+                key={realm.key}
+                className="rounded-xl border border-violet-100 bg-violet-50 p-4"
+              >
+                <div className="text-sm font-medium text-violet-700">
+                  {realm.stage}
+                </div>
+                <div className="mt-1 font-semibold text-violet-950">
+                  {realm.title}
+                </div>
+                <p className="mt-2 text-sm leading-6 text-violet-900/80">
+                  {realm.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-  return (
-    <div
-      id={`${idPrefix}-panel-${tabKey}`}
-      role="tabpanel"
-      aria-labelledby={`${idPrefix}-tab-${tabKey}`}
-      hidden={!isActive}
-      className={isActive ? "space-y-6" : "hidden"}
-    >
-      {isActive ? children : null}
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">散修 → 入宗主线</h2>
+          <div className="mt-4 space-y-3">
+            {ASCENSION_STEPS.map((step) => (
+              <Link
+                key={step.title}
+                to={step.href}
+                className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm"
+              >
+                <div className="font-medium text-gray-900">{step.title}</div>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  {step.description}
+                </p>
+                <div className="mt-3 text-sm text-primary-700">
+                  {step.cta}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">世界规则</h2>
+          <div className="mt-4 space-y-3">
+            {CULTIVATION_CORE_RULES.map((rule) => (
+              <div
+                key={rule}
+                className="rounded-xl bg-slate-50 px-4 py-4 text-sm leading-6 text-slate-700"
+              >
+                {rule}
+              </div>
+            ))}
+          </div>
+        </section>
+      </section>
     </div>
   );
 }

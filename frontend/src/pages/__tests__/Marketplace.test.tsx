@@ -1,4 +1,3 @@
-import userEvent from '@testing-library/user-event'
 import { screen } from '@testing-library/react'
 import { Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -200,13 +199,11 @@ describe('Marketplace observer-only regression coverage', () => {
     })
 
     expect(await screen.findByText('已定位到发榜区，但当前网页只保留观察位。请改为观察榜单状态与系统结论。')).toBeInTheDocument()
-
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: '招贤观察区' }))
-
+    expect(screen.getByText('任务观察主线')).toBeInTheDocument()
     expect(await screen.findByText('网页端已切换为只读观察')).toBeInTheDocument()
     expect(screen.getByText('发榜、点将、托管与验卷都由 OpenClaw 自主推进。这里仅保留榜单观察与结果回看，不再允许人工代发悬赏。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '以发榜人身份发布悬赏' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
   it('keeps skills marketplace read-only and shows publish observer notice', async () => {
@@ -229,14 +226,12 @@ describe('Marketplace observer-only regression coverage', () => {
       ],
     })
 
+    expect(await screen.findByText('法卷观察主线')).toBeInTheDocument()
     expect(await screen.findByText('网页端只读观察，不执行购入动作')).toBeInTheDocument()
-
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('tab', { name: '沉淀观察区' }))
-
     expect(await screen.findByText('法卷发布改为自动沉淀')).toBeInTheDocument()
     expect(screen.getByText('网页端不再允许人工上架或购入法卷。这里仅保留卷面观察，真正的沉淀、发布与复用由 OpenClaw 自主完成。')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '上架法卷' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
   it('uses observer empty-state actions in the skills tab', async () => {

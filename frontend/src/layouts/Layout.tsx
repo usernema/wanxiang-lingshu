@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Home, MessageSquare, ShoppingBag, User, Wallet, LogOut, RefreshCw, Rocket, Bell, Sparkles } from 'lucide-react'
+import { Home, User, LogOut, RefreshCw, Rocket, Bell, Sparkles } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchNotifications, getActiveSession, getBootstrapStateDescription, getRefreshSessionsLabel, getSessionLoadingMessage, logoutAgent } from '@/lib/api'
 import BrandLogo from '@/components/ui/BrandLogo'
@@ -9,10 +9,8 @@ import { useState } from 'react'
 const navItems = [
   { to: '/', label: '仙门总览', icon: Home },
   { to: '/join', label: '观察入口', icon: Rocket },
-  { to: '/world', label: '宗门图谱', icon: Sparkles },
-  { to: '/forum', label: '论道台', icon: MessageSquare },
-  { to: '/marketplace', label: '万象楼', icon: ShoppingBag },
-  { to: '/wallet', label: '灵石账房', icon: Wallet },
+  { to: '/onboarding', label: '观察进度', icon: User },
+  { to: '/world', label: '世界观察', icon: Sparkles },
 ]
 
 export function GuestRecoveryPanel({

@@ -1,6 +1,5 @@
-import { Link } from 'react-router-dom'
-import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { GuestRecoveryPanel } from '@/layouts/Layout'
 import {
@@ -19,7 +18,6 @@ import {
 } from '@/lib/api'
 import { formatAutopilotStateLabel, getAgentObserverStatus, getAgentObserverTone } from '@/lib/agentAutopilot'
 import { WANXIANG_TOWER_NODES } from '@/lib/cultivation'
-import PageTabBar from '@/components/ui/PageTabBar'
 import type { AgentProfile, CreditBalance, ForumPost, MarketplaceTask, Skill } from '@/types'
 import type { AppSessionState } from '@/App'
 
@@ -50,7 +48,7 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
   const onboardingSearchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const requestedTab = parseOnboardingTab(onboardingSearchParams.get('tab'))
   const entry = parseOnboardingEntry(onboardingSearchParams.get('entry'))
-  const [activeTab, setActiveTab] = useState<OnboardingTab>(() => requestedTab || 'next')
+  const focusedSection = requestedTab || 'next'
 
   const profileQuery = useQuery({
     queryKey: ['onboarding-profile', session?.aid],
@@ -311,11 +309,6 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     },
     [balance?.frozen_balance, interventionReason, mission?.dojo?.suggested_next_action, missionSteps.length, stageLabel],
   )
-  const onboardingTabs = [
-    { key: 'next', label: '系统任务', badge: nextStep?.done ? '已稳' : '推荐' },
-    { key: 'practice', label: '系统流转', badge: practiceItems.filter((item) => !item.done).length },
-    { key: 'growth', label: '成长资产', badge: growthItems.filter((item) => !item.done).length },
-  ]
   const observerLinks = [
     {
       key: 'mainline',
@@ -420,12 +413,6 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
     systemNextStep,
   ])
 
-  useEffect(() => {
-    if (requestedTab) {
-      setActiveTab(requestedTab)
-    }
-  }, [requestedTab])
-
   const entryBanner = getOnboardingEntryBanner(entry)
 
   if (sessionState.bootstrapState === 'loading') {
@@ -491,27 +478,24 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
               </div>
             )}
             <div className="mt-4 flex flex-wrap gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => setActiveTab('next')}
-                className={`rounded-lg px-3 py-2 ${activeTab === 'next' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              <a
+                href="#onboarding-mainline"
+                className={`rounded-lg px-3 py-2 ${focusedSection === 'next' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
                 看系统主线
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('practice')}
-                className={`rounded-lg px-3 py-2 ${activeTab === 'practice' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              </a>
+              <a
+                href="#onboarding-flow"
+                className={`rounded-lg px-3 py-2 ${focusedSection === 'practice' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
                 看系统流转
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('growth')}
-                className={`rounded-lg px-3 py-2 ${activeTab === 'growth' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
+              </a>
+              <a
+                href="#onboarding-assets"
+                className={`rounded-lg px-3 py-2 ${focusedSection === 'growth' ? 'bg-primary-600 text-white' : 'border border-primary-200 bg-white text-primary-700 hover:bg-primary-100'}`}
               >
                 看成长资产
-              </button>
+              </a>
             </div>
           </div>
         </div>
@@ -537,23 +521,41 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
         </section>
       )}
 
+      {requestedTab && (
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 shadow-sm">
+          已按深链展开
+          {focusedSection === 'next' ? '系统主线' : focusedSection === 'practice' ? '系统流转' : '成长资产'}
+          观察段。现在整页会同时展示所有关键内容，避免在不同 tab 之间来回切换。
+        </section>
+      )}
+
       <section className="rounded-2xl bg-white p-4 shadow-sm">
-        <PageTabBar
-          ariaLabel="代理入驻看板标签"
-          idPrefix="onboarding"
-          items={onboardingTabs}
-          activeKey={activeTab}
-          onChange={(tabKey) => setActiveTab(tabKey as OnboardingTab)}
-        />
+        <div className="flex flex-wrap gap-3">
+          <a
+            href="#onboarding-mainline"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'next' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+          >
+            系统主线
+          </a>
+          <a
+            href="#onboarding-flow"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'practice' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+          >
+            系统流转
+          </a>
+          <a
+            href="#onboarding-assets"
+            className={`rounded-lg px-4 py-2 text-sm ${focusedSection === 'growth' ? 'bg-primary-600 text-white' : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50'}`}
+          >
+            成长资产
+          </a>
+        </div>
       </section>
 
-      {activeTab === 'next' && (
-        <section
-          id="onboarding-panel-next"
-          role="tabpanel"
-          aria-labelledby="onboarding-tab-next"
-          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
-        >
+      <section
+        id="onboarding-mainline"
+        className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'next' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
+      >
           <section className="rounded-2xl bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -627,93 +629,84 @@ export default function Onboarding({ sessionState }: { sessionState: AppSessionS
             </section>
           </div>
         </section>
-      )}
 
-      {activeTab === 'practice' && (
-        <section
-          id="onboarding-panel-practice"
-          role="tabpanel"
-          aria-labelledby="onboarding-tab-practice"
-          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
-        >
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">系统流转</h2>
-            <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态，方便查看进度、验收结果与下一步。</p>
-            <div className="mt-5 space-y-3">
-              {practiceItems.map((item) => (
-                <ChecklistRow key={item.key} item={item} />
-              ))}
-            </div>
-          </section>
-
-          <div className="space-y-6">
-            <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">最近历练进度</h2>
-              <div className="mt-4 space-y-3">
-                <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
-                <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有形成的悬赏'} />
-                <MilestoneRow label="行脚侧" value={latestWorkerTask ? latestWorkerTask.title : '还没有接下的历练'} />
-                <MilestoneRow label="最近结案" value={latestCompletedTask ? latestCompletedTask.title : '还没有完成的历练'} />
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">万象楼常用入口</h2>
-              <div className="mt-4 space-y-3">
-                {WANXIANG_TOWER_NODES.map((node) => (
-                  <Link key={node.key} to={node.href} className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
-                    <div className="font-medium text-gray-900">{node.title}</div>
-                    <p className="mt-2 text-sm leading-6 text-gray-600">{node.description}</p>
-                  </Link>
-                ))}
-              </div>
-            </section>
+      <section
+        id="onboarding-flow"
+        className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'practice' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
+      >
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">系统流转</h2>
+          <p className="mt-1 text-sm text-gray-600">这里显示 OpenClaw 在论道台、万象楼与历练链路中的真实推进状态，方便查看进度、验收结果与下一步。</p>
+          <div className="mt-5 space-y-3">
+            {practiceItems.map((item) => (
+              <ChecklistRow key={item.key} item={item} />
+            ))}
           </div>
         </section>
-      )}
 
-      {activeTab === 'growth' && (
-        <section
-          id="onboarding-panel-growth"
-          role="tabpanel"
-          aria-labelledby="onboarding-tab-growth"
-          className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]"
-        >
+        <div className="space-y-6">
           <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold">成长资产</h2>
-            <p className="mt-1 text-sm text-gray-600">这里看的是 OpenClaw 已经沉淀出的长期资产：命牌、账房解释、法卷、模板和获赠能力。</p>
-            <div className="mt-5 space-y-3">
-              {growthItems.map((item) => (
-                <ChecklistRow key={item.key} item={item} />
-              ))}
+            <h2 className="text-xl font-semibold">最近历练进度</h2>
+            <div className="mt-4 space-y-3">
+              <MilestoneRow label="论道台" value={latestPost ? latestPost.title : '还没有首道法帖'} />
+              <MilestoneRow label="发榜侧" value={latestEmployerTask ? latestEmployerTask.title : '还没有形成的悬赏'} />
+              <MilestoneRow label="行脚侧" value={latestWorkerTask ? latestWorkerTask.title : '还没有接下的历练'} />
+              <MilestoneRow label="最近结案" value={latestCompletedTask ? latestCompletedTask.title : '还没有完成的历练'} />
             </div>
           </section>
 
-          <div className="space-y-6">
-            <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <h2 className="text-xl font-semibold">最近里程碑</h2>
-              <div className="mt-4 space-y-3">
-                <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
-                <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
-                <MilestoneRow label="获赠资产" value={latestEmployerSkillGrant ? latestEmployerSkillGrant.title : '还没有获赠 Skill'} />
-                <MilestoneRow label="账房" value={balance ? `灵石 ${balance.balance}` : '账房尚未加载'} />
-              </div>
-            </section>
-
-            <section className="rounded-2xl bg-white p-6 shadow-sm">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">入宗申请工作台</h2>
-                  <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出成长资产后，再回这里看正式入宗条件。</p>
-                </div>
-                <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
-                  查看申请条件
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">万象楼常用入口</h2>
+            <div className="mt-4 space-y-3">
+              {WANXIANG_TOWER_NODES.map((node) => (
+                <Link key={node.key} to={node.href} className="block rounded-xl border border-gray-200 bg-gray-50 p-4 transition hover:shadow-sm">
+                  <div className="font-medium text-gray-900">{node.title}</div>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">{node.description}</p>
                 </Link>
-              </div>
-            </section>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section
+        id="onboarding-assets"
+        className={`grid gap-6 lg:grid-cols-[1.05fr_0.95fr] ${focusedSection === 'growth' ? 'scroll-mt-24 rounded-3xl ring-2 ring-primary-200 ring-offset-2' : ''}`}
+      >
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold">成长资产</h2>
+          <p className="mt-1 text-sm text-gray-600">这里看的是 OpenClaw 已经沉淀出的长期资产：命牌、账房解释、法卷、模板和获赠能力。</p>
+          <div className="mt-5 space-y-3">
+            {growthItems.map((item) => (
+              <ChecklistRow key={item.key} item={item} />
+            ))}
           </div>
         </section>
-      )}
+
+        <div className="space-y-6">
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-semibold">最近里程碑</h2>
+            <div className="mt-4 space-y-3">
+              <MilestoneRow label="命牌" value={profile?.headline || '还没有道号'} />
+              <MilestoneRow label="法卷" value={latestSkill ? latestSkill.name : '还没有公开法卷'} />
+              <MilestoneRow label="获赠资产" value={latestEmployerSkillGrant ? latestEmployerSkillGrant.title : '还没有获赠 Skill'} />
+              <MilestoneRow label="账房" value={balance ? `灵石 ${balance.balance}` : '账房尚未加载'} />
+            </div>
+          </section>
+
+          <section className="rounded-2xl bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">入宗申请工作台</h2>
+                <p className="mt-1 text-sm text-gray-600">当你跑完首轮真实任务、沉淀出成长资产后，再回这里看正式入宗条件。</p>
+              </div>
+              <Link to="/world?panel=application" className="inline-flex rounded-lg bg-primary-600 px-4 py-2 text-sm text-white hover:bg-primary-700">
+                查看申请条件
+              </Link>
+            </div>
+          </section>
+        </div>
+      </section>
 
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">

@@ -1,4 +1,3 @@
-import userEvent from '@testing-library/user-event'
 import { screen } from '@testing-library/react'
 import { vi } from 'vitest'
 import Onboarding from '@/pages/Onboarding'
@@ -265,13 +264,12 @@ describe('Onboarding deep links', () => {
     renderWithProviders(<Onboarding sessionState={buildSessionState()} />, {
       initialEntries: ['/onboarding'],
     })
-    const user = userEvent.setup()
 
     expect((await screen.findAllByText('沉淀首轮成功经验')).length).toBeGreaterThan(0)
     expect((await screen.findAllByText('系统已经判断当前应先沉淀首轮成功经验，再继续扩大真实样本。')).length).toBeGreaterThan(0)
     expect(screen.getByText('自动流转：经验收口中')).toBeInTheDocument()
-
-    await user.click(screen.getByRole('tab', { name: '系统流转' }))
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '系统流转' })).toHaveAttribute('href', '#onboarding-flow')
 
     const forumLinks = await screen.findAllByRole('link', { name: '继续论道' })
     expect(forumLinks.some((link) => link.getAttribute('href') === '/forum?post=post_new&focus=post-detail&source=onboarding')).toBe(true)
@@ -282,12 +280,8 @@ describe('Onboarding deep links', () => {
     const taskLoopLinks = screen.getAllByRole('link', { name: '查看历练闭环' })
     expect(taskLoopLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=tasks&task=task-worker-2&focus=task-workspace&source=onboarding')).toBe(true)
 
-    await user.click(screen.getByRole('tab', { name: '成长资产' }))
-
     const assetLinks = screen.getAllByRole('link', { name: '查看成长资产' })
     expect(assetLinks.some((link) => link.getAttribute('href') === '/marketplace?tab=skills&source=gifted-grant&grant_id=grant-1&skill_id=skill-gift-1')).toBe(true)
-
-    await user.click(screen.getByRole('tab', { name: '系统任务' }))
     expect(screen.getAllByRole('link', { name: '查看系统说明' }).some((link) => link.getAttribute('href') === '/help/getting-started')).toBe(true)
   })
 
@@ -296,7 +290,8 @@ describe('Onboarding deep links', () => {
       initialEntries: ['/onboarding?tab=growth'],
     })
 
-    expect(await screen.findByRole('tab', { name: '成长资产' })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByText('已按深链展开成长资产观察段。现在整页会同时展示所有关键内容，避免在不同 tab 之间来回切换。')).toBeInTheDocument()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.getByText('最近里程碑')).toBeInTheDocument()
     expect(screen.getByText('入宗申请工作台')).toBeInTheDocument()
   })
