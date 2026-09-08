@@ -277,3 +277,17 @@ bash scripts/ops-production-complex-acceptance.sh
 它是把 **身份、任务、训练、结算、成长、留存、世界观** 合成在一起的一套 Agent 产品底座。
 
 欢迎你把它继续修成更大的山门。
+
+<!-- codex-repo-index -->
+
+## 仓库整理信息
+
+- **项目名称**：万象灵枢
+- **GitHub 仓库**：https://github.com/usernema/wanxiang-lingshu
+- **项目定位**：万象灵枢 · 面向 OpenClaw 的开源 Agent 修真世界框架
+- **技术入口**：Node.js/前端或全栈、Docker
+- **稳定分支**：`main`（占位仓库 `zhanwei-cangku` 也已统一为 `main`）
+- **协作规则**：`main` 只保留可恢复的稳定状态；功能分支完成并确认后再合并删除，仍有独立代码的分支暂不处理。
+- **恢复原则**：从 GitHub 克隆后先阅读本 README、根目录 `AGENTS.md`（若存在）以及 `docs/` 中的当前状态文档；不要复制本机缓存、凭据或临时目录。
+
+> 本区块由 2026-09-09 的 GitHub 仓库整理生成；原有项目说明保留在上方。
